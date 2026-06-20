@@ -329,6 +329,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
@@ -401,7 +402,7 @@ function renderHome(){
 }
 
 function initRO(){
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
   curStep=0;
   buildSteps();buildPanes();
@@ -420,13 +421,15 @@ function buildPanes(){
 }
 
 function buildPane(id){
-  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
+  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase()"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
 
-  if(id==='fotos'){var z=['Frente','Lateral izq.','Lateral der.','Trasero','Tablero','Daño'];return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar.</span></div><div class="photo-grid">'+z.map(function(zz,i){return '<div class="photo-slot" id="ps-'+i+'"><i class="ti ti-camera" style="font-size:22px"></i><span style="font-size:10px;margin-top:2px">'+zz+'</span><input type="file" accept="image/*" capture="environment" onchange="handlePhoto(event,'+i+')" /></div>';}).join('')+'</div>';}
+  if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Tira todas las fotos que necesites.</span></div><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Tomar / Agregar Fotos<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
+
+
 
   if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de inspección':'Autorización para trabajar';var desc=id==='firma1'?'El cliente autoriza a Pit Stop a inspeccionar y diagnosticar el vehículo.':'El cliente autoriza a Pit Stop a realizar los servicios indicados por el total presentado.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="170"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
 
-  if(id==='inspeccion'){var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"></div>';}).join('')+'</div></div>';});return h;}
+  if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--navy);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"></div>';}).join('')+'</div></div>';});return h;}
 
   if(id==='servicios')return '<div class="sw"><i class="ti ti-search si"></i><input id="ro-sq" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div><div class="cat-scroll" id="ro-sc"></div><div id="ro-sl"></div><div class="dv"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden</div><button class="btn sm" onclick="RO.servicios=[];renderROSO()"><i class="ti ti-trash"></i></button></div><div id="ro-so"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div><div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas técnicas</div><textarea id="tech-n" placeholder="Observaciones del técnico..." oninput="RO.techNotes=this.value"></textarea></div>';
 
@@ -448,6 +451,9 @@ function gotoStep(n){
   updNav();
   document.getElementById('stp-'+n).scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
   document.getElementById('ro-panes-wrap').scrollTop=0;
+  // Re-render photo grid when entering fotos step
+  if(STEPS[n]&&STEPS[n].id==='fotos'){setTimeout(function(){renderPhotosGrid();},80);}
+
   if(n===6)buildEstSum();
   if(n===5){renderAutoRecs();renderDenList();}
   if(n===8){var cn=document.getElementById('cier-next');if(cn)cn.value=RO.nextDate;}
@@ -478,7 +484,199 @@ function initSP(cid,key){
 }
 function clearSig(cid,key){var c=document.getElementById(cid);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height);RO[key]=false;var s=document.getElementById('st-'+key);if(s){s.textContent='Sin firma';s.style.color='';}}
 
-function handlePhoto(e,i){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){RO.fotos[i]=ev.target.result;var sl=document.getElementById('ps-'+i);if(sl){var img=document.createElement('img');img.src=ev.target.result;sl.appendChild(img);sl.style.borderColor='var(--green)';}};r.readAsDataURL(f);}
+function handlePhotos(e){
+  var files=Array.from(e.target.files);if(!files.length)return;
+  if(!Array.isArray(RO.fotos))RO.fotos=[];
+  var done=0;
+  files.forEach(function(f){
+    var r=new FileReader();
+    r.onload=function(ev){
+      RO.fotos.push(ev.target.result);
+      done++;
+      if(done===files.length)renderPhotosGrid();
+    };
+    r.readAsDataURL(f);
+  });
+}
+function renderPhotosGrid(){
+  var grid=document.getElementById('photo-grid-dyn');
+  var lbl=document.getElementById('photo-count-lbl');
+  if(!grid)return;
+  var photos=RO.fotos||[];
+  if(lbl)lbl.textContent=photos.length?photos.length+' foto'+(photos.length!==1?'s':'')+ ' capturada'+(photos.length!==1?'s':''):'Sin fotos todavía';
+  grid.innerHTML=photos.map(function(src,i){
+    return '<div style="position:relative;aspect-ratio:1;border-radius:var(--r-md);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+
+      '<img src="'+src+'" style="width:100%;height:100%;object-fit:cover">'+
+      '<button onclick="deletePhoto('+i+')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>'+
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:3px">FOTO '+(i+1)+'</div>'+
+    '</div>';
+  }).join('');
+}
+function deletePhoto(i){
+  if(!confirm('¿Eliminar esta foto?'))return;
+  RO.fotos.splice(i,1);
+  renderPhotosGrid();
+}
+
+// Legacy single handlePhoto — keep for safety
+function handlePhoto(e,i){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){if(!Array.isArray(RO.fotos))RO.fotos=[];RO.fotos[i]=ev.target.result;renderPhotosGrid();};r.readAsDataURL(f);}
+
+// ============ VIN QR SCANNER ============
+var _vinStream=null;var _vinTimer=null;
+function openVINScanner(){
+  var modal=document.getElementById('vin-scanner-modal');
+  modal.style.display='flex';
+  var vid=document.getElementById('vin-video');
+  var res=document.getElementById('vin-result-box');
+  if(res){res.style.display='none';res.textContent='';}
+  document.getElementById('vin-scan-status').textContent='Apunta al código QR del vehículo';
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}})
+  .then(function(stream){
+    _vinStream=stream;vid.srcObject=stream;vid.play();
+    _vinTimer=setInterval(function(){scanVINFrame();},200);
+  }).catch(function(err){
+    document.getElementById('vin-scan-status').textContent='Cámara no disponible: '+err.message;
+  });
+}
+function scanVINFrame(){
+  var vid=document.getElementById('vin-video');
+  var canvas=document.getElementById('vin-canvas');
+  if(!vid||!canvas||vid.readyState!==4)return;
+  canvas.width=vid.videoWidth;canvas.height=vid.videoHeight;
+  var ctx=canvas.getContext('2d');ctx.drawImage(vid,0,0);
+  var img=ctx.getImageData(0,0,canvas.width,canvas.height);
+  if(typeof jsQR==='undefined')return;
+  var code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if(code&&code.data){
+    var raw=code.data.trim();
+    // Extract VIN — 17 alphanum chars (no I,O,Q)
+    var vinMatch=raw.match(/[A-HJ-NPR-Z0-9]{17}/i);
+    var vin=vinMatch?vinMatch[0].toUpperCase():raw.toUpperCase();
+    closeVINScanner();
+    var vinInput=document.getElementById('v-vin');
+    if(vinInput){vinInput.value=vin;RO.vehiculo.vin=vin;decodeVIN(vin);}
+    var res=document.getElementById('vin-result-box');
+    if(res){res.style.display='block';res.innerHTML='<i class="ti ti-check"></i> VIN capturado: '+vin;}
+  }
+}
+function closeVINScanner(){
+  clearInterval(_vinTimer);_vinTimer=null;
+  if(_vinStream){_vinStream.getTracks().forEach(function(t){t.stop();});_vinStream=null;}
+  var vid=document.getElementById('vin-video');if(vid)vid.srcObject=null;
+  document.getElementById('vin-scanner-modal').style.display='none';
+}
+function decodeVIN(vin){
+  // Basic WMI decode — first 3 chars
+  if(!vin||vin.length<3)return;
+  var info=document.getElementById('vin-decode-info');if(!info)return;
+  var wmi=vin.substring(0,3).toUpperCase();
+  var year=vin[9];
+  var yearMap={A:2010,B:2011,C:2012,D:2013,E:2014,F:2015,G:2016,H:2017,J:2018,K:2019,L:2020,M:2021,N:2022,P:2023,R:2024,S:2025};
+  var makes={
+    '1HG':'Honda','2HG':'Honda','JHM':'Honda','1G1':'Chevrolet','1GT':'GMC','2G1':'Chevrolet','1FA':'Ford','1FT':'Ford','2FA':'Ford','3FA':'Ford','1GC':'Chevrolet/GMC','1TY':'Toyota','JT':'Toyota','KM8':'Hyundai','KNA':'Kia','1N4':'Nissan','JN1':'Nissan','WBA':'BMW','WBS':'BMW','WDB':'Mercedes','WDC':'Mercedes','WVW':'Volkswagen','1VW':'Volkswagen','SAL':'Land Rover','SCA':'Rolls-Royce','YV1':'Volvo'
+  };
+  var make='';Object.keys(makes).forEach(function(k){if(wmi.startsWith(k))make=makes[k];});
+  if(!make&&wmi.startsWith('JT'))make='Toyota';
+  var yr=yearMap[year.toUpperCase()]||'—';
+  info.style.display='block';
+  info.innerHTML='<strong><i class="ti ti-info-circle"></i> VIN decodificado:</strong><br>'+
+    (make?'Fabricante: '+make+'<br>':'')+
+    'Año modelo: '+yr+'<br>'+
+    'WMI: '+wmi+' · VIN: '+vin;
+}
+
+// ============ AI PART DESCRIPTION (auto on name input) ============
+var _partDescTimer=null;
+function schedulePartDescribe(val){
+  RO&&(RO._tmpPartName=val);
+  clearTimeout(_partDescTimer);
+  var box=document.getElementById('pp-ai-desc');
+  if(!val||val.trim().length<4){if(box)box.style.display='none';return;}
+  _partDescTimer=setTimeout(function(){aiPartDescribe(val.trim());},900);
+}
+function aiPartDescribe(partName){
+  var box=document.getElementById('pp-ai-desc');if(!box)return;
+  var veh=RO&&RO.vehiculo&&RO.vehiculo.year?(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim():'';
+  box.style.display='block';
+  box.innerHTML='<i class="ti ti-loader"></i> Consultando especificaciones...';
+  var msg='Eres un experto en partes automotrices. Dame información técnica breve sobre esta pieza:\n\n'+
+    'Pieza: '+partName+'\n'+(veh?'Vehículo: '+veh+'\n':'')+
+    '\nResponde SOLO con JSON sin markdown:\n'+
+    '{"desc":"descripción técnica de 1-2 líneas","spec":"especificación clave (viscosidad, dimensión, etc)","note":"consejo de instalación o compatibilidad","compatible":"sí/no/depende — si aplica al vehículo indicado"}\n'+
+    'Máximo 20 palabras por campo. En español pero términos técnicos en inglés.';
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,messages:[{role:'user',content:msg}]})
+  }).then(function(r){return r.json();}).then(function(data){
+    var text='';
+    if(data.content)data.content.forEach(function(b){if(b.type==='text')text+=b.text;});
+    text=text.replace(/```json/g,'').replace(/```/g,'').trim();
+    try{
+      var r=JSON.parse(text);
+      var html='<strong><i class="ti ti-info-circle"></i> '+partName+'</strong><br>';
+      if(r.desc)html+='📋 '+r.desc+'<br>';
+      if(r.spec)html+='⚙️ Spec: <strong>'+r.spec+'</strong><br>';
+      if(r.note)html+='💡 '+r.note+'<br>';
+      if(veh&&r.compatible)html+='<span style="color:'+(r.compatible.includes('sí')?'var(--green)':'var(--amber)')+'">✓ Compatibilidad con '+veh+': '+r.compatible+'</span>';
+      box.innerHTML=html;
+    }catch(e){box.style.display='none';}
+  }).catch(function(){box.style.display='none';});
+}
+
+// ============ AI DIAGNOSTIC SUMMARY ============
+function aiDiagnosticSummary(){
+  var veh=RO.vehiculo||{};
+  if(!veh.year||!veh.make||!veh.model){
+    alert('Primero completa el año, marca y modelo en el paso Cliente.');return;
+  }
+  var vehStr=veh.year+' '+veh.make+' '+veh.model;
+  var btn=event.target.closest('button');
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.innerHTML='<i class="ti ti-loader"></i> Analizando plataforma...';btn.disabled=true;}
+  var el=document.getElementById('ai-diag-result');
+  if(el){el.style.display='block';el.innerHTML='<i class="ti ti-loader"></i> Consultando base de datos de problemas comunes...';}
+  var msg='Eres un experto en mecánica automotriz y reparación. Dame los problemas más comunes reportados para este vehículo:\n\n'+
+    'Vehículo: '+vehStr+(veh.odoIn?' · '+veh.odoIn+' millas':'')+'\n\n'+
+    'Responde SOLO con JSON sin markdown:\n'+
+    '{"platform":"descripción breve de la plataforma","problems":[{"area":"sistema afectado","issue":"problema específico","severity":"alta/media/baja","mileage":"rango de millas típico si aplica","fix":"reparación típica en 5-8 palabras"}],"tsbs":"boletines técnicos o recalls conocidos en 1-2 líneas o null","tip":"consejo rápido para el técnico"}\n'+
+    'Máximo 5 problemas más comunes y relevantes. En español pero términos técnicos en inglés.';
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:msg}]})
+  }).then(function(r){return r.json();}).then(function(data){
+    if(btn){btn.innerHTML=orig;btn.disabled=false;}
+    var text='';
+    if(data.content)data.content.forEach(function(b){if(b.type==='text')text+=b.text;});
+    text=text.replace(/```json/g,'').replace(/```/g,'').trim();
+    try{
+      var r=JSON.parse(text);
+      var sevColor={alta:'var(--red)',media:'var(--amber)',baja:'var(--green)'};
+      var html='<div style="font-weight:700;margin-bottom:8px"><i class="ti ti-sparkles" style="color:var(--blue)"></i> '+vehStr+(r.platform?' — '+r.platform:'')+'</div>';
+      (r.problems||[]).forEach(function(p){
+        html+='<div style="background:var(--white);border-radius:6px;padding:8px 10px;margin-bottom:6px;border-left:3px solid '+(sevColor[p.severity]||'var(--gray-300)')+'">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+          '<div style="font-size:11px;font-weight:700;color:var(--navy)">'+p.area+'</div>'+
+          '<span class="badge '+(p.severity==='alta'?'br':p.severity==='media'?'ba':'bg')+'" style="flex-shrink:0">'+p.severity+'</span>'+
+          '</div>'+
+          '<div style="font-size:11px;margin-top:2px">⚠️ '+p.issue+'</div>'+
+          (p.mileage?'<div style="font-size:10px;color:var(--gray-400)">📍 '+p.mileage+'</div>':'')+
+          '<div style="font-size:10px;color:var(--green);margin-top:3px;font-weight:700">🔧 '+p.fix+'</div>'+
+        '</div>';
+      });
+      if(r.tsbs)html+='<div style="background:var(--amber-light);border-radius:6px;padding:8px 10px;margin-top:4px;font-size:11px;color:var(--amber)"><strong>📋 TSB/Recalls:</strong> '+r.tsbs+'</div>';
+      if(r.tip)html+='<div style="margin-top:6px;font-size:10px;color:var(--gray-500);font-style:italic">💡 Tip: '+r.tip+'</div>';
+      html+='<div style="font-size:9px;color:var(--gray-400);margin-top:6px">Verifica con AllData, Mitchell o NHTSA para TSBs actualizados.</div>';
+      if(el)el.innerHTML=html;
+    }catch(e){
+      if(el)el.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> No se pudo obtener el diagnóstico. Verifica la conexión.</div>';
+    }
+  }).catch(function(){
+    if(btn){btn.innerHTML=orig;btn.disabled=false;}
+    if(el)el.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> AI no disponible.</div>';
+  });
+}
+
+
 
 function setInsp(zid,iid,color){
   RO.insp[iid]=color;
@@ -621,7 +819,7 @@ function exportPDF(){
   doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('CLIENTE Y VEHÍCULO',14,y);y+=1;doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
   doc.setFont(undefined,'normal');doc.text('Cliente: '+RO.cliente,14,y);doc.text('Tel: '+(RO.tel||'—'),110,y);y+=5;
   doc.text('Vehículo: '+veh,14,y);doc.text('Tablilla: '+(RO.vehiculo.tag||'—'),110,y);y+=5;
-  doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi',14,y);y+=5;
+  doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi',14,y);if(RO.vehiculo.vin)doc.text('VIN: '+RO.vehiculo.vin,110,y);y+=5;
   if(RO.queja){var ql=doc.splitTextToSize('Queja: '+RO.queja,180);doc.text(ql,14,y);y+=ql.length*4;}
   var rate=DB.settings.laborRate||103;
   y+=2;doc.setFont(undefined,'bold');doc.setFontSize(9);doc.text('SERVICIOS Y PIEZAS',14,y);y+=1;doc.line(14,y,196,y);y+=5;doc.setFont(undefined,'normal');doc.setFontSize(9);
@@ -1293,6 +1491,27 @@ document.addEventListener('touchstart',hideSplash,{once:true});
 document.addEventListener('click',hideSplash,{once:true});
 </script>
 
+<div id="vin-scanner-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.9);flex-direction:column;align-items:center;justify-content:center">
+  <div style="width:100%;max-width:440px;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="color:#fff;font-size:16px;font-weight:700"><i class="ti ti-qrcode"></i> Escanear VIN / QR</div>
+      <button onclick="closeVINScanner()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:1">
+      <video id="vin-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+      <canvas id="vin-canvas" style="display:none"></canvas>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <div style="width:65%;height:65%;border:3px solid rgba(33,150,243,.9);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)"></div>
+      </div>
+      <div id="vin-scan-status" style="position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:12px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.8)">Apunta al código QR del vehículo</div>
+    </div>
+    <div style="margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;font-size:11px;color:rgba(255,255,255,.65);line-height:1.6">
+      💡 El QR del VIN está en la puerta del conductor o en el tablero. También funciona con QR de carfax y dealers.
+    </div>
+    <div id="vin-result-box" style="display:none;margin-top:10px;background:var(--green);border-radius:8px;padding:12px;color:#fff;font-weight:700;text-align:center"></div>
+  </div>
+</div>
+
 <div id="parts-modal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.5)" onclick="if(event.target===this)closePartsModal()">
   <div style="position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:18px 18px 0 0;max-height:90vh;display:flex;flex-direction:column">
     <div style="padding:8px 0 0;flex-shrink:0;display:flex;justify-content:center"><div style="width:40px;height:4px;background:var(--gray-300);border-radius:2px"></div></div>
@@ -1314,7 +1533,8 @@ document.addEventListener('click',hideSplash,{once:true});
         <div class="cb">
           <button class="btn blue full" onclick="aiPartSuggest()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> Sugerir specs con AI (aceite, filtro, etc.)</button>
           <div id="ai-suggest-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);line-height:1.5"></div>
-          <div class="fr fr1"><div class="fg"><div class="fl">Nombre de la pieza</div><input id="pp-name" placeholder="Ej: Filtro de aceite Fram PH3593A"></div></div>
+          <div class="fr fr1"><div class="fg"><div class="fl">Nombre de la pieza</div><input id="pp-name" placeholder="Ej: Filtro de aceite Fram PH3593A" oninput="schedulePartDescribe(this.value)"></div></div>
+          <div id="pp-ai-desc" style="display:none;background:var(--blue-light);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--navy);line-height:1.6"></div>
           <div class="fr"><div class="fg"><div class="fl"># Pieza / parte</div><input id="pp-num" placeholder="PH3593A"></div><div class="fg"><div class="fl">Suplidor</div><input id="pp-sup" placeholder="Advance Auto Parts"></div></div>
           <div class="fr fr3">
             <div class="fg"><div class="fl">Costo c/u ($)</div><input id="pp-cost" type="number" step="0.01" placeholder="0.00" oninput="calcPartProfit()"></div>
