@@ -159,6 +159,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="mc" onclick="go('menu')"><div class="mi" style="background:#F3E8FF"><i class="ti ti-tools" style="color:#7C3AED;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Servicios</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Menú y calculadora</div></div>
         <div class="mc" onclick="go('finanzas')"><div class="mi" style="background:var(--green-light)"><i class="ti ti-chart-line" style="color:var(--green);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Finanzas</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">P&L · Inventario</div></div>
         <div class="mc" onclick="go('historial')"><div class="mi" style="background:#FFF0E6"><i class="ti ti-history" style="color:#D2691E;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Historial</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Resumen del día y ROs</div></div>
+        <div class="mc" onclick="go('inventario')"><div class="mi" style="background:#EEF2FF"><i class="ti ti-package" style="color:#4F46E5;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Inventario</div><div id="home-inv-lbl" style="font-size:11px;color:var(--gray-400);margin-top:2px">Piezas y partes</div></div>
       </div>
       <div class="st">Notificaciones</div>
       <div id="home-notifs"></div>
@@ -329,7 +330,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
@@ -381,6 +382,7 @@ function go(p){
   if(p==='finanzas'){renderPL();}
   if(p==='historial'){renderHistDia();}
   if(p==='ajustes'){initAjustes();}
+  if(p==='inventario'){renderInventario();}
 }
 
 function renderHome(){
@@ -399,6 +401,9 @@ function renderHome(){
   DB.ordenes.forEach(function(o){if(!o.nextDate)return;var d=new Date(o.nextDate);var diff=Math.floor((d-now)/86400000);if(diff>=0&&diff<=14)notifs.push({t:o.cliente+' — mantenimiento en '+diff+'d',c:diff<=3?'var(--red)':'var(--amber)'}); });
   var nel=document.getElementById('home-notifs');
   nel.innerHTML=notifs.length?notifs.map(function(n){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+n.c+'"><div style="font-size:12px;font-weight:600">'+n.t+'</div></div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin notificaciones pendientes.</div>';
+  // Update inventory label
+  var invLbl=document.getElementById('home-inv-lbl');
+  if(invLbl){var low=DB.inventario.filter(function(i){return i.qty<=i.min;}).length;invLbl.innerHTML=DB.inventario.length+' items'+(low>0?' · <span style="color:var(--red);font-weight:700">'+low+' bajo stock</span>':'');}
 }
 
 function initRO(){
@@ -423,7 +428,7 @@ function buildPanes(){
 function buildPane(id){
   if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase()"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
 
-  if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Tira todas las fotos que necesites.</span></div><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Tomar / Agregar Fotos<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
+  if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Tira todas las fotos que necesites.</span></div><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Tomar / Seleccionar Fotos<input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
 
 
 
@@ -437,7 +442,7 @@ function buildPane(id){
 
   if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
-  if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Exportar PDF</button></div>';
+  if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
 }
 
@@ -464,7 +469,8 @@ function updNav(){
   var bp=document.getElementById('ro-prev');var bn=document.getElementById('ro-next');
   if(bp)bp.style.opacity=curStep===0?.35:1;
   if(bn)bn.style.display=curStep===8?'none':'inline-flex';
-  document.getElementById('ro-nav').style.display=curStep===8?'none':'flex';
+  // Always show nav bar so user can go back from any step
+  document.getElementById('ro-nav').style.display='flex';
   var sl=document.getElementById('ro-step-lbl');if(sl)sl.textContent=(curStep+1)+'/'+STEPS.length;
 }
 
@@ -521,48 +527,41 @@ function deletePhoto(i){
 // Legacy single handlePhoto — keep for safety
 function handlePhoto(e,i){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){if(!Array.isArray(RO.fotos))RO.fotos=[];RO.fotos[i]=ev.target.result;renderPhotosGrid();};r.readAsDataURL(f);}
 
-// ============ VIN QR SCANNER ============
-var _vinStream=null;var _vinTimer=null;
+// ============ VIN SCANNER (ZXing — Code39, Code128, QR, DataMatrix) ============
+var _zxingReader=null;
 function openVINScanner(){
   var modal=document.getElementById('vin-scanner-modal');
   modal.style.display='flex';
   var vid=document.getElementById('vin-video');
   var res=document.getElementById('vin-result-box');
   if(res){res.style.display='none';res.textContent='';}
-  document.getElementById('vin-scan-status').textContent='Apunta al código QR del vehículo';
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}})
-  .then(function(stream){
-    _vinStream=stream;vid.srcObject=stream;vid.play();
-    _vinTimer=setInterval(function(){scanVINFrame();},200);
-  }).catch(function(err){
-    document.getElementById('vin-scan-status').textContent='Cámara no disponible: '+err.message;
-  });
-}
-function scanVINFrame(){
-  var vid=document.getElementById('vin-video');
-  var canvas=document.getElementById('vin-canvas');
-  if(!vid||!canvas||vid.readyState!==4)return;
-  canvas.width=vid.videoWidth;canvas.height=vid.videoHeight;
-  var ctx=canvas.getContext('2d');ctx.drawImage(vid,0,0);
-  var img=ctx.getImageData(0,0,canvas.width,canvas.height);
-  if(typeof jsQR==='undefined')return;
-  var code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
-  if(code&&code.data){
-    var raw=code.data.trim();
-    // Extract VIN — 17 alphanum chars (no I,O,Q)
-    var vinMatch=raw.match(/[A-HJ-NPR-Z0-9]{17}/i);
-    var vin=vinMatch?vinMatch[0].toUpperCase():raw.toUpperCase();
+  var status=document.getElementById('vin-scan-status');
+  status.textContent='Iniciando cámara...';
+  if(typeof ZXing==='undefined'){status.textContent='Error: librería no cargada. Intenta reconectar.';return;}
+  try{
+    _zxingReader=new ZXing.BrowserMultiFormatReader();
+    status.textContent='Apunta al código de barras o QR del VIN';
+    _zxingReader.decodeFromVideoDevice(null,vid,function(result,err){
+      if(result){
+        var raw=result.getText().trim();
+        var vinMatch=raw.match(/[A-HJ-NPR-Z0-9]{17}/i);
+        var vin=vinMatch?vinMatch[0].toUpperCase():raw.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+        closeVINScanner();
+        var vinInput=document.getElementById('v-vin');
+        if(vinInput){vinInput.value=vin;RO.vehiculo.vin=vin;decodeVIN(vin);}
+        var r=document.getElementById('vin-result-box');
+        if(r){r.style.display='block';r.innerHTML='<i class="ti ti-check"></i> VIN capturado: '+vin;}
+      }
+    });
+  }catch(e){
+    status.textContent='Error: '+e.message;
     closeVINScanner();
-    var vinInput=document.getElementById('v-vin');
-    if(vinInput){vinInput.value=vin;RO.vehiculo.vin=vin;decodeVIN(vin);}
-    var res=document.getElementById('vin-result-box');
-    if(res){res.style.display='block';res.innerHTML='<i class="ti ti-check"></i> VIN capturado: '+vin;}
+    alert('Cámara no disponible: '+e.message);
   }
 }
 function closeVINScanner(){
-  clearInterval(_vinTimer);_vinTimer=null;
-  if(_vinStream){_vinStream.getTracks().forEach(function(t){t.stop();});_vinStream=null;}
-  var vid=document.getElementById('vin-video');if(vid)vid.srcObject=null;
+  if(_zxingReader){try{_zxingReader.reset();}catch(e){}; _zxingReader=null;}
+  var vid=document.getElementById('vin-video');if(vid&&vid.srcObject){vid.srcObject.getTracks().forEach(function(t){t.stop();});vid.srcObject=null;}
   document.getElementById('vin-scanner-modal').style.display='none';
 }
 function decodeVIN(vin){
@@ -811,51 +810,163 @@ function exportPDF(){
   if(typeof window.jspdf==='undefined'){alert('PDF cargando...');return;}
   if(!RO.cliente){alert('Completa datos del cliente.');return;}
   var doc=new window.jspdf.jsPDF();var y=0;
+  var rate=DB.settings.laborRate||103;
+
+  // Header
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
-  doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');doc.text('ShopFlow by Pit Stop',14,10);
-  doc.setFontSize(8);doc.setFont(undefined,'normal');doc.text('Bayamón, Puerto Rico',14,17);doc.text(RO.id+' · '+new Date(RO.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
+  doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
+  doc.text((DB.settings.shopName||'Pit Stop')+' — ShopFlow',14,10);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');
+  doc.text((DB.settings.shopAddress||'Bayamón, Puerto Rico'),14,17);
+  doc.text(RO.id+' · '+new Date(RO.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
+
   y=28;doc.setTextColor(0,0,0);
   var veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
-  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('CLIENTE Y VEHÍCULO',14,y);y+=1;doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
-  doc.setFont(undefined,'normal');doc.text('Cliente: '+RO.cliente,14,y);doc.text('Tel: '+(RO.tel||'—'),110,y);y+=5;
+
+  // Client & Vehicle
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('CLIENTE Y VEHÍCULO',14,y);y+=1;
+  doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
+  doc.setFont(undefined,'normal');
+  doc.text('Cliente: '+RO.cliente,14,y);doc.text('Tel: '+(RO.tel||'—'),110,y);y+=5;
   doc.text('Vehículo: '+veh,14,y);doc.text('Tablilla: '+(RO.vehiculo.tag||'—'),110,y);y+=5;
-  doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi',14,y);if(RO.vehiculo.vin)doc.text('VIN: '+RO.vehiculo.vin,110,y);y+=5;
+  doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi',14,y);
+  if(RO.vehiculo.vin)doc.text('VIN: '+RO.vehiculo.vin,110,y);y+=5;
   if(RO.queja){var ql=doc.splitTextToSize('Queja: '+RO.queja,180);doc.text(ql,14,y);y+=ql.length*4;}
-  var rate=DB.settings.laborRate||103;
-  y+=2;doc.setFont(undefined,'bold');doc.setFontSize(9);doc.text('SERVICIOS Y PIEZAS',14,y);y+=1;doc.line(14,y,196,y);y+=5;doc.setFont(undefined,'normal');doc.setFontSize(9);
+
+  // Services & Parts
+  y+=2;doc.setFont(undefined,'bold');doc.setFontSize(9);
+  doc.text('SERVICIOS REALIZADOS',14,y);y+=1;doc.line(14,y,196,y);y+=5;
+  doc.setFont(undefined,'normal');doc.setFontSize(9);
+
   var sub=0;
   RO.servicios.forEach(function(s){
-    // Service line
-    doc.setFont(undefined,'bold');doc.text(s.n+(s.qty>1?' ×'+s.qty:''),16,y);
+    if(y>265){doc.addPage();y=14;}
+    // Service / labor price line
     var svcAmt=(s.ep||0)*(s.qty||1);
-    doc.text('$'+svcAmt.toFixed(2),196,y,{align:'right'});y+=5;sub+=svcAmt;doc.setFont(undefined,'normal');
-    // Labor line
-    if(s.laborHours>0){var laborC=s.laborHours*rate;doc.setFontSize(8);doc.setTextColor(80,80,80);doc.text('   Mano de obra: '+s.laborHours+'h × $'+rate+'/hr',18,y);doc.text('$'+laborC.toFixed(2),196,y,{align:'right'});y+=4;sub+=laborC;doc.setTextColor(0,0,0);doc.setFontSize(9);}
-    // Parts lines - each with part number and customer price
+    var laborAmt=(parseFloat(s.laborHours)||0)*rate;
+    var partsAmt=(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);
+    var lineTotal=svcAmt+laborAmt+partsAmt;
+
+    doc.setFont(undefined,'bold');doc.setFontSize(9);
+    var svcLabel=s.n+(s.qty>1?' ×'+s.qty:'');
+    var svcLines=doc.splitTextToSize(svcLabel,130);
+    doc.text(svcLines,16,y);
+    doc.text('$'+lineTotal.toFixed(2),196,y,{align:'right'});
+    y+=svcLines.length*5;sub+=lineTotal;
+    doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(80,80,80);
+
+    // Sub-line: service price breakdown
+    if(svcAmt>0&&(laborAmt>0||partsAmt>0)){
+      doc.text('   Servicio: $'+svcAmt.toFixed(2),18,y);y+=4;
+    }
+    // Sub-line: labor hours
+    if(laborAmt>0){
+      doc.text('   Mano de obra: '+(parseFloat(s.laborHours)||0)+'h × $'+rate+'/hr = $'+laborAmt.toFixed(2),18,y);y+=4;
+    }
+    // Sub-lines: parts
     if(s.parts&&s.parts.length){
       s.parts.forEach(function(p){
-        doc.setFontSize(8);doc.setTextColor(80,80,80);
-        var partLabel='   Part: '+p.name+(p.qty>1?' x'+p.qty:'')+(p.partNum?'  [Part# '+p.partNum+']':'');
-        var pl=doc.splitTextToSize(partLabel,150);
+        var partLabel='   Part: '+p.name+(p.qty>1?' x'+p.qty:'')+(p.partNum?'  [#'+p.partNum+']':'');
+        var pl=doc.splitTextToSize(partLabel,165);
         doc.text(pl,18,y);
         doc.text('$'+(p.sellPrice*p.qty).toFixed(2),196,y,{align:'right'});
-        y+=pl.length*4;sub+=p.sellPrice*p.qty;
-        doc.setTextColor(0,0,0);doc.setFontSize(9);
+        y+=pl.length*4;
       });
     }
-    y+=1;
+    doc.setTextColor(0,0,0);doc.setFontSize(9);
+    y+=2;
   });
-  var ivu=sub*.115;
-  y+=2;doc.line(140,y,196,y);y+=4;doc.text('Subtotal',140,y);doc.text('$'+sub.toFixed(2),196,y,{align:'right'});y+=4;doc.text('IVU 11.5%',140,y);doc.text('$'+ivu.toFixed(2),196,y,{align:'right'});y+=4;
-  doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setFillColor(11,31,58);doc.rect(120,y-4,76,8,'F');doc.setTextColor(255,255,255);doc.text('TOTAL: $'+RO.total.toFixed(2),196,y+1,{align:'right'});doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');doc.setFontSize(9);y+=10;
-  doc.text('Método: '+(RO.pago||'—')+'  Estado: '+(RO.estado==='pagado'?'PAGADO':'PENDIENTE'),14,y);y+=8;
-  if(RO.nextDate){doc.setFillColor(234,243,222);doc.rect(14,y-3,182,10,'F');doc.setFont(undefined,'bold');doc.setTextColor(59,109,17);doc.text('PRÓXIMO MANTENIMIENTO: '+new Date(RO.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'}),18,y+2);doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');y+=14;}
-  if(y>220){doc.addPage();y=14;}
-  doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'bold');doc.text('TÉRMINOS Y CONDICIONES',14,y);y+=4;doc.setFont(undefined,'normal');
-  doc.splitTextToSize(DISC.replace(/\n\n/g,'\n'),182).forEach(function(l){if(y>280){doc.addPage();y=14;}doc.text(l,14,y);y+=3.2;});
-  y+=6;if(y>265){doc.addPage();y=14;}doc.setFontSize(9);doc.setTextColor(0,0,0);doc.setFont(undefined,'bold');doc.text('Firma del cliente:',14,y);doc.line(50,y,120,y);doc.text('Fecha:',140,y);doc.line(155,y,196,y);
-  doc.save('ShopFlow_'+RO.id+'.pdf');
+
+  // Totals
+  var disc=RO.descuento||0;
+  var subAfterDisc=sub*(1-disc/100);
+  var ivu=subAfterDisc*.115;
+  var totalFinal=subAfterDisc+ivu;
+
+  y+=2;doc.line(120,y,196,y);y+=4;
+  doc.setFontSize(8);
+  doc.text('Subtotal',120,y);doc.text('$'+sub.toFixed(2),196,y,{align:'right'});y+=4;
+  if(disc>0){doc.text('Descuento ('+disc+'%)',120,y);doc.text('— $'+(sub-subAfterDisc).toFixed(2),196,y,{align:'right'});y+=4;}
+  doc.text('IVU 11.5%',120,y);doc.text('$'+ivu.toFixed(2),196,y,{align:'right'});y+=4;
+  doc.setFont(undefined,'bold');doc.setFontSize(10);
+  doc.setFillColor(11,31,58);doc.rect(110,y-4,86,9,'F');
+  doc.setTextColor(255,255,255);
+  doc.text('TOTAL: $'+totalFinal.toFixed(2),196,y+2,{align:'right'});
+  doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');doc.setFontSize(9);y+=10;
+  doc.text('Método: '+(RO.pago||'—')+'  ·  Estado: '+(RO.estado==='pagado'?'✓ PAGADO':'⏳ PENDIENTE'),14,y);y+=8;
+
+  // Next service reminder
+  if(RO.nextDate){
+    doc.setFillColor(234,243,222);doc.rect(14,y-3,182,10,'F');
+    doc.setFont(undefined,'bold');doc.setTextColor(59,109,17);
+    doc.text('PRÓXIMO MANTENIMIENTO: '+new Date(RO.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'}),18,y+2);
+    doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');y+=14;
+  }
+
+  // Terms
+  if(y>210){doc.addPage();y=14;}
+  doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'bold');
+  doc.text('TÉRMINOS Y CONDICIONES',14,y);y+=4;doc.setFont(undefined,'normal');
+  doc.splitTextToSize(DISC.replace(/\n\n/g,'\n'),182).forEach(function(l){
+    if(y>278){doc.addPage();y=14;}doc.text(l,14,y);y+=3.2;
+  });
+
+  // Signature section
+  y+=6;if(y>255){doc.addPage();y=14;}
+  doc.setFontSize(9);doc.setTextColor(0,0,0);doc.setFont(undefined,'bold');
+  doc.text('AUTORIZACIÓN DEL CLIENTE',14,y);y+=1;
+  doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=6;
+  doc.setFont(undefined,'normal');doc.setFontSize(8);
+  doc.text('Al firmar, el cliente autoriza los trabajos realizados y acepta los términos y condiciones.',14,y);y+=6;
+
+  // Try to embed actual sig2 canvas
+  var sigCanvas=document.getElementById('sig-2');
+  if(sigCanvas&&RO.sig2){
+    try{
+      var sigImg=sigCanvas.toDataURL('image/png');
+      doc.addImage(sigImg,'PNG',14,y,90,30);
+      doc.rect(14,y,90,30);
+    }catch(e){doc.line(14,y+15,104,y+15);}
+  }else{
+    doc.setTextColor(150,150,150);doc.text('(Sin firma digital capturada)',14,y+15);
+    doc.line(14,y+20,104,y+20);
+  }
+  doc.setTextColor(0,0,0);
+  doc.text('Firma del cliente',14,y+32);
+  doc.text('Fecha: '+new Date().toLocaleDateString('es-PR'),120,y+15);
+  doc.line(120,y+20,196,y+20);
+
+  // Output as blob and show share sheet
+  var blob=doc.output('blob');
+  _pdfBlob=blob;
+  _pdfUrl=URL.createObjectURL(blob);
+  _pdfFilename='ShopFlow_'+RO.id+'.pdf';
+  document.getElementById('pdf-share-modal').style.display='flex';
 }
+
+var _pdfBlob=null;var _pdfUrl=null;var _pdfFilename='ShopFlow.pdf';
+function shareViaNative(){
+  if(!_pdfBlob)return;
+  var file=new File([_pdfBlob],_pdfFilename,{type:'application/pdf'});
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({title:'ShopFlow — '+RO.id,text:'Orden de servicio para '+RO.cliente,files:[file]})
+    .catch(function(e){if(e.name!=='AbortError'){window.open(_pdfUrl,'_blank');}});
+  }else{
+    // Fallback: open in new tab (user can share/save from there)
+    window.open(_pdfUrl,'_blank');
+  }
+}
+function printPDF(){
+  if(!_pdfUrl)return;
+  var w=window.open(_pdfUrl,'_blank');
+  if(w){setTimeout(function(){try{w.print();}catch(e){}},800);}
+}
+function downloadPDF(){
+  if(!_pdfUrl)return;
+  var a=document.createElement('a');a.href=_pdfUrl;a.download=_pdfFilename;a.click();
+}
+function closePDFShare(){document.getElementById('pdf-share-modal').style.display='none';}
+
 
 function gTab(id){document.querySelectorAll('#garage .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#g-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#g-tabs .tab');var ids=['g-act','g-lst','g-ent'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});renderGarage();}
 function renderGarage(){
@@ -1121,6 +1232,18 @@ function closePartsModal(){
   var roEl=document.getElementById('ro');
   if(roEl&&roEl.classList.contains('v')){renderROSO();}
 }
+function autoMarkup(force){
+  var costEl=document.getElementById('pp-cost');
+  var sellEl=document.getElementById('pp-sell');
+  if(!costEl||!sellEl)return;
+  var cost=parseFloat(costEl.value)||0;
+  if(cost<=0)return;
+  // Auto-apply if sell is empty/zero, OR if force=true (button click)
+  if(force||!parseFloat(sellEl.value)){
+    sellEl.value=(cost*1.7).toFixed(2);
+    calcPartProfit();
+  }
+}
 function calcPartProfit(){
   var cost=parseFloat((document.getElementById('pp-cost')||{value:0}).value)||0;
   var qty=parseInt((document.getElementById('pp-qty')||{value:1}).value)||1;
@@ -1152,18 +1275,12 @@ function savePart(){
   };
   if(!DB.serviceParts[currentPartService.id])DB.serviceParts[currentPartService.id]=[];
   DB.serviceParts[currentPartService.id].push(part);
-  saveDB();
-  // Ask about inventory
-  if(confirm('¿Restar esta pieza del inventario?\n\n'+name+' (x'+qty+')\n\nSi la pieza no existe en inventario, se creará.')){
+  // Auto-deduct from inventory silently if part exists — no prompt
+  if(DB.inventario.length>0){
     var inv=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
-    if(inv){
-      inv.qty=Math.max(0,inv.qty-qty);
-    } else {
-      // Create it with negative-tracked starting at 0
-      DB.inventario.push({id:'INV-'+Date.now(),nombre:name,cat:'Piezas de servicio',costo:cost,precio:sell,qty:0,min:2,loc:'',sku:part.partNum||''});
-    }
-    saveDB();
+    if(inv){inv.qty=Math.max(0,inv.qty-qty);saveDB();}
   }
+  saveDB();
   // Clear form
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
@@ -1181,10 +1298,10 @@ function savePartRO(){
   var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]};
   if(!svc.parts)svc.parts=[];
   svc.parts.push(part);
-  if(confirm('¿Restar esta pieza del inventario?\n\n'+name+' (x'+qty+')')){
-    var inv=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
-    if(inv){inv.qty=Math.max(0,inv.qty-qty);}else{DB.inventario.push({id:'INV-'+Date.now(),nombre:name,cat:'Piezas de servicio',costo:cost,precio:sell,qty:0,min:2,loc:'',sku:part.partNum||''});}
-    saveDB();
+  // Auto-deduct from inventory silently if part exists — no prompt
+  if(DB.inventario.length>0){
+    var inv2=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
+    if(inv2){inv2.qty=Math.max(0,inv2.qty-qty);saveDB();}
   }
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
@@ -1472,8 +1589,143 @@ function importBackup(e){
   r.readAsText(f);
 }
 
+// ============ INVENTARIO MODULE ============
+var _invEditId=null;var _invCat='Todos';
+var INV_CATS=['Todos','Aceites','Filtros','Frenos','Suspensión','Eléctrico','Motor','Transmisión','A/C','Neumáticos','General','Otro'];
+
+function renderInventario(){
+  var el=document.getElementById('inventario-body');if(!el)return;
+  var q=(document.getElementById('inv-q')||{value:''}).value.toLowerCase();
+  var items=DB.inventario.filter(function(i){
+    var matchCat=_invCat==='Todos'||i.cat===_invCat;
+    var matchQ=!q||i.nombre.toLowerCase().includes(q)||(i.sku||'').toLowerCase().includes(q)||(i.brand||'').toLowerCase().includes(q);
+    return matchCat&&matchQ;
+  });
+  // Stats bar
+  var total=DB.inventario.length;
+  var low=DB.inventario.filter(function(i){return i.qty<=i.min;}).length;
+  var totalVal=DB.inventario.reduce(function(s,i){return s+(i.costo||0)*(i.qty||0);},0);
+  var statsEl=document.getElementById('inv-stats');
+  if(statsEl)statsEl.innerHTML=
+    '<div class="sc"><div class="sl">Items</div><div class="sv n">'+total+'</div></div>'+
+    '<div class="sc"><div class="sl">Bajo stock</div><div class="sv '+(low?'r':'g')+'">'+low+'</div></div>'+
+    '<div class="sc"><div class="sl">Valor inv.</div><div class="sv b">$'+totalVal.toFixed(0)+'</div></div>';
+  // Category chips
+  var catsEl=document.getElementById('inv-cats');
+  if(catsEl)catsEl.innerHTML=INV_CATS.map(function(c){return '<div class="cp'+(c===_invCat?' active':'')+'" onclick="_invCat=\''+c+'\';renderInventario()">'+c+'</div>';}).join('');
+  if(!items.length){el.innerHTML='<div style="text-align:center;padding:40px 20px"><i class="ti ti-package" style="font-size:48px;color:var(--gray-300)"></i><div style="font-size:13px;color:var(--gray-400);margin-top:10px">Sin piezas en esta categoría.<br>Toca <strong>+ Agregar</strong> para comenzar.</div></div>';return;}
+  el.innerHTML=items.map(function(it){
+    var low=it.qty<=it.min;
+    var margin=it.precio>0?((it.precio-it.costo)/it.precio*100):0;
+    return '<div style="padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:10px">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+(low?'var(--red)':'var(--gray-900)')+'">'+it.nombre+'</div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-top:1px">'+
+          (it.sku?'<strong>#'+it.sku+'</strong> · ':'')+
+          (it.brand?it.brand+' · ':'')+
+          it.cat+(it.loc?' · 📍'+it.loc:'')+'</div>'+
+        '<div style="font-size:11px;margin-top:3px;display:flex;gap:6px">'+
+          '<span style="color:var(--red)">Costo: $'+(it.costo||0).toFixed(2)+'</span>'+
+          '<span style="color:var(--blue)">Venta: $'+(it.precio||0).toFixed(2)+'</span>'+
+          '<span style="color:var(--green)">'+margin.toFixed(0)+'% margen</span>'+
+        '</div>'+
+      '</div>'+
+      '<div style="text-align:center;flex-shrink:0">'+
+        '<div style="font-size:22px;font-weight:700;color:'+(low?'var(--red)':'var(--green)')+'">'+it.qty+'</div>'+
+        '<div style="font-size:9px;color:var(--gray-400)">min: '+it.min+'</div>'+
+      '</div>'+
+      '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'+
+        '<button class="btn sm g" onclick="adjInv(\''+it.id+'\',1)" style="padding:6px 10px"><i class="ti ti-plus"></i></button>'+
+        '<button class="btn sm r" onclick="adjInv(\''+it.id+'\',-1)" style="padding:6px 10px"><i class="ti ti-minus"></i></button>'+
+        '<button class="btn sm" onclick="editInvItem(\''+it.id+'\')" style="padding:6px 8px"><i class="ti ti-pencil"></i></button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+function adjInv(id,d){
+  var it=DB.inventario.find(function(x){return x.id===id;});
+  if(!it)return;it.qty=Math.max(0,it.qty+d);saveDB();renderInventario();
+}
+function openAddInv(){
+  _invEditId=null;
+  var f=document.getElementById('inv-form');if(!f)return;
+  ['inv-fn','inv-sku','inv-brand','inv-desc','inv-loc','inv-sup'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('inv-cat-sel').value='General';
+  document.getElementById('inv-cost').value='';document.getElementById('inv-price').value='';
+  document.getElementById('inv-qty').value='0';document.getElementById('inv-min').value='2';
+  document.getElementById('inv-modal-title').textContent='Agregar pieza';
+  document.getElementById('inv-delete-btn').style.display='none';
+  document.getElementById('inv-modal').style.display='flex';
+}
+function editInvItem(id){
+  var it=DB.inventario.find(function(x){return x.id===id;});if(!it)return;
+  _invEditId=id;
+  document.getElementById('inv-fn').value=it.nombre||'';
+  document.getElementById('inv-sku').value=it.sku||'';
+  document.getElementById('inv-brand').value=it.brand||'';
+  document.getElementById('inv-desc').value=it.desc||'';
+  document.getElementById('inv-cat-sel').value=it.cat||'General';
+  document.getElementById('inv-cost').value=it.costo||'';
+  document.getElementById('inv-price').value=it.precio||'';
+  document.getElementById('inv-qty').value=it.qty||0;
+  document.getElementById('inv-min').value=it.min||2;
+  document.getElementById('inv-loc').value=it.loc||'';
+  document.getElementById('inv-sup').value=it.sup||'';
+  document.getElementById('inv-modal-title').textContent='Editar pieza';
+  document.getElementById('inv-delete-btn').style.display='block';
+  document.getElementById('inv-modal').style.display='flex';
+}
+function saveInvItem(){
+  var name=document.getElementById('inv-fn').value.trim();
+  if(!name){alert('Ingresa el nombre de la pieza.');return;}
+  var item={
+    nombre:name,sku:document.getElementById('inv-sku').value.trim(),
+    brand:document.getElementById('inv-brand').value.trim(),
+    desc:document.getElementById('inv-desc').value.trim(),
+    cat:document.getElementById('inv-cat-sel').value,
+    costo:parseFloat(document.getElementById('inv-cost').value)||0,
+    precio:parseFloat(document.getElementById('inv-price').value)||0,
+    qty:parseInt(document.getElementById('inv-qty').value)||0,
+    min:parseInt(document.getElementById('inv-min').value)||2,
+    loc:document.getElementById('inv-loc').value.trim(),
+    sup:document.getElementById('inv-sup').value.trim()
+  };
+  if(_invEditId){
+    var ex=DB.inventario.find(function(x){return x.id===_invEditId;});
+    if(ex)Object.assign(ex,item);
+  }else{
+    item.id='INV-'+Date.now();
+    DB.inventario.push(item);
+  }
+  saveDB();closeInvModal();renderInventario();
+}
+function deleteInvItem(){
+  if(!_invEditId)return;
+  if(!confirm('¿Eliminar esta pieza del inventario?'))return;
+  DB.inventario=DB.inventario.filter(function(x){return x.id!==_invEditId;});
+  saveDB();closeInvModal();renderInventario();
+}
+function closeInvModal(){document.getElementById('inv-modal').style.display='none';_invEditId=null;}
+function autoInvMarkup(force){
+  var costEl=document.getElementById('inv-cost');
+  var priceEl=document.getElementById('inv-price');
+  if(!costEl||!priceEl)return;
+  var cost=parseFloat(costEl.value)||0;
+  if(cost<=0)return;
+  if(force||!parseFloat(priceEl.value)){
+    priceEl.value=(cost*1.7).toFixed(2);
+    calcInvMargin();
+  }
+}
+function calcInvMargin(){
+  var c=parseFloat(document.getElementById('inv-cost').value)||0;
+  var p=parseFloat(document.getElementById('inv-price').value)||0;
+  var ml=document.getElementById('inv-margin-lbl');
+  if(ml){var m=p>0?((p-c)/p*100):0;ml.textContent=m.toFixed(0)+'% margen';}
+}
 // INIT
 loadDB();
+
 var now=new Date();
 document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate();
 renderHome();
@@ -1491,7 +1743,91 @@ document.addEventListener('touchstart',hideSplash,{once:true});
 document.addEventListener('click',hideSplash,{once:true});
 </script>
 
-<div id="vin-scanner-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.9);flex-direction:column;align-items:center;justify-content:center">
+<!-- PDF SHARE SHEET -->
+<div id="pdf-share-modal" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center">
+  <div style="background:var(--white);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:20px 20px 32px">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="width:44px;height:4px;background:var(--gray-300);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:18px;font-weight:700;color:var(--green)"><i class="ti ti-check"></i> Recibo listo</div>
+      <div style="font-size:13px;color:var(--gray-500);margin-top:4px">¿Cómo quieres enviarlo al cliente?</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <button onclick="shareViaNative()" class="btn p" style="flex-direction:column;padding:16px 8px;gap:8px;font-size:12px;height:auto;justify-content:center">
+        <i class="ti ti-share" style="font-size:28px"></i>
+        <span>WhatsApp<br>Email · SMS</span>
+      </button>
+      <button onclick="printPDF()" class="btn" style="flex-direction:column;padding:16px 8px;gap:8px;font-size:12px;height:auto;justify-content:center">
+        <i class="ti ti-printer" style="font-size:28px"></i>
+        <span>Imprimir<br>AirPrint</span>
+      </button>
+      <button onclick="downloadPDF()" class="btn" style="flex-direction:column;padding:16px 8px;gap:8px;font-size:12px;height:auto;justify-content:center">
+        <i class="ti ti-download" style="font-size:28px"></i>
+        <span>Guardar<br>en iPad</span>
+      </button>
+    </div>
+    <button onclick="closePDFShare()" class="btn full" style="color:var(--gray-500)"><i class="ti ti-x"></i> Cerrar</button>
+  </div>
+</div>
+
+<!-- INVENTARIO PAGE -->
+<div id="inventario" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i> Inicio</button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Inventario</div>
+    <button onclick="openAddInv()" style="background:var(--blue);border:none;color:#fff;font-size:12px;font-weight:700;padding:8px 13px;border-radius:var(--r-md);cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-plus"></i> Agregar</button>
+  </div>
+  <div style="padding:10px 14px;background:var(--white);border-bottom:1px solid var(--gray-100)">
+    <div class="sw" style="margin-bottom:8px"><i class="ti ti-search si"></i><input id="inv-q" placeholder="Buscar por nombre, # pieza, marca..." oninput="renderInventario()"></div>
+    <div class="cat-scroll" id="inv-cats"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 14px;background:var(--gray-50);border-bottom:1px solid var(--gray-100)" id="inv-stats"></div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="inventario-body"></div>
+</div>
+
+<!-- INVENTORY ADD/EDIT MODAL -->
+<div id="inv-modal" style="display:none;position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeInvModal()">
+  <div style="background:var(--white);border-radius:18px 18px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
+    <div style="padding:8px 0 0;flex-shrink:0;display:flex;justify-content:center"><div style="width:40px;height:4px;background:var(--gray-300);border-radius:2px"></div></div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <button class="btn sm" onclick="closeInvModal()"><i class="ti ti-x"></i></button>
+      <div style="font-size:15px;font-weight:700" id="inv-modal-title">Agregar pieza</div>
+      <button class="btn sm r" id="inv-delete-btn" onclick="deleteInvItem()" style="display:none"><i class="ti ti-trash"></i></button>
+    </div>
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;min-height:0">
+      <div class="card">
+        <div class="ch">Identificación</div>
+        <div class="cb">
+          <div class="fr fr1"><div class="fg"><div class="fl">Nombre de la pieza *</div><input id="inv-fn" placeholder="Ej: Filtro de aceite Fram PH3593A"></div></div>
+          <div class="fr"><div class="fg"><div class="fl">Número de parte (SKU)</div><input id="inv-sku" placeholder="PH3593A" style="font-family:monospace"></div><div class="fg"><div class="fl">Marca / Fabricante</div><input id="inv-brand" placeholder="Fram, Mobil, ACDelco..."></div></div>
+          <div class="fr"><div class="fg"><div class="fl">Categoría</div><select id="inv-cat-sel"><option>Aceites</option><option>Filtros</option><option>Frenos</option><option>Suspensión</option><option>Eléctrico</option><option>Motor</option><option>Transmisión</option><option>A/C</option><option>Neumáticos</option><option>General</option><option>Otro</option></select></div><div class="fg"><div class="fl">Ubicación en taller</div><input id="inv-loc" placeholder="Estante A3, Drawer 2..."></div></div>
+          <div class="fr fr1"><div class="fg"><div class="fl">Descripción / Compatibilidad</div><textarea id="inv-desc" placeholder="Ej: Filtro compatible con Toyota Corolla 2016-2022 1.8L" style="min-height:44px"></textarea></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch">Precios y stock</div>
+        <div class="cb">
+          <div class="fr fr3">
+            <div class="fg"><div class="fl">Costo c/u ($)</div><input id="inv-cost" type="number" step="0.01" placeholder="0.00" oninput="autoInvMarkup();calcInvMargin()"></div>
+            <div class="fg"><div class="fl">Precio venta ($)</div>
+              <div style="display:flex;gap:4px;align-items:center">
+                <input id="inv-price" type="number" step="0.01" placeholder="0.00" style="flex:1" oninput="calcInvMargin()">
+                <button onclick="autoInvMarkup(true)" title="Aplicar ×1.7" style="background:var(--blue-light);border:1.5px solid var(--blue);color:var(--blue);font-size:10px;font-weight:700;padding:7px 6px;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;flex-shrink:0">×1.7</button>
+              </div>
+            </div>
+            <div class="fg" style="justify-content:flex-end"><div class="fl">&nbsp;</div><div id="inv-margin-lbl" style="font-size:13px;font-weight:700;color:var(--green);padding:8px 0">—</div></div>
+          </div>
+          <div class="fr"><div class="fg"><div class="fl">Cantidad en stock</div><input id="inv-qty" type="number" min="0" value="0" placeholder="0"></div><div class="fg"><div class="fl">Mínimo (alerta)</div><input id="inv-min" type="number" min="0" value="2" placeholder="2"></div></div>
+          <div class="fr fr1"><div class="fg"><div class="fl">Suplidor / Proveedor</div><input id="inv-sup" placeholder="Advance Auto Parts, AutoZone..."></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--gray-100);flex-shrink:0;background:var(--white)">
+      <button class="btn p full" onclick="saveInvItem()"><i class="ti ti-device-floppy"></i> Guardar pieza</button>
+    </div>
+  </div>
+</div>
+
+
   <div style="width:100%;max-width:440px;padding:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="color:#fff;font-size:16px;font-weight:700"><i class="ti ti-qrcode"></i> Escanear VIN / QR</div>
@@ -1537,9 +1873,14 @@ document.addEventListener('click',hideSplash,{once:true});
           <div id="pp-ai-desc" style="display:none;background:var(--blue-light);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--navy);line-height:1.6"></div>
           <div class="fr"><div class="fg"><div class="fl"># Pieza / parte</div><input id="pp-num" placeholder="PH3593A"></div><div class="fg"><div class="fl">Suplidor</div><input id="pp-sup" placeholder="Advance Auto Parts"></div></div>
           <div class="fr fr3">
-            <div class="fg"><div class="fl">Costo c/u ($)</div><input id="pp-cost" type="number" step="0.01" placeholder="0.00" oninput="calcPartProfit()"></div>
+            <div class="fg"><div class="fl">Costo c/u ($)</div><input id="pp-cost" type="number" step="0.01" placeholder="0.00" oninput="autoMarkup();calcPartProfit()"></div>
             <div class="fg"><div class="fl">Cantidad</div><input id="pp-qty" type="number" value="1" min="1" oninput="calcPartProfit()"></div>
-            <div class="fg"><div class="fl">Venta c/u ($)</div><input id="pp-sell" type="number" step="0.01" placeholder="0.00" oninput="calcPartProfit()"></div>
+            <div class="fg"><div class="fl">Venta c/u ($)</div>
+              <div style="display:flex;gap:4px;align-items:center">
+                <input id="pp-sell" type="number" step="0.01" placeholder="0.00" style="flex:1" oninput="calcPartProfit()">
+                <button onclick="autoMarkup(true)" title="Aplicar ×1.7" style="background:var(--blue-light);border:1.5px solid var(--blue);color:var(--blue);font-size:10px;font-weight:700;padding:7px 6px;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;flex-shrink:0">×1.7</button>
+              </div>
+            </div>
           </div>
           <div class="fr"><div class="fg"><div class="fl"># Recibo / invoice</div><input id="pp-receipt" placeholder="ADV-789012"></div><div class="fg"><div class="fl">Fecha compra</div><input id="pp-date" type="date"></div></div>
           <div class="calc-result" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:var(--gray-50);border-radius:var(--r-sm);padding:9px 10px;margin:4px 0 8px;text-align:center;border:1px solid var(--gray-200)">
