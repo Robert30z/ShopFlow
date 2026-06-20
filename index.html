@@ -337,28 +337,29 @@ var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA: Piezas instaladas tienen garantía de 30 días o 1,000 millas. No cubre piezas del cliente ni daños por negligencia.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
 
 var IZ=[
-  {id:'elec',z:'Eléctrico',items:[{id:'bat',l:'Batería/terminales'},{id:'alt',l:'Alternador'},{id:'star',l:'Starter'},{id:'fus',l:'Fusibles'}]},
-  {id:'mot',z:'Motor & Fluidos',items:[{id:'oil',l:'Aceite'},{id:'cool',l:'Refrigerante'},{id:'brkf',l:'Fluido frenos'},{id:'belt',l:'Correas'},{id:'hose',l:'Mangueras'},{id:'airf',l:'Filtro aire'}]},
-  {id:'frn',z:'Frenos',items:[{id:'pf',l:'Pastillas del.'},{id:'pr',l:'Pastillas tras.'},{id:'rf',l:'Rotores del.'},{id:'rr',l:'Rotores tras.'},{id:'cal',l:'Calibres'}]},
-  {id:'sus',z:'Suspensión',items:[{id:'lca',l:'Lower control arm'},{id:'tie',l:'Tie rods'},{id:'sbl',l:'Sway bar links'},{id:'blj',l:'Ball joints'},{id:'shk',l:'Amortiguadores'}]},
-  {id:'drv',z:'Drivetrain',items:[{id:'cvx',l:'CV axles'},{id:'trf',l:'Fluido trans.'},{id:'mnt',l:'Motor mounts'}]},
-  {id:'gom',z:'Neumáticos',items:[{id:'tfl',l:'Goma del. izq.'},{id:'tfr',l:'Goma del. der.'},{id:'trl',l:'Goma tras. izq.'},{id:'trr',l:'Goma tras. der.'}]},
-  {id:'aac',z:'Aire Acondicionado',items:[{id:'acc',l:'Enfriamiento'},{id:'acp',l:'Compresor'},{id:'ach',l:'Calefacción'},{id:'acf',l:'Filtro cabina'}]},
-  {id:'ext',z:'Luces & Exterior',items:[{id:'lhd',l:'Faros'},{id:'ltl',l:'Luces traseras'},{id:'lbk',l:'Luz freno'},{id:'wip',l:'Plumillas'},{id:'hrn',l:'Bocina'}]}
+  {id:'elec',z:'Electrical',items:[{id:'bat',l:'Battery / terminals'},{id:'alt',l:'Alternator'},{id:'star',l:'Starter'},{id:'fus',l:'Fuses'}]},
+  {id:'mot',z:'Engine & Fluids',items:[{id:'oil',l:'Engine oil'},{id:'cool',l:'Coolant'},{id:'brkf',l:'Brake fluid'},{id:'belt',l:'Belts'},{id:'hose',l:'Hoses'},{id:'airf',l:'Air filter'}]},
+  {id:'frn',z:'Brakes',items:[{id:'pf',l:'Front pads'},{id:'pr',l:'Rear pads'},{id:'rf',l:'Front rotors'},{id:'rr',l:'Rear rotors'},{id:'cal',l:'Calipers'}]},
+  {id:'sus',z:'Suspension / Front End',items:[{id:'lca',l:'Lower control arm'},{id:'tie',l:'Tie rods'},{id:'sbl',l:'Sway bar links'},{id:'blj',l:'Ball joints'},{id:'shk',l:'Shocks / struts'}]},
+  {id:'drv',z:'Drivetrain',items:[{id:'cvx',l:'CV axles'},{id:'trf',l:'Transmission fluid'},{id:'mnt',l:'Motor mounts'}]},
+  {id:'gom',z:'Tires',items:[{id:'tfl',l:'Front left tire'},{id:'tfr',l:'Front right tire'},{id:'trl',l:'Rear left tire'},{id:'trr',l:'Rear right tire'}]},
+  {id:'aac',z:'Air Conditioning',items:[{id:'acc',l:'Cooling'},{id:'acp',l:'Compressor'},{id:'ach',l:'Heating'},{id:'acf',l:'Cabin filter'}]},
+  {id:'ext',z:'Lights & Exterior',items:[{id:'lhd',l:'Headlights'},{id:'ltl',l:'Tail lights'},{id:'lbk',l:'Brake light'},{id:'wip',l:'Wipers'},{id:'hrn',l:'Horn'}]}
 ];
 
 var MS={
-  aceites:[{id:'a1',n:'Aceite & filtro — conv. 5W-30',p:45,c:18},{id:'a2',n:'Aceite & filtro — sint. 0W-20',p:75,c:32},{id:'a3',n:'Aceite & filtro — sint. 5W-40',p:80,c:35},{id:'a4',n:'Filtro de aire',p:25,c:10},{id:'a5',n:'Filtro de cabina',p:30,c:12}],
-  frenos:[{id:'f1',n:'Pastillas delanteras estándar',p:95,c:35},{id:'f2',n:'Pastillas traseras estándar',p:85,c:30},{id:'f3',n:'Rotores delanteros (par)',p:130,c:55},{id:'f4',n:'Rotores traseros (par)',p:120,c:48},{id:'f5',n:'Frenos completos del.',p:220,c:90},{id:'f6',n:'Frenos completos tras.',p:200,c:80},{id:'f7',n:'Calibre (por lado)',p:140,c:60},{id:'f8',n:'Flush líquido de frenos',p:55,c:15}],
-  suspension:[{id:'s1',n:'Lower control arm',p:160,c:70},{id:'s2',n:'Tie rod end',p:90,c:35},{id:'s3',n:'Sway bar link',p:65,c:20},{id:'s4',n:'Ball joint',p:110,c:40},{id:'s5',n:'Amortiguador',p:130,c:55},{id:'s6',n:'Strut completo',p:180,c:80},{id:'s7',n:'CV axle / semieje',p:175,c:75},{id:'s8',n:'Alineación (sublet)',p:75,c:45}],
-  ac:[{id:'ac1',n:'A/C Service R134a',p:120,c:40},{id:'ac2',n:'A/C Service R1234yf',p:180,c:80},{id:'ac3',n:'Compresor A/C',p:350,c:150},{id:'ac4',n:'Diagnóstico A/C',p:65,c:0}],
-  electrico:[{id:'e1',n:'Batería supply e instalación',p:160,c:80},{id:'e2',n:'Batería — instalación',p:30,c:0},{id:'e3',n:'Alternador',p:280,c:120},{id:'e4',n:'Starter',p:250,c:110},{id:'e5',n:'Bujías (4 cil)',p:65,c:20},{id:'e6',n:'Diagnóstico OBD-II',p:65,c:0}],
-  motor:[{id:'m1',n:'Timing belt completo',p:380,c:150},{id:'m2',n:'Bomba de agua',p:220,c:80},{id:'m3',n:'Flush refrigerante',p:85,c:25},{id:'m4',n:'Correa serpentina',p:95,c:30},{id:'m5',n:'Radiador',p:320,c:130}],
-  transmision:[{id:'t1',n:'Flush trans. automática',p:120,c:40},{id:'t2',n:'Flush trans. CVT',p:140,c:50},{id:'t3',n:'Aceite trans. manual',p:80,c:25},{id:'t4',n:'Flush diferencial',p:85,c:28}],
-  diagnostico:[{id:'d1',n:'Diagnóstico OBD-II completo',p:65,c:0},{id:'d2',n:'Inspección pre-compra',p:95,c:0},{id:'d3',n:'Diagnóstico eléctrico',p:95,c:0},{id:'d4',n:'Prueba de batería',p:30,c:0}],
-  neumaticos:[{id:'n1',n:'Montaje + balanceo (4)',p:100,c:0},{id:'n2',n:'Reparación ponche plug',p:20,c:3},{id:'n3',n:'Rotación de neumáticos',p:35,c:0}]
+  aceites:[{id:'a1',n:'Mantenimiento Básico de Aceite y Filtro',p:45,c:0},{id:'a2',n:'Mantenimiento Completo de Aceite y Filtro',p:75,c:0}],
+  frenos:[{id:'f1',n:'Front Brake Service',p:120,c:0},{id:'f2',n:'Rear Brake Service',p:110,c:0},{id:'f3',n:'Complete Brake Service (Front & Rear)',p:200,c:0},{id:'f4',n:'Brake Fluid Flush',p:55,c:0}],
+  suspension:[{id:'s1',n:'Suspension Component Replacement',p:120,c:0},{id:'s2',n:'CV Axle Replacement',p:140,c:0},{id:'s3',n:'Wheel Alignment (sublet)',p:75,c:0}],
+  ac:[{id:'ac1',n:'A/C Service & Recharge',p:120,c:0},{id:'ac2',n:'A/C Diagnostic',p:65,c:0},{id:'ac3',n:'A/C Component Replacement',p:200,c:0}],
+  electrico:[{id:'e1',n:'Battery Replacement',p:60,c:0},{id:'e2',n:'Alternator Replacement',p:180,c:0},{id:'e3',n:'Starter Replacement',p:160,c:0},{id:'e4',n:'Spark Plug Replacement',p:80,c:0},{id:'e5',n:'OBD-II Diagnostic',p:65,c:0}],
+  motor:[{id:'m1',n:'Timing Belt Service',p:250,c:0},{id:'m2',n:'Water Pump Replacement',p:160,c:0},{id:'m3',n:'Coolant Flush',p:85,c:0},{id:'m4',n:'Serpentine Belt Replacement',p:75,c:0},{id:'m5',n:'Tune-Up',p:120,c:0}],
+  transmision:[{id:'t1',n:'Transmission Fluid Service',p:120,c:0},{id:'t2',n:'Differential Fluid Service',p:85,c:0},{id:'t3',n:'Power Steering Flush',p:65,c:0}],
+  diagnostico:[{id:'d1',n:'Full Diagnostic (OBD-II)',p:65,c:0},{id:'d2',n:'Pre-Purchase Inspection',p:95,c:0},{id:'d3',n:'Electrical Diagnostic',p:95,c:0},{id:'d4',n:'Noise / Drivability Diagnostic',p:55,c:0}],
+  neumaticos:[{id:'n1',n:'Mount & Balance',p:100,c:0},{id:'n2',n:'Tire Repair (Patch/Plug)',p:25,c:0},{id:'n3',n:'Tire Rotation',p:35,c:0}],
+  general:[{id:'g1',n:'General Labor / Custom Job',p:0,c:0},{id:'g2',n:'Cabin Air Filter Replacement',p:30,c:0},{id:'g3',n:'Engine Air Filter Replacement',p:25,c:0},{id:'g4',n:'Wiper Blade Replacement',p:25,c:0}]
 };
-var MC=[{id:'aceites',l:'Aceites'},{id:'frenos',l:'Frenos'},{id:'suspension',l:'Suspensión'},{id:'ac',l:'A/C'},{id:'electrico',l:'Eléctrico'},{id:'motor',l:'Motor'},{id:'transmision',l:'Transmisión'},{id:'diagnostico',l:'Diagnóstico'},{id:'neumaticos',l:'Neumáticos'}];
+var MC=[{id:'aceites',l:'Oil & Filter'},{id:'frenos',l:'Brakes'},{id:'suspension',l:'Suspension'},{id:'ac',l:'A/C'},{id:'electrico',l:'Electrical'},{id:'motor',l:'Engine'},{id:'transmision',l:'Transmission'},{id:'diagnostico',l:'Diagnostic'},{id:'neumaticos',l:'Tires'},{id:'general',l:'General'}];
 
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'firma1',l:'Firma 1'},{id:'inspeccion',l:'Inspección'},{id:'servicios',l:'Servicios'},{id:'denegados',l:'Denegados'},{id:'estimado',l:'Estimado'},{id:'firma2',l:'Firma 2'},{id:'cierre',l:'Cierre'}];
 
@@ -524,7 +525,7 @@ function renderROSO(){
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="oi-n" style="font-size:13px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><button onclick="removeROSvc('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
         '<div><div class="fl" style="margin-bottom:2px">Labor / servicio ($)</div><input type="number" value="'+s.ep+'" step="0.01" style="font-size:12px;font-weight:700;color:var(--red)" oninput="RO.servicios['+i+'].ep=parseFloat(this.value)||0;renderROSO()"></div>'+
-        '<div><div class="fl" style="margin-bottom:2px">Horas labor <span style="color:var(--blue)">@$'+rate+'</span></div><div style="display:flex;gap:4px"><input type="number" value="'+s.laborHours+'" step="0.1" min="0" style="font-size:12px;font-weight:700" oninput="RO.servicios['+i+'].laborHours=parseFloat(this.value)||0;renderROSO()"><button class="btn sm blue" onclick="aiLaborEstimate('+i+')" style="padding:5px 8px;flex-shrink:0" title="Estimar con AI"><i class="ti ti-sparkles"></i></button></div></div>'+
+        '<div><div class="fl" style="margin-bottom:2px">Horas labor <span style="color:var(--blue)">@$'+rate+'</span></div><div style="display:flex;gap:4px"><input type="number" value="'+s.laborHours+'" step="0.05" min="0" inputmode="decimal" placeholder="0.0" style="font-size:12px;font-weight:700" oninput="RO.servicios['+i+'].laborHours=parseFloat(this.value)||0;updROSub()" onblur="renderROSO()"><button class="btn sm blue" onclick="aiLaborEstimate('+i+')" style="padding:5px 8px;flex-shrink:0" title="Estimar con AI"><i class="ti ti-sparkles"></i></button></div></div>'+
       '</div>'+
       (s.laborHours>0?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Mano de obra: '+s.laborHours+'h × $'+rate+' = <strong style="color:var(--navy)">$'+laborCost.toFixed(2)+'</strong></div>':'')+
       '<button class="btn sm" onclick="openPartsModalRO('+i+')" style="width:100%;justify-content:center;font-size:11px;'+(partsCount>0?'background:var(--green-light);border-color:var(--green);color:var(--green)':'')+'"><i class="ti ti-receipt"></i> '+(partsCount>0?partsCount+' pieza'+(partsCount>1?'s':'')+' · costo $'+partsCost.toFixed(2)+' · venta $'+partsSell.toFixed(2):'Agregar piezas compradas')+'</button>'+
@@ -636,7 +637,7 @@ function exportPDF(){
     if(s.parts&&s.parts.length){
       s.parts.forEach(function(p){
         doc.setFontSize(8);doc.setTextColor(80,80,80);
-        var partLabel='   Pieza: '+p.name+(p.qty>1?' ×'+p.qty:'')+(p.partNum?' (#'+p.partNum+')':'');
+        var partLabel='   Part: '+p.name+(p.qty>1?' x'+p.qty:'')+(p.partNum?'  [Part# '+p.partNum+']':'');
         var pl=doc.splitTextToSize(partLabel,150);
         doc.text(pl,18,y);
         doc.text('$'+(p.sellPrice*p.qty).toFixed(2),196,y,{align:'right'});
@@ -738,6 +739,72 @@ function saveG(){var d=document.getElementById('gd').value;var m=parseFloat(docu
 
 
 
+
+// ============ AI PART SPEC SUGGESTION ============
+function aiPartSuggest(){
+  var veh=null;
+  if(partsContext==='ro'&&RO.vehiculo&&RO.vehiculo.year){
+    veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
+  }
+  if(!veh){
+    veh=prompt('¿Para qué vehículo? (ej: 2020 Toyota Tacoma 4x4)');
+    if(!veh)return;
+  }
+  var job='';
+  if(partsContext==='ro'&&currentROPartIdx!==null&&RO.servicios[currentROPartIdx]){
+    job=RO.servicios[currentROPartIdx].n;
+  }else if(currentPartService){
+    job=currentPartService.name;
+  }
+  var btn=event.target.closest('button');
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.innerHTML='<i class="ti ti-loader"></i> Buscando...';btn.disabled=true;}
+  var resultEl=document.getElementById('ai-suggest-result');
+  if(resultEl){resultEl.style.display='block';resultEl.innerHTML='<i class="ti ti-loader"></i> Consultando specs...';}
+
+  var prompt='Eres un experto en partes automotrices. Para este vehículo y trabajo, dame las especificaciones de partes más comunes.\n\n'+
+    'Vehículo: '+veh+'\n'+
+    'Trabajo: '+(job||'mantenimiento')+'\n\n'+
+    'Responde SOLO con JSON sin markdown, formato exacto:\n'+
+    '{"parts":[{"name":"tipo y especificación","partNum":"número de parte común si lo sabes","note":"detalle breve"}],"summary":"resumen en 1 línea"}\n\n'+
+    'Para cambio de aceite incluye: tipo de aceite (viscosidad), capacidad en cuartos, y filtro recomendado. '+
+    'Da números de parte comunes (Fram, Mobil, AC Delco, etc.) cuando los sepas. '+
+    'Máximo 4 partes. Notas breves. Responde en español pero mantén nombres técnicos en inglés.';
+
+  fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,messages:[{role:"user",content:prompt}]})
+  }).then(function(r){return r.json();}).then(function(data){
+    if(btn){btn.innerHTML=orig;btn.disabled=false;}
+    var text='';
+    if(data.content&&data.content.length){data.content.forEach(function(b){if(b.type==='text')text+=b.text;});}
+    text=text.replace(/```json/g,'').replace(/```/g,'').trim();
+    try{
+      var result=JSON.parse(text);
+      var html='<div style="font-weight:700;margin-bottom:6px"><i class="ti ti-info-circle"></i> Sugerencia para '+veh+'</div>';
+      if(result.summary)html+='<div style="margin-bottom:8px;font-style:italic">'+result.summary+'</div>';
+      (result.parts||[]).forEach(function(p,i){
+        html+='<div style="background:var(--white);border-radius:6px;padding:7px 9px;margin-bottom:5px"><div style="font-weight:700;font-size:12px">'+p.name+'</div>'+(p.partNum?'<div style="font-size:11px;color:var(--blue)">Part #: '+p.partNum+'</div>':'')+(p.note?'<div style="font-size:10px;color:var(--gray-500)">'+p.note+'</div>':'')+'<button class="btn sm" onclick="usePartSuggestion(\''+encodeURIComponent(p.name)+'\',\''+encodeURIComponent(p.partNum||'')+'\')" style="margin-top:5px;padding:3px 8px;font-size:10px"><i class="ti ti-arrow-up"></i> Usar este</button></div>';
+      });
+      html+='<div style="font-size:10px;color:var(--amber);margin-top:6px;font-weight:600"><i class="ti ti-alert-triangle"></i> ESTIMADO — verifica contra la tapa, Mitchell, o el part lookup de Advance antes de comprar.</div>';
+      if(resultEl)resultEl.innerHTML=html;
+    }catch(err){
+      if(resultEl)resultEl.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> No se pudo obtener la sugerencia. Ingresa las partes manualmente.</div>';
+    }
+  }).catch(function(err){
+    if(btn){btn.innerHTML=orig;btn.disabled=false;}
+    if(resultEl)resultEl.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> AI no disponible (requiere conexión). Ingresa las partes manualmente.</div>';
+  });
+}
+function usePartSuggestion(nameEnc,numEnc){
+  var name=decodeURIComponent(nameEnc);
+  var num=decodeURIComponent(numEnc);
+  document.getElementById('pp-name').value=name;
+  if(num)document.getElementById('pp-num').value=num;
+  document.getElementById('pp-cost').focus();
+}
+
 // ============ PER-JOB PARTS (RO) ============
 var currentROPartIdx=null;
 var partsContext='menu'; // 'menu' or 'ro'
@@ -751,6 +818,7 @@ function openPartsModalRO(svcIdx){
   var d=document.getElementById('pp-date');if(d)d.value=new Date().toISOString().split('T')[0];
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
+  var air=document.getElementById('ai-suggest-result');if(air){air.style.display='none';air.innerHTML='';}
   calcPartProfit();
   renderPartsListRO();
   document.getElementById('parts-modal').style.display='block';
@@ -843,6 +911,7 @@ function openPartsModal(svcId,svcName){
   // Clear inputs
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
+  var air2=document.getElementById('ai-suggest-result');if(air2){air2.style.display='none';air2.innerHTML='';}
   calcPartProfit();
   renderPartsList();
   document.getElementById('parts-modal').style.display='block';
@@ -1224,14 +1293,16 @@ document.addEventListener('touchstart',hideSplash,{once:true});
 document.addEventListener('click',hideSplash,{once:true});
 </script>
 
-<div id="parts-modal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.5)">
-  <div style="position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:18px 18px 0 0;max-height:88vh;display:flex;flex-direction:column">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <div>
-        <div style="font-size:15px;font-weight:700" id="pm-title">Piezas del servicio</div>
-        <div style="font-size:11px;color:var(--gray-400)" id="pm-sub"></div>
+<div id="parts-modal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.5)" onclick="if(event.target===this)closePartsModal()">
+  <div style="position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:18px 18px 0 0;max-height:90vh;display:flex;flex-direction:column">
+    <div style="padding:8px 0 0;flex-shrink:0;display:flex;justify-content:center"><div style="width:40px;height:4px;background:var(--gray-300);border-radius:2px"></div></div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px">
+      <button class="btn sm" onclick="closePartsModal()" style="flex-shrink:0;padding:8px 12px"><i class="ti ti-arrow-left"></i> Atrás</button>
+      <div style="flex:1;text-align:center;min-width:0">
+        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="pm-title">Piezas</div>
+        <div style="font-size:10px;color:var(--gray-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="pm-sub"></div>
       </div>
-      <button class="btn sm" onclick="closePartsModal()"><i class="ti ti-x"></i></button>
+      <button class="btn sm" onclick="closePartsModal()" style="flex-shrink:0;padding:8px 10px" title="Cerrar"><i class="ti ti-x"></i></button>
     </div>
     <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;min-height:0">
       <div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:11px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px;line-height:1.5">
@@ -1241,6 +1312,8 @@ document.addEventListener('click',hideSplash,{once:true});
       <div class="card">
         <div class="ch">Agregar pieza comprada</div>
         <div class="cb">
+          <button class="btn blue full" onclick="aiPartSuggest()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> Sugerir specs con AI (aceite, filtro, etc.)</button>
+          <div id="ai-suggest-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);line-height:1.5"></div>
           <div class="fr fr1"><div class="fg"><div class="fl">Nombre de la pieza</div><input id="pp-name" placeholder="Ej: Filtro de aceite Fram PH3593A"></div></div>
           <div class="fr"><div class="fg"><div class="fl"># Pieza / parte</div><input id="pp-num" placeholder="PH3593A"></div><div class="fg"><div class="fl">Suplidor</div><input id="pp-sup" placeholder="Advance Auto Parts"></div></div>
           <div class="fr fr3">
