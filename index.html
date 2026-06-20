@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ShopFlow">
+<meta name="theme-color" content="#0B1F3A">
+<title>ShopFlow — Auto Service Management</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/tabler-icons.min.css">
+<style>
+:root{
+  --navy:#0B1F3A;
+  --blue:#2196F3;
+  --blue-light:#E3F2FD;
+  --red:#D32F2F;
+  --red-light:#FFEBEE;
+  --green:#3B6D11;
+  --green-light:#EAF3DE;
+  --amber:#BA7517;
+  --amber-light:#FFF8E1;
+  --gray-50:#F8F9FA;
+  --gray-100:#F1F3F5;
+  --gray-200:#E9ECEF;
+  --gray-300:#DEE2E6;
+  --gray-400:#ADB5BD;
+  --gray-500:#6C757D;
+  --gray-700:#495057;
+  --gray-900:#212529;
+  --white:#FFFFFF;
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:14px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);
+  --shadow-md:0 4px 12px rgba(0,0,0,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;font-size:14px;color:var(--gray-900);background:var(--gray-100);overscroll-behavior:none}
+.pg{display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column}
+.pg.v{display:flex}
+.tb{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--navy);position:sticky;top:0;z-index:50;flex-shrink:0}
+.sf-mark{display:flex;align-items:center;gap:9px}
+.sf-icon{width:32px;height:32px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sf-wordmark{font-size:18px;font-weight:600;letter-spacing:-.03em;color:var(--white)}
+.sf-wordmark span{color:var(--blue)}
+.sf-by{font-size:9px;color:rgba(255,255,255,.45);letter-spacing:.08em;text-transform:uppercase;margin-top:-2px}
+.tb-right{display:flex;align-items:center;gap:8px}
+.tb-btn{background:rgba(255,255,255,.1);border:none;border-radius:var(--radius-sm);color:var(--white);padding:6px 10px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px}
+.tb-btn:hover{background:rgba(255,255,255,.18)}
+.tb-back{background:none;border:none;color:rgba(255,255,255,.8);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 0}
+.scroll-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px}
+.section{padding:14px 16px}
+.section-sm{padding:10px 16px}
+.st{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-500);margin-bottom:8px}
+.card{background:var(--white);border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)}
+.card-hdr{padding:10px 14px;border-bottom:1px solid var(--gray-200);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--gray-900)}
+.card-body{padding:12px 14px}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.fr3{grid-template-columns:1fr 1fr 1fr}
+.fr1{grid-template-columns:1fr}
+.fg{display:flex;flex-direction:column;gap:3px}
+.fl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)}
+input,select,textarea{font-size:13px;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);background:var(--white);color:var(--gray-900);width:100%;-webkit-appearance:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);background:#fff}
+textarea{resize:vertical;min-height:52px;line-height:1.5}
+input[type=range]{padding:0;border:none;background:none;accent-color:var(--blue)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-md);font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-300);background:var(--white);color:var(--gray-700);font-family:inherit;transition:all .12s}
+.btn:active{transform:scale(.97)}
+.btn.p{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.blue{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.g{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.a{background:var(--amber);color:#fff;border-color:var(--amber)}
+.btn.r{background:var(--red);color:#fff;border-color:var(--red)}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:var(--radius-sm)}
+.btn.full{width:100%;justify-content:center}
+.act{display:flex;gap:8px;padding:12px 16px;background:var(--white);border-top:1px solid var(--gray-200);flex-wrap:wrap;position:sticky;bottom:0;z-index:10;flex-shrink:0}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.badge.g{background:var(--green-light);color:var(--green)}
+.badge.r{background:var(--red-light);color:var(--red)}
+.badge.a{background:var(--amber-light);color:var(--amber)}
+.badge.b{background:var(--blue-light);color:var(--blue)}
+.badge.gr{background:var(--gray-100);color:var(--gray-500)}
+.badge.n{background:var(--navy);color:#fff}
+.er{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--gray-100);font-size:13px}
+.er:last-child{border-bottom:none}
+.dv{height:1px;background:var(--gray-100);margin:10px 0}
+.tot-bar{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--navy);color:#fff;border-radius:var(--radius-md);margin-top:8px;font-weight:600;font-size:14px}
+.sig-pad{border:2px dashed var(--gray-300);border-radius:var(--radius-md);background:var(--gray-50);cursor:crosshair;display:block;touch-action:none;width:100%;height:110px}
+.sig-pad.signed{border-color:var(--green);background:var(--green-light)}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.photo-slot{aspect-ratio:1;border:2px dashed var(--gray-300);border-radius:var(--radius-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;font-weight:600;color:var(--gray-400);background:var(--gray-50);overflow:hidden;position:relative;cursor:pointer}
+.photo-slot:active{border-color:var(--blue)}
+.photo-slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-md) - 2px)}
+.photo-slot input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.steps-bar{display:flex;overflow-x:auto;background:var(--navy);padding:0 4px 8px;gap:2px;flex-shrink:0}
+.steps-bar::-webkit-scrollbar{display:none}
+.stp{flex-shrink:0;padding:6px 10px;text-align:center;font-size:10px;font-weight:600;cursor:pointer;color:rgba(255,255,255,.5);border-radius:var(--radius-sm);transition:all .15s;white-space:nowrap}
+.stp.active{background:var(--blue);color:#fff}
+.stp.done{color:rgba(255,255,255,.8)}
+.stp.done::before{content:'✓ '}
+.pan{display:none;padding:14px 16px;padding-bottom:90px}
+.pan.active{display:block}
+.insp-zone{margin-bottom:14px}
+.insp-zone-title{font-size:12px;font-weight:600;color:var(--navy);padding:7px 10px;background:var(--blue-light);border-radius:var(--radius-sm);margin-bottom:6px;display:flex;align-items:center;gap:6px;justify-content:space-between}
+.insp-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.ii{border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:7px 9px;background:var(--white);transition:all .12s}
+.ii.verde{border-color:var(--green);background:var(--green-light)}
+.ii.amarillo{border-color:var(--amber);background:var(--amber-light)}
+.ii.rojo{border-color:var(--red);background:var(--red-light)}
+.ii-name{font-size:11px;font-weight:600;margin-bottom:5px;color:var(--gray-800)}
+.ii-btns{display:flex;gap:3px}
+.ibt{flex:1;padding:4px 0;border:1.5px solid var(--gray-200);border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;background:var(--white);color:var(--gray-500);text-align:center;font-family:inherit}
+.ibt.v{background:var(--green);color:#fff;border-color:var(--green)}
+.ibt.a{background:var(--amber);color:#fff;border-color:var(--amber)}
+.ibt.r{background:var(--red);color:#fff;border-color:var(--red)}
+.ii-note{margin-top:5px}
+.ii-note input{font-size:10px;padding:4px 7px;width:100%}
+.svc-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--white);border-radius:var(--radius-sm);border:1.5px solid var(--gray-200);margin-bottom:5px;cursor:pointer}
+.svc-row:active{border-color:var(--blue);background:var(--blue-light)}
+.oi{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--gray-50);border-radius:var(--radius-sm);margin-bottom:5px;border:1.5px solid var(--gray-200)}
+.oi-n{font-size:12px;font-weight:600;flex:1}
+.rec-item{border:1.5px solid var(--amber);border-radius:var(--radius-md);padding:9px 11px;margin-bottom:7px;background:var(--amber-light)}
+.cats-scroll{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;flex-shrink:0}
+.cats-scroll::-webkit-scrollbar{display:none}
+.cat-pill{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);white-space:nowrap;background:var(--white);color:var(--gray-600)}
+.cat-pill.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.stat-grid.g3{grid-template-columns:repeat(3,1fr)}
+.stat-grid.g4{grid-template-columns:repeat(4,1fr)}
+.sc{background:var(--white);border-radius:var(--radius-md);padding:11px 13px;box-shadow:var(--shadow-sm)}
+.sl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:4px}
+.sv{font-size:20px;font-weight:700}
+.sv.g{color:var(--green)}.sv.r{color:var(--red)}.sv.a{color:var(--amber)}.sv.b{color:var(--blue)}.sv.n{color:var(--navy)}
+.tabs{display:flex;border-bottom:2px solid var(--gray-200);background:var(--white);overflow-x:auto;flex-shrink:0}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--gray-500);white-space:nowrap;margin-bottom:-2px}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-pane{display:none;padding:14px 16px;padding-bottom:90px}
+.tab-pane.active{display:block}
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mc{background:var(--white);border-radius:var(--radius-lg);padding:14px;cursor:pointer;box-shadow:var(--shadow-sm);border:2px solid transparent;transition:border-color .12s}
+.mc:active{border-color:var(--blue)}
+.mi{width:36px;height:36px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.notif-item{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--radius-md);margin-bottom:6px;box-shadow:var(--shadow-sm);border-left:3px solid var(--amber)}
+.garage-card{background:var(--white);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm);border-left:4px solid var(--gray-300)}
+.garage-card.working{border-left-color:var(--blue)}
+.garage-card.ready{border-left-color:var(--green)}
+.garage-card.waiting{border-left-color:var(--amber)}
+.garage-card.overdue{border-left-color:var(--red)}
+.prog-bar{height:5px;background:var(--gray-200);border-radius:3px;overflow:hidden;margin-top:4px}
+.prog-fill{height:100%;border-radius:3px;transition:width .3s}
+.cli-row{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100);cursor:pointer}
+.cli-av{width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0}
+.inv-row{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--white);border-bottom:1px solid var(--gray-100)}
+.disclaimer-box{background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--radius-md);padding:11px 13px;font-size:10px;color:var(--gray-600);line-height:1.7;max-height:180px;overflow-y:auto}
+.search-wrap{position:relative;margin-bottom:10px}
+.search-wrap input{padding-left:34px;background:var(--white)}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--gray-400);pointer-events:none}
+.tip-box{background:var(--blue-light);border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px;line-height:1.6}
+.warn-box{background:var(--amber-light);border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--amber);display:flex;gap:8px;margin-bottom:10px;line-height:1.6}
+.sup-card{background:var(--white);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+.sup-logo{width:38px;height:38px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.order-line{border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:9px 10px;margin-bottom:7px;background:var(--gray-50)}
+.prog-row{margin-bottom:10px}
+.prog-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;font-weight:500}
+.fast-card{border:1.5px solid var(--gray-200);border-radius:var(--radius-lg);padding:11px 13px;background:var(--white);margin-bottom:8px;transition:border-color .12s;box-shadow:var(--shadow-sm)}
+.fast-card.expanded{border-color:var(--blue)}
+.fast-title{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:8px}
+.fast-body{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-100)}
+.fast-card.expanded .fast-body{display:block}
+.calc-result{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:var(--gray-50);border-radius:var(--radius-sm);padding:9px 10px;margin:8px 0;text-align:center;border:1px solid var(--gray-200)}
+.cr-l{font-size:9px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.cr-v{font-size:13px;font-weight:700}
+.splash{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .5s}
+.splash.hide{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="splash" id="splash">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <div style="width:56px;height:56px;background:var(--blue);border-radius:16px;display:flex;align-items:center;justify-content:center">
+      <i class="ti ti-tool" style="color:#fff;font-size:30px"></i>
+    </div>
+    <div>
+      <div style="font-size:32px;font-weight:700;letter-spacing:-.04em;color:#fff">Shop<span style="color:var(--blue)">Flow</span></div>
+      <div style="font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.1em;text-transform:uppercase">Auto Service Management</div>
+    </div>
+  </div>
+  <div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:6px">by Pit Stop · Bayamón, PR</div>
+  <div style="margin-top:32px;width:40px;height:3px;background:var(--blue);border-radius:2px;animation:pulse 1s infinite alternate"></div>
+</div>
+<style>@keyframes pulse{from{opacity:.3;transform:scaleX(.6)}to{opacity:1;transform:scaleX(1)}}</style>
+
+<!-- HOME -->
+<div id="home" class="pg v">
+  <div class="tb">
+    <div class="sf-mark">
+      <div class="sf-icon"><i class="ti ti-tool" style="color:#fff;font-size:18px"></i></div>
+      <div><div class="sf-wordmark">Shop<span>Flow</span></div><div class="sf-by">Pit Stop · Bayamón PR</div></div>
+    </div>
+    <div class="tb-right">
+      <div id="hdate" style="font-size:11px;color:rgba(255,255,255,.6)"></div>
+    </div>
+  </div>
+  <div class="scroll-body">
+    <div class="section">
+      <div class="stat-grid g4">
+        <div class="sc"><div class="sl">Hoy</div><div class="sv g" id="h-hoy">$0</div></div>
+        <div class="sc"><div class="sl">Taller</div><div class="sv a" id="h-taller">0</div></div>
+        <div class="sc"><div class="sl">Por cobrar</div><div class="sv r" id="h-cobrar">$0</div></div>
+        <div class="sc"><div class="sl">Órdenes</div><div class="sv n" id="h-ords">0</div></div>
+      </div>
+      <div class="st">Acciones rápidas</div>
+      <div class="mod-grid">
+        <div class="mc" onclick="go('ro')"><div class="mi" style="background:var(--red-light)"><i class="ti ti-clipboard-plus" style="color:var(--red);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Nueva RO</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">Flujo completo 9 pasos</div></div>
+        <div class="mc" onclick="go('garage')"><div class="mi" style="background:var(--amber-light)"><i class="ti ti-building-garage" style="color:var(--amber);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Garage</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">Vehículos activos</div></div>
+        <div class="mc" onclick="go('ordenes')"><div class="mi" style="background:var(--green-light)"><i class="ti ti-clipboard-list" style="color:var(--green);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Órdenes</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">Historial completo</div></div>
+        <div class="mc" onclick="go('clientes')"><div class="mi" style="background:var(--blue-light)"><i class="ti ti-users" style="color:var(--blue);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Clientes</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">Base de datos</div></div>
+        <div class="mc" onclick="go('menu')"><div class="mi" style="background:#F3E8FF"><i class="ti ti-tools" style="color:#7C3AED;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Servicios</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">Menú y calculadora</div></div>
+        <div class="mc" onclick="go('finanzas')"><div class="mi" style="background:var(--green-light)"><i class="ti ti-chart-line" style="color:var(--green);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Finanzas</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">P&L · Inventario · Suplidores</div></div>
+      </div>
+      <div class="st" style="margin-top:4px">Notificaciones</div>
+      <div id="home-notifs"></div>
+    </div>
+  </div>
+</div>
+
+<!-- NUEVA RO -->
+<div id="ro" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i> Home</button>
+    <div style="color:rgba(255,255,255,.9);font-size:13px;font-weight:600">Nueva RO</div>
+    <div id="ro-id-lbl" style="font-size:11px;color:rgba(255,255,255,.5)"></div>
+  </div>
+  <div class="steps-bar" id="ro-steps-bar"></div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch" id="ro-panes-wrap">
+    <!-- panes injected by JS -->
+  </div>
+  <div class="act" id="ro-bottom-nav">
+    <button class="btn" id="ro-prev" onclick="prevStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
+    <div style="flex:1;text-align:center;font-size:11px;color:var(--gray-500);align-self:center" id="ro-step-lbl"></div>
+    <button class="btn p" id="ro-next" onclick="nextStep()">Siguiente <i class="ti ti-arrow-right"></i></button>
+  </div>
+</div>
+
+<!-- GARAGE -->
+<div id="garage" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i></button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Garage activo</div>
+    <div></div>
+  </div>
+  <div class="tabs" id="garage-tabs">
+    <div class="tab active" onclick="garageSwitchTab('g-activos')">Activos</div>
+    <div class="tab" onclick="garageSwitchTab('g-listos')">Listos</div>
+    <div class="tab" onclick="garageSwitchTab('g-entregados')">Entregados</div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div id="g-activos" class="tab-pane active"></div>
+    <div id="g-listos" class="tab-pane"></div>
+    <div id="g-entregados" class="tab-pane"></div>
+  </div>
+</div>
+
+<!-- ORDENES -->
+<div id="ordenes" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i></button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Órdenes</div>
+    <div id="ord-count-lbl" style="font-size:11px;color:rgba(255,255,255,.6)"></div>
+  </div>
+  <div style="padding:10px 14px;background:var(--white);border-bottom:1px solid var(--gray-200)">
+    <div class="search-wrap" style="margin:0"><i class="ti ti-search search-icon"></i><input id="ord-q" placeholder="Buscar cliente, tablilla, número RO..." oninput="renderOrdenes()"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto" id="ordenes-body"></div>
+</div>
+
+<!-- CLIENTES -->
+<div id="clientes" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i></button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Clientes</div>
+    <div></div>
+  </div>
+  <div style="padding:10px 14px;background:var(--white);border-bottom:1px solid var(--gray-200)">
+    <div class="search-wrap" style="margin:0"><i class="ti ti-search search-icon"></i><input id="cli-q" placeholder="Buscar por nombre o teléfono..." oninput="renderClientes()"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto" id="clientes-body"></div>
+</div>
+
+<!-- MENU DE SERVICIOS -->
+<div id="menu" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i></button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Menú de servicios</div>
+    <div style="position:relative;cursor:pointer" onclick="toggleMenuOrder()">
+      <i class="ti ti-clipboard-list" style="color:#fff;font-size:22px"></i>
+      <div id="menu-cart-count" style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center">0</div>
+    </div>
+  </div>
+  <div style="padding:8px 14px;background:var(--white);border-bottom:1px solid var(--gray-200)">
+    <div class="search-wrap" style="margin-bottom:8px"><i class="ti ti-search search-icon"></i><input id="menu-q" placeholder="Buscar servicio..." oninput="renderMenuSvcs()"></div>
+    <div class="cats-scroll" id="menu-cats"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:10px 14px" id="menu-body"></div>
+  <div id="menu-order-panel" style="display:none;border-top:2px solid var(--gray-200);background:var(--white);padding:12px 14px;max-height:280px;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700">Orden de servicio</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" onclick="clearMenuOrder()"><i class="ti ti-trash"></i></button>
+        <button class="btn sm" onclick="toggleMenuOrder()"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+    <div id="menu-order-items"></div>
+    <div class="er" style="margin-top:6px"><span style="font-weight:700">Total con IVU</span><span id="menu-tot" style="font-size:15px;font-weight:700;color:var(--red)">$0.00</span></div>
+    <button class="btn p full" style="margin-top:8px" onclick="saveMenuOrder()"><i class="ti ti-device-floppy"></i> Guardar como RO</button>
+  </div>
+</div>
+
+<!-- FINANZAS -->
+<div id="finanzas" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i></button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Finanzas & Inventario</div>
+    <div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="finSwitchTab('f-pl')">P&L</div>
+    <div class="tab" onclick="finSwitchTab('f-suplidores')">Suplidores</div>
+    <div class="tab" onclick="finSwitchTab('f-inventario')">Inventario</div>
+    <div class="tab" onclick="finSwitchTab('f-gastos')">Gastos</div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div id="f-pl" class="tab-pane active"></div>
+    <div id="f-suplidores" class="tab-pane"></div>
+    <div id="f-inventario" class="tab-pane"></div>
+    <div id="f-gastos" class="tab-pane"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// ============================================================
+// SHOPFLOW v1.0 — DATA & STATE
+// ============================================================
+var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesSuplidores:[],inventario:[],movimientos:[]};
+var RO={};
+var currentStep=0;
+var activeSvcCat='aceites';
+var menuOrder=[];
+
+var DISCLAIMER='TÉRMINOS Y CONDICIONES — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS Y PRE-EXISTENTES: Pit Stop no se hace responsable de daños ocultos, defectos internos, o condiciones pre-existentes no visibles al momento de la inspección. Todo daño estético pre-existente queda documentado en esta orden.\n\n2. GARANTÍA DE PIEZAS: Piezas instaladas por Pit Stop tienen garantía de instalación de 30 días o 1,000 millas, lo que ocurra primero. No cubre piezas del cliente, daños por negligencia, accidentes, ni modificaciones posteriores.\n\n3. SERVICIOS DENEGADOS: El cliente ha sido informado de todos los servicios recomendados. Al rechazarlos, exime a Pit Stop de toda responsabilidad por daños o fallas resultantes.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24 horas después de ser contactado el cliente incurrirán en cargo de $30.00/día. El tiempo comienza al momento del contacto.\n\n5. ESTIMADOS: Todo estimado es aproximado. Si durante el trabajo se descubren condiciones adicionales, se notificará al cliente antes de proceder.\n\n6. RESPONSABILIDAD LIMITADA: La responsabilidad de Pit Stop se limita al costo del servicio realizado. Pit Stop no se responsabiliza por pérdidas de tiempo, ingresos, ni daños consecuentes.\n\n7. FUERZA MAYOR: Pit Stop no se responsabiliza de fallas durante la reparación causadas por el estado deteriorado del vehículo (corrosión, edad extrema, desgaste severo).\n\n8. AUTORIZACIÓN: Al firmar esta orden, el cliente autoriza a Pit Stop a realizar el trabajo descrito y acepta estos términos.\n\nShopFlow by Pit Stop Auto Service · Bayamón, Puerto Rico';
+
+var INSP_ZONES=[
+  {id:'electrico',zona:'Eléctrico',icon:'ti-bolt',items:[{id:'bat',l:'Batería / terminales'},{id:'alt',l:'Alternador'},{id:'starter',l:'Motor de arranque'},{id:'fuses',l:'Fusibles'}]},
+  {id:'motor',zona:'Motor & Fluidos',icon:'ti-engine',items:[{id:'oil',l:'Nivel de aceite'},{id:'coolant',l:'Refrigerante'},{id:'brakef',l:'Fluido de frenos'},{id:'psf',l:'Dirección hidráulica'},{id:'belts',l:'Correas'},{id:'hoses',l:'Mangueras'},{id:'airfilter',l:'Filtro de aire'}]},
+  {id:'frenos',zona:'Frenos',icon:'ti-circle',items:[{id:'padf',l:'Pastillas del.'},{id:'padr',l:'Pastillas tras.'},{id:'rotf',l:'Rotores del.'},{id:'rotr',l:'Rotores tras.'},{id:'calipers',l:'Calibres'},{id:'ebrake',l:'Freno de emergencia'}]},
+  {id:'suspension',zona:'Suspensión / Tren del.',icon:'ti-settings',items:[{id:'lcarm',l:'Lower control arm'},{id:'tierod',l:'Tie rods'},{id:'swaybl',l:'Sway bar links'},{id:'ballj',l:'Ball joints'},{id:'shocks',l:'Amortiguadores'},{id:'struts',l:'Struts'}]},
+  {id:'drivetrain',zona:'Drivetrain',icon:'ti-settings-2',items:[{id:'cvax',l:'CV axles / semiejes'},{id:'transf',l:'Fluido transmisión'},{id:'mounts',l:'Motor mounts'}]},
+  {id:'gomas',zona:'Neumáticos',icon:'ti-circle-dot',items:[{id:'tfl',l:'Goma del. izq.'},{id:'tfr',l:'Goma del. der.'},{id:'trl',l:'Goma tras. izq.'},{id:'trr',l:'Goma tras. der.'},{id:'spare',l:'Repuesto'}]},
+  {id:'ac',zona:'Aire Acondicionado',icon:'ti-wind',items:[{id:'accool',l:'Enfriamiento'},{id:'accomp',l:'Compresor'},{id:'acheat',l:'Calefacción'},{id:'acfilt',l:'Filtro de cabina'}]},
+  {id:'exterior',zona:'Exterior & Luces',icon:'ti-sun',items:[{id:'lhead',l:'Faros delanteros'},{id:'ltail',l:'Luces traseras'},{id:'lbrk',l:'Luz de freno'},{id:'lturn',l:'Direccionales'},{id:'wipers',l:'Plumillas'},{id:'horn',l:'Bocina'}]}
+];
+
+var MENU_SVCS={
+  aceites:[{id:'a1',n:'Aceite & filtro — convencional 5W-30',p:45,c:18},{id:'a2',n:'Aceite & filtro — sintético 0W-20',p:75,c:32},{id:'a3',n:'Aceite & filtro — sintético 5W-40',p:80,c:35},{id:'a4',n:'Aceite & filtro — diesel',p:95,c:45},{id:'a5',n:'Filtro de aire',p:25,c:10},{id:'a6',n:'Filtro de cabina',p:30,c:12}],
+  frenos:[{id:'f1',n:'Pastillas delanteras — estándar',p:95,c:35},{id:'f2',n:'Pastillas traseras — estándar',p:85,c:30},{id:'f3',n:'Pastillas delanteras — premium',p:130,c:55},{id:'f4',n:'Pastillas traseras — premium',p:120,c:48},{id:'f5',n:'Rotores delanteros (par)',p:130,c:55},{id:'f6',n:'Rotores traseros (par)',p:120,c:48},{id:'f7',n:'Frenos completos del. (pastillas + rotores)',p:220,c:90},{id:'f8',n:'Frenos completos tras. (pastillas + rotores)',p:200,c:80},{id:'f9',n:'Calibre (por lado)',p:140,c:60},{id:'f10',n:'Flush líquido de frenos',p:55,c:15}],
+  suspension:[{id:'s1',n:'Lower control arm (por lado)',p:160,c:70},{id:'s2',n:'Upper control arm (por lado)',p:150,c:65},{id:'s3',n:'Tie rod end (por lado)',p:90,c:35},{id:'s4',n:'Sway bar link (por lado)',p:65,c:20},{id:'s5',n:'Ball joint (por lado)',p:110,c:40},{id:'s6',n:'Amortiguador / shock (por lado)',p:130,c:55},{id:'s7',n:'Strut completo (por lado)',p:180,c:80},{id:'s8',n:'CV axle / semieje (por lado)',p:175,c:75},{id:'s9',n:'Alineación (sublet)',p:75,c:45}],
+  ac:[{id:'ac1',n:'A/C Service — evacuación y recarga R134a',p:120,c:40},{id:'ac2',n:'A/C Service — evacuación y recarga R1234yf',p:180,c:80},{id:'ac3',n:'Compresor de A/C',p:350,c:150},{id:'ac4',n:'Condensador de A/C',p:220,c:90},{id:'ac5',n:'Diagnóstico A/C',p:65,c:0}],
+  electrico:[{id:'e1',n:'Batería — supply e instalación',p:160,c:80},{id:'e2',n:'Batería — instalación (cliente trae)',p:30,c:0},{id:'e3',n:'Alternador',p:280,c:120},{id:'e4',n:'Starter / motor de arranque',p:250,c:110},{id:'e5',n:'Bujías (4 cilindros)',p:65,c:20},{id:'e6',n:'Bujías (6 cilindros)',p:95,c:30},{id:'e7',n:'Diagnóstico OBD-II',p:65,c:0}],
+  motor:[{id:'m1',n:'Timing belt completo',p:380,c:150},{id:'m2',n:'Bomba de agua',p:220,c:80},{id:'m3',n:'Flush de refrigerante',p:85,c:25},{id:'m4',n:'Termostato',p:90,c:30},{id:'m5',n:'Correa serpentina',p:95,c:30},{id:'m6',n:'Radiador',p:320,c:130}],
+  transmision:[{id:'t1',n:'Flush transmisión automática (ATF)',p:120,c:40},{id:'t2',n:'Flush transmisión CVT',p:140,c:50},{id:'t3',n:'Aceite transmisión manual',p:80,c:25},{id:'t4',n:'Flush diferencial',p:85,c:28},{id:'t5',n:'Flush dirección hidráulica',p:65,c:18}],
+  diagnostico:[{id:'d1',n:'Diagnóstico OBD-II completo',p:65,c:0},{id:'d2',n:'Inspección pre-compra (50 puntos)',p:95,c:0},{id:'d3',n:'Diagnóstico eléctrico avanzado',p:95,c:0},{id:'d4',n:'Prueba de batería y carga',p:30,c:0},{id:'d5',n:'Diagnóstico de suspensión / ruido',p:55,c:0}],
+  neumaticos:[{id:'n1',n:'Montaje + balanceo (4 gomas)',p:100,c:0},{id:'n2',n:'Reparación de ponche (plug)',p:20,c:3},{id:'n3',n:'Reparación de ponche (patch)',p:35,c:5},{id:'n4',n:'Rotación de neumáticos',p:35,c:0}]
+};
+var MENU_CATS=[{id:'aceites',l:'Aceites & Filtros'},{id:'frenos',l:'Frenos'},{id:'suspension',l:'Suspensión'},{id:'ac',l:'A/C'},{id:'electrico',l:'Eléctrico'},{id:'motor',l:'Motor'},{id:'transmision',l:'Transmisión'},{id:'diagnostico',l:'Diagnóstico'},{id:'neumaticos',l:'Neumáticos'}];
+
+var STEPS=[
+  {id:'cliente',label:'Cliente',icon:'ti-user'},
+  {id:'fotos',label:'Fotos',icon:'ti-camera'},
+  {id:'firma1',label:'Firma inicio',icon:'ti-writing'},
+  {id:'inspeccion',label:'Inspección',icon:'ti-clipboard-check'},
+  {id:'servicios',label:'Servicios',icon:'ti-tools'},
+  {id:'denegados',label:'Denegados',icon:'ti-alert-triangle'},
+  {id:'estimado',label:'Estimado',icon:'ti-receipt'},
+  {id:'firma2',label:'Firma OK',icon:'ti-pen'},
+  {id:'cierre',label:'Cierre & PDF',icon:'ti-file-type-pdf'}
+];
+
+// ============================================================
+// STORAGE
+// ============================================================
+function saveDB(){try{localStorage.setItem('sf_db_v1',JSON.stringify(DB));}catch(e){console.warn('Storage error',e);}}
+function loadDB(){try{var s=localStorage.getItem('sf_db_v1');if(s)DB=JSON.parse(s);}catch(e){}}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function go(p){
+  document.querySelectorAll('.pg').forEach(function(x){x.classList.remove('v');});
+  var el=document.getElementById(p);if(el)el.classList.add('v');
+  if(p==='home')renderHome();
+  if(p==='ro'){initRO();}
+  if(p==='garage')renderGarage();
+  if(p==='ordenes')renderOrdenes();
+  if(p==='clientes')renderClientes();
+  if(p==='menu')initMenu();
+  if(p==='finanzas')initFinanzas();
+}
+
+// ============================================================
+// HOME
+// ============================================================
+function renderHome(){
+  var now=new Date();
+  var dd=document.getElementById('hdate');if(dd)dd.textContent=MESES[now.getMonth()]+' '+now.getDate();
+  var today=now.toDateString();
+  var todayOrds=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;});
+  var hoy=todayOrds.reduce(function(s,o){return s+(o.total||0);},0);
+  var active=DB.garage.filter(function(c){return c.estado!=='entregado';}).length;
+  var pend=DB.ordenes.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+(o.total||0);},0);
+  document.getElementById('h-hoy').textContent='$'+hoy.toFixed(0);
+  document.getElementById('h-taller').textContent=active;
+  document.getElementById('h-cobrar').textContent='$'+pend.toFixed(0);
+  document.getElementById('h-ords').textContent=DB.ordenes.length;
+  var now2=new Date();
+  var notifs=[];
+  DB.ordenes.forEach(function(o){
+    if(!o.nextDate)return;
+    var d=new Date(o.nextDate);var diff=Math.floor((d-now2)/86400000);
+    if(diff>=0&&diff<=14)notifs.push({txt:o.cliente+' — '+MESES[d.getMonth()]+' '+d.getDate(),sub:'Mantenimiento en '+diff+' día'+(diff===1?'':'s'),color:diff<=3?'var(--red)':'var(--amber)'});
+  });
+  DB.garage.filter(function(c){return c.readyTime&&c.estado!=='entregado';}).forEach(function(c){
+    var hrs=(now2-new Date(c.readyTime))/3600000;
+    if(hrs>c.maxHours)notifs.push({txt:c.cliente+' — '+c.vehiculo,sub:'Vehículo listo hace '+hrs.toFixed(0)+'h — $30/día aplicable',color:'var(--red)'});
+  });
+  var nel=document.getElementById('home-notifs');
+  nel.innerHTML=notifs.length?notifs.map(function(n){return '<div class="notif-item" style="border-left-color:'+n.color+'"><div style="flex:1"><div style="font-size:12px;font-weight:700">'+n.txt+'</div><div style="font-size:11px;color:var(--gray-500);margin-top:2px">'+n.sub+'</div></div></div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">Sin notificaciones pendientes.</div>';
+}
+
+// ============================================================
+// NUEVA RO — BUILDER
+// ============================================================
+function initRO(){
+  RO={id:'RO-'+Date.now().toString().slice(-6),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:''},queja:'',fotos:[],fotoNotes:'',sig1:false,sig2:false,sigDen:false,insp:{},inspNotes:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
+  var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
+  currentStep=0;
+  buildROSteps();buildROPanes();
+  document.getElementById('ro-id-lbl').textContent=RO.id;
+  updateRONav();
+}
+
+function buildROSteps(){
+  var el=document.getElementById('ro-steps-bar');
+  el.innerHTML=STEPS.map(function(s,i){return '<div class="stp'+(i===0?' active':'')+'" id="stp-'+i+'" onclick="gotoStep('+i+')">'+s.label+'</div>';}).join('');
+}
+
+function buildROPanes(){
+  var wrap=document.getElementById('ro-panes-wrap');
+  wrap.innerHTML=STEPS.map(function(s,i){return '<div class="pan'+(i===0?' active':'')+'" id="pan-'+i+'">'+buildPane(s.id)+'</div>';}).join('');
+  initROSigs();renderROSvcMenu();renderRecsList();renderDenList();
+}
+
+function buildPane(id){
+  switch(id){
+    case 'cliente': return paneCliente();
+    case 'fotos': return paneFotos();
+    case 'firma1': return paneFirma('sig-1','sig1','Autorización de inspección','El cliente autoriza a Pit Stop / ShopFlow a inspeccionar y diagnosticar el vehículo. No implica autorización para realizar ningún trabajo de reparación.');
+    case 'inspeccion': return paneInsp();
+    case 'servicios': return paneSvcs();
+    case 'denegados': return paneDen();
+    case 'estimado': return paneEst();
+    case 'firma2': return paneFirma('sig-2','sig2','Autorización para trabajar','El cliente autoriza a Pit Stop / ShopFlow a realizar los servicios indicados en esta orden por el total estimado presentado.');
+    case 'cierre': return paneCierre();
+    default: return '';
+  }
+}
+
+function paneCliente(){
+  return '<div class="card"><div class="card-hdr"><i class="ti ti-user"></i> Datos del cliente</div><div class="card-body">'+
+    '<div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono / WhatsApp</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div>'+
+    '<div class="fr fr1"><div class="fg"><div class="fl">Email (opcional)</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div>'+
+  '</div></div>'+
+  '<div class="card"><div class="card-hdr"><i class="ti ti-car"></i> Vehículo</div><div class="card-body">'+
+    '<div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div>'+
+    '<div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div>'+
+    '<div class="fr"><div class="fg"><div class="fl">Odómetro entrada (mi)</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida (mi)</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div>'+
+    '<div class="fr fr1"><div class="fg"><div class="fl">Queja / motivo de visita</div><textarea id="v-q" placeholder="El cliente reporta que el A/C no enfría, ruido al frenar..." oninput="RO.queja=this.value"></textarea></div></div>'+
+  '</div></div>';
+}
+
+function paneFotos(){
+  var zones=['Frente','Lateral izq.','Lateral der.','Trasero','Tablero/Odóm.','Daño existente'];
+  return '<div class="tip-box"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Esto te protege de cualquier reclamación futura.</span></div>'+
+    '<div class="photo-grid">'+zones.map(function(z,i){return '<div class="photo-slot" id="pslot-'+i+'"><i class="ti ti-camera" style="font-size:22px"></i><span>'+z+'</span><input type="file" accept="image/*" capture="environment" onchange="handlePhoto(event,'+i+')" /></div>';}).join('')+'</div>'+
+    '<div class="card" style="margin-top:10px"><div class="card-hdr">Notas de daños pre-existentes</div><div class="card-body"><textarea id="foto-notes" placeholder="Describe rayones, abolladuras, daños existentes antes del servicio..." oninput="RO.fotoNotes=this.value"></textarea></div></div>';
+}
+
+function paneFirma(canvasId,stateKey,titulo,desc){
+  return '<div class="tip-box"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div>'+
+    '<div class="card"><div class="card-hdr">Firma del cliente</div><div class="card-body">'+
+      '<canvas id="'+canvasId+'" class="sig-pad" width="600" height="110"></canvas>'+
+      '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'+
+        '<button class="btn sm" onclick="clearSig(\''+canvasId+'\',\''+stateKey+'\')"><i class="ti ti-eraser"></i> Borrar</button>'+
+        '<span id="st-'+stateKey+'" style="font-size:11px;color:var(--gray-400)">Sin firma aún</span>'+
+      '</div>'+
+    '</div></div>'+
+    '<div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';
+}
+
+function paneInsp(){
+  var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-badges"><span class="badge g">0 OK</span><span class="badge a">0 Atención</span><span class="badge r">0 Crítico</span></div>';
+  INSP_ZONES.forEach(function(z){
+    html+='<div class="insp-zone"><div class="insp-zone-title"><div style="display:flex;align-items:center;gap:6px"><i class="ti '+z.icon+'"></i>'+z.zona+'</div><span id="zs-'+z.id+'" style="font-size:10px;font-weight:500;color:var(--gray-500)">—</span></div>';
+    html+='<div class="insp-grid">'+z.items.map(function(it){
+      return '<div class="ii" id="ii-'+it.id+'"><div class="ii-name">'+it.l+'</div><div class="ii-btns">'+
+        '<button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button>'+
+        '<button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button>'+
+        '<button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button>'+
+      '</div><div class="ii-note"><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px" oninput="RO.inspNotes[\''+it.id+'\']=this.value"></div></div>';
+    }).join('')+'</div></div>';
+  });
+  return html;
+}
+
+function paneSvcs(){
+  return '<div class="search-wrap"><i class="ti ti-search search-icon"></i><input id="ro-svc-q" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div>'+
+    '<div class="cats-scroll" id="ro-svc-cats"></div>'+
+    '<div id="ro-svc-list"></div>'+
+    '<div class="dv"></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden de servicio</div><button class="btn sm" onclick="RO.servicios=[];renderROSvcOrder()"><i class="ti ti-trash"></i></button></div>'+
+    '<div id="ro-svc-order"></div>'+
+    '<div class="er"><span style="font-weight:600">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div>'+
+    '<div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas técnicas</div><textarea id="tech-notes" placeholder="Observaciones del técnico sobre el trabajo realizado..." oninput="RO.techNotes=this.value"></textarea></div>';
+}
+
+function paneDen(){
+  return '<div class="warn-box"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Los ítems marcados en ROJO en la inspección aparecen aquí automáticamente. También puedes agregar servicios rechazados manualmente.</span></div>'+
+    '<div id="den-auto" style="margin-bottom:10px"></div>'+
+    '<div class="card"><div class="card-hdr">Agregar denegado manualmente</div><div class="card-body">'+
+      '<div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div>'+
+      '<div class="fr"><div class="fg"><div class="fl">Precio estimado (sin IVU)</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente — seguridad</option></select></div></div>'+
+      '<div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas traseras al 10% de vida útil. Cliente informado del riesgo de seguridad." style="min-height:52px"></textarea></div></div>'+
+      '<button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button>'+
+    '</div></div>'+
+    '<div id="den-list"></div>'+
+    '<div id="den-sig-wrap" style="display:none">'+
+      '<div class="card"><div class="card-hdr"><i class="ti ti-writing" style="color:var(--amber)"></i> Firma — reconocimiento de denegados</div><div class="card-body">'+
+        '<div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;line-height:1.6">El cliente reconoce haber sido informado de los servicios indicados y decide no autorizarlos. Pit Stop no se responsabiliza por consecuencias.</div>'+
+        '<canvas id="sig-den" class="sig-pad" width="600" height="90"></canvas>'+
+        '<div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div>'+
+      '</div></div>'+
+    '</div>';
+}
+
+function paneEst(){
+  return '<div class="card"><div class="card-hdr"><i class="ti ti-receipt"></i> Resumen</div><div class="card-body">'+
+    '<div id="est-cli" style="background:var(--gray-50);border-radius:var(--radius-sm);padding:10px;margin-bottom:10px;font-size:12px"></div>'+
+    '<div id="est-items"></div>'+
+    '<div class="er"><span>Subtotal</span><span id="est-sub">$0.00</span></div>'+
+    '<div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div>'+
+    '<div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div>'+
+    '<div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div>'+
+    '<div id="est-den-sum" style="margin-top:10px"></div>'+
+  '</div></div>'+
+  '<div class="card"><div class="card-hdr">Pago</div><div class="card-body">'+
+    '<div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div></div>'+
+    '<div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio (recordatorio)</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div>'+
+  '</div></div>';
+}
+
+function paneCierre(){
+  return '<div class="card"><div class="card-hdr"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="card-body"><div class="disclaimer-box">'+DISCLAIMER.replace(/\n/g,'<br>')+'</div></div></div>'+
+    '<div class="card"><div class="card-hdr"><i class="ti ti-bell"></i> Recordatorio de mantenimiento</div><div class="card-body">'+
+      '<div class="fr"><div class="fg"><div class="fl">Fecha</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Cambio de aceite y mantenimiento preventivo"></div></div>'+
+    '</div></div>'+
+    '<div class="act" style="position:static;border-top:none;background:transparent;padding:0">'+
+      '<button class="btn p full" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button>'+
+      '<button class="btn full" style="margin-top:6px" onclick="exportROPDF()"><i class="ti ti-file-type-pdf"></i> Exportar PDF</button>'+
+    '</div>';
+}
+
+// ============================================================
+// RO STEP NAV
+// ============================================================
+function gotoStep(n){
+  document.getElementById('pan-'+currentStep).classList.remove('active');
+  document.getElementById('stp-'+currentStep).classList.remove('active');
+  document.getElementById('stp-'+currentStep).classList.add('done');
+  currentStep=n;
+  document.getElementById('pan-'+n).classList.add('active');
+  STEPS.forEach(function(s,i){var el=document.getElementById('stp-'+i);if(!el)return;el.className='stp'+(i<n?' done':i===n?' active':'');});
+  updateRONav();
+  document.getElementById('stp-'+n).scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+  document.getElementById('ro-panes-wrap').scrollTop=0;
+  if(n===6)buildEstSummary();
+  if(n===5){renderRecsList();renderDenList();}
+  if(n===8){var cn=document.getElementById('cier-next');if(cn)cn.value=RO.nextDate;}
+}
+function nextStep(){if(currentStep<8)gotoStep(currentStep+1);}
+function prevStep(){if(currentStep>0)gotoStep(currentStep-1);}
+function updateRONav(){
+  var bp=document.getElementById('ro-prev');var bn=document.getElementById('ro-next');var sl=document.getElementById('ro-step-lbl');
+  if(bp)bp.style.opacity=currentStep===0?.35:1;
+  if(bn)bn.style.display=currentStep===8?'none':'inline-flex';
+  if(sl)sl.textContent=(currentStep+1)+'/'+STEPS.length;
+  document.getElementById('ro-bottom-nav').style.display=currentStep===8?'none':'flex';
+}
+
+// ============================================================
+// SIGNATURES
+// ============================================================
+function initROSigs(){setTimeout(function(){['sig-1','sig-2'].forEach(function(id){initSigPad(id,id==='sig-1'?'sig1':'sig2');});},100);}
+function initSigPad(canvasId,key){
+  var c=document.getElementById(canvasId);if(!c||c._init)return;c._init=true;
+  var ctx=c.getContext('2d');ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#1a1a1a';
+  var drawing=false;
+  function pos(e){var r=c.getBoundingClientRect();var sc=c.width/r.width;if(e.touches&&e.touches[0])return{x:(e.touches[0].clientX-r.left)*sc,y:(e.touches[0].clientY-r.top)*sc};return{x:(e.clientX-r.left)*sc,y:(e.clientY-r.top)*sc};}
+  function start(e){e.preventDefault();drawing=true;var p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);}
+  function draw(e){e.preventDefault();if(!drawing)return;var p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();RO[key]=true;var st=document.getElementById('st-'+key);if(st){st.textContent='Firma capturada ✓';st.style.color='var(--green)';}c.classList.add('signed');}
+  function stop(){drawing=false;}
+  c.addEventListener('mousedown',start);c.addEventListener('mousemove',draw);c.addEventListener('mouseup',stop);c.addEventListener('mouseleave',stop);
+  c.addEventListener('touchstart',start,{passive:false});c.addEventListener('touchmove',draw,{passive:false});c.addEventListener('touchend',stop);
+}
+function clearSig(canvasId,key){
+  var c=document.getElementById(canvasId);if(c){c.getContext('2d').clearRect(0,0,c.width,c.height);c.classList.remove('signed');}
+  RO[key]=false;var st=document.getElementById('st-'+key);if(st){st.textContent='Sin firma aún';st.style.color='';}
+}
+
+// ============================================================
+// PHOTOS
+// ============================================================
+function handlePhoto(e,i){
+  var f=e.target.files[0];if(!f)return;
+  var r=new FileReader();r.onload=function(ev){
+    RO.fotos[i]=ev.target.result;
+    var slot=document.getElementById('pslot-'+i);
+    if(slot){var img=document.createElement('img');img.src=ev.target.result;img.alt='Foto '+(i+1);slot.appendChild(img);slot.style.borderColor='var(--green)';}
+  };r.readAsDataURL(f);
+}
+
+// ============================================================
+// INSPECTION
+// ============================================================
+function setInsp(zoneId,itemId,color){
+  RO.insp[itemId]=color;
+  var card=document.getElementById('ii-'+itemId);
+  if(card)card.className='ii '+color;
+  var keys={verde:'v',amarillo:'a',rojo:'r'};
+  Object.keys(keys).forEach(function(c){var b=document.getElementById('ib'+keys[c]+'-'+itemId);if(b)b.className='ibt'+(c===color?' '+keys[c]:'');});
+  var noteEl=document.getElementById('in-'+itemId);
+  if(noteEl)noteEl.style.display=(color==='amarillo'||color==='rojo')?'block':'none';
+  if(color==='rojo'){
+    var zone=INSP_ZONES.find(function(z){return z.items.some(function(it){return it.id===itemId;});});
+    var item=zone&&zone.items.find(function(it){return it.id===itemId;});
+    if(item&&!RO.denegados.find(function(d){return d.autoId===itemId;})){
+      RO.denegados.push({autoId:itemId,nombre:'Revisar / reparar: '+item.l,precio:0,urgencia:'urgente',nota:'Marcado crítico en inspección multipuntos',auto:true});
+    }
+  } else {
+    RO.denegados=RO.denegados.filter(function(d){return !(d.autoId===itemId&&d.auto);});
+  }
+  updateInspBadges();
+}
+function updateInspBadges(){
+  var vals=Object.values(RO.insp);
+  var v=vals.filter(function(x){return x==='verde';}).length;
+  var a=vals.filter(function(x){return x==='amarillo';}).length;
+  var r=vals.filter(function(x){return x==='rojo';}).length;
+  var el=document.getElementById('insp-badges');
+  if(el)el.innerHTML='<span class="badge g">'+v+' OK</span><span class="badge a">'+a+' Atención</span><span class="badge r">'+r+' Crítico</span>';
+  INSP_ZONES.forEach(function(z){
+    var el2=document.getElementById('zs-'+z.id);if(!el2)return;
+    var zv=z.items.filter(function(it){return RO.insp[it.id]==='verde';}).length;
+    var za=z.items.filter(function(it){return RO.insp[it.id]==='amarillo';}).length;
+    var zr=z.items.filter(function(it){return RO.insp[it.id]==='rojo';}).length;
+    if(!zv&&!za&&!zr){el2.textContent='—';return;}
+    el2.innerHTML=(zv?'<span style="color:var(--green)">'+zv+'✓</span> ':'')+(za?'<span style="color:var(--amber)">'+za+'⚠</span> ':'')+(zr?'<span style="color:var(--red)">'+zr+'✗</span>':'');
+  });
+}
+
+// ============================================================
+// SERVICES IN RO
+// ============================================================
+function renderROSvcMenu(){
+  var cats=document.getElementById('ro-svc-cats');
+  if(cats)cats.innerHTML=MENU_CATS.map(function(c){return '<div class="cat-pill'+(activeSvcCat===c.id?' active':'')+'" onclick="activeSvcCat=\''+c.id+'\';renderROSvcMenu()">'+c.l+'</div>';}).join('');
+  var q=(document.getElementById('ro-svc-q')||{value:''}).value.toLowerCase();
+  var svcs=(MENU_SVCS[activeSvcCat]||[]).filter(function(s){return !q||s.n.toLowerCase().includes(q);});
+  var el=document.getElementById('ro-svc-list');
+  if(el)el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:600;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p.toFixed(2)+'</span><button class="btn sm p" onclick="addSvcToRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('')||'<div style="text-align:center;padding:16px;font-size:12px;color:var(--gray-400)">Sin resultados.</div>';
+}
+function addSvcToRO(id,nombre,precio){
+  var ex=RO.servicios.find(function(s){return s.id===id;});
+  if(ex){ex.qty=(ex.qty||1)+1;}else RO.servicios.push({id:id,nombre:nombre,precio:precio,qty:1,editPrecio:precio});
+  renderROSvcOrder();
+}
+function renderROSvcOrder(){
+  var el=document.getElementById('ro-svc-order');
+  if(!el)return;
+  el.innerHTML=RO.servicios.length?RO.servicios.map(function(s,i){return '<div class="oi"><span class="oi-n">'+s.nombre+(s.qty>1?' ×'+s.qty:'')+'</span><input type="number" value="'+s.editPrecio.toFixed(2)+'" step="0.01" style="width:70px;font-size:12px;font-weight:700;color:var(--red);text-align:right" oninput="RO.servicios['+i+'].editPrecio=parseFloat(this.value)||0;updateROSub()"><button onclick="RO.servicios.splice('+i+',1);renderROSvcOrder();" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px;margin-left:4px"><i class="ti ti-x"></i></button></div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin servicios en la orden.</div>';
+  updateROSub();
+}
+function updateROSub(){
+  var sub=RO.servicios.reduce(function(s,i){return s+(i.editPrecio||0)*(i.qty||1);},0);
+  var el=document.getElementById('ro-sub');if(el)el.textContent='$'+sub.toFixed(2);
+}
+
+// ============================================================
+// DENEGADOS
+// ============================================================
+function renderRecsList(){
+  var el=document.getElementById('den-auto');if(!el)return;
+  var autos=RO.denegados.filter(function(d){return d.auto;});
+  if(!autos.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Sin ítems críticos de la inspección aún.</div>';return;}
+  el.innerHTML='<div class="st">De la inspección — marcados crítico</div>'+autos.map(function(r,i){return '<div class="rec-item"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:12px;font-weight:700;color:var(--amber)"><i class="ti ti-alert-triangle"></i> '+r.nombre+'</span><span class="badge r">Crítico</span></div><div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">'+r.nota+'</div><div style="display:flex;gap:6px"><input type="number" placeholder="Precio est." step="0.01" style="flex:1;font-size:12px" oninput="RO.denegados.find(function(x){return x.autoId===\''+r.autoId+'\';}).precio=parseFloat(this.value)||0"><button class="btn sm a" onclick="moveAutoToDen(\''+r.autoId+'\')" style="white-space:nowrap">Confirmar denegado</button></div></div>';}).join('');
+}
+function moveAutoToDen(autoId){
+  var r=RO.denegados.find(function(x){return x.autoId===autoId;});
+  if(r)r.confirmed=true;
+  renderDenList();
+}
+function addDen(){
+  var n=document.getElementById('den-n').value;if(!n){alert('Ingresa el servicio.');return;}
+  RO.denegados.push({nombre:n,precio:parseFloat(document.getElementById('den-p').value)||0,urgencia:document.getElementById('den-u').value,nota:document.getElementById('den-nota').value});
+  document.getElementById('den-n').value='';document.getElementById('den-p').value='';document.getElementById('den-nota').value='';
+  renderDenList();
+}
+function renderDenList(){
+  var el=document.getElementById('den-list');if(!el)return;
+  var confirmed=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
+  var sigWrap=document.getElementById('den-sig-wrap');
+  if(!confirmed.length){el.innerHTML='';if(sigWrap)sigWrap.style.display='none';return;}
+  var uc={recomendado:'b',importante:'a',urgente:'r'};
+  el.innerHTML='<div class="st" style="margin-top:4px">Denegados confirmados</div>'+confirmed.map(function(d,i){return '<div class="rec-item"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:700">'+d.nombre+'</span><button onclick="removeConfirmedDen('+i+')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray-400)"><i class="ti ti-x"></i></button></div><div style="display:flex;justify-content:space-between"><span class="badge '+uc[d.urgencia||'recomendado']+'">'+d.urgencia+'</span><span style="font-size:13px;font-weight:700;color:var(--red)">$'+(d.precio||0).toFixed(2)+' sin IVU</span></div>'+(d.nota?'<div style="font-size:11px;color:var(--gray-500);margin-top:4px;font-style:italic">'+d.nota+'</div>':'')+' </div>';}).join('');
+  if(sigWrap)sigWrap.style.display='block';
+  setTimeout(function(){initSigPad('sig-den','sigDen');},100);
+}
+function removeConfirmedDen(i){
+  var confirmed=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
+  var item=confirmed[i];
+  if(item.auto){item.confirmed=false;}else{var idx=RO.denegados.indexOf(item);if(idx>-1)RO.denegados.splice(idx,1);}
+  renderDenList();
+}
+
+// ============================================================
+// ESTIMADO
+// ============================================================
+function buildEstSummary(){
+  var veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
+  var cli=document.getElementById('est-cli');
+  if(cli)cli.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400);font-size:11px">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Tablilla</span><span>'+(RO.vehiculo.tag||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Odómetro</span><span>'+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi</span></div>';
+  var il=document.getElementById('est-items');
+  if(il)il.innerHTML=RO.servicios.map(function(s){return '<div class="er"><span>'+s.nombre+(s.qty>1?' ×'+s.qty:'')+'</span><span>$'+((s.editPrecio||0)*(s.qty||1)).toFixed(2)+'</span></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';
+  var dd=document.getElementById('est-next');if(dd)dd.value=RO.nextDate;
+  calcEst();
+  var denConf=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
+  var des=document.getElementById('est-den-sum');
+  if(des&&denConf.length){var dt=denConf.reduce(function(s,d){return s+(d.precio||0);},0);des.innerHTML='<div style="background:var(--amber-light);border-radius:var(--radius-md);padding:10px 12px;font-size:12px"><div style="font-weight:700;color:var(--amber);margin-bottom:5px"><i class="ti ti-alert-triangle"></i> Recomendados — no autorizados</div>'+denConf.map(function(d){return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>'+d.nombre+'</span><span>$'+(d.precio||0).toFixed(2)+'</span></div>';}).join('')+'<div style="border-top:1px solid rgba(0,0,0,.1);margin-top:5px;padding-top:5px;font-weight:700;display:flex;justify-content:space-between"><span>Total denegado</span><span>$'+dt.toFixed(2)+'</span></div></div>';}
+  else if(des)des.innerHTML='';
+}
+function calcEst(){
+  var sub=RO.servicios.reduce(function(s,i){return s+(i.editPrecio||0)*(i.qty||1);},0);
+  var desc=RO.descuento||0;var ad=sub*(1-desc/100);var ivu=ad*.115;var tot=ad+ivu;RO.total=tot;
+  var s=document.getElementById('est-sub');if(s)s.textContent='$'+sub.toFixed(2);
+  var iv=document.getElementById('est-ivu');if(iv)iv.textContent='$'+ivu.toFixed(2);
+  var tf=document.getElementById('est-tot');if(tf)tf.textContent='$'+tot.toFixed(2);
+  return tot;
+}
+
+// ============================================================
+// SAVE RO
+// ============================================================
+function saveRO(){
+  if(!RO.cliente){alert('Agrega el nombre del cliente.');gotoStep(0);return;}
+  if(!RO.servicios.length){alert('Agrega al menos un servicio.');gotoStep(4);return;}
+  RO.total=calcEst();
+  DB.ordenes.push(JSON.parse(JSON.stringify(RO)));
+  autoSaveCli();
+  if(RO.vehiculo.tag||RO.cliente){
+    DB.garage.push({id:'GAR-'+Date.now(),cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.nombre;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Vehículo ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
+  }
+  saveDB();
+  alert('Orden '+RO.id+' guardada correctamente.');
+  go('home');
+}
+
+// ============================================================
+// PDF EXPORT
+// ============================================================
+function exportROPDF(){
+  if(typeof window.jspdf==='undefined'){alert('PDF cargando, intenta en un momento.');return;}
+  if(!RO.cliente){alert('Completa los datos del cliente primero.');return;}
+  var doc=new window.jspdf.jsPDF();var y=0;
+  doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');doc.text('ShopFlow',14,10);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');doc.text('by Pit Stop Auto Service · Bayamón, PR',14,17);
+  doc.setFontSize(9);doc.text(RO.id+' · '+new Date(RO.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
+  y=28;doc.setTex
