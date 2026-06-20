@@ -140,7 +140,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       <div class="sf-icon"><i class="ti ti-tool" style="color:#fff;font-size:17px"></i></div>
       <div><div class="sf-wm">Shop<span>Flow</span></div><div class="sf-by">Pit Stop · Bayamón PR</div></div>
     </div>
-    <div id="hdate" style="font-size:11px;color:rgba(255,255,255,.5)"></div>
+    <div style="display:flex;align-items:center;gap:10px"><div id="hdate" style="font-size:11px;color:rgba(255,255,255,.5)"></div><button onclick="go('ajustes')" style="background:rgba(255,255,255,.12);border:none;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="ti ti-settings" style="color:#fff;font-size:17px"></i></button></div>
   </div>
   <div class="sb">
     <div class="sec">
@@ -299,10 +299,39 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="ro-detail-body"></div>
 </div>
 
+
+<div id="ajustes" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i> Inicio</button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Ajustes</div>
+    <div></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0">
+    <div style="padding:14px 16px">
+      <div class="card"><div class="ch"><i class="ti ti-clock-dollar"></i> Tarifa de labor</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Esta es tu tarifa por hora de labor. Se usa para calcular el costo de mano de obra en cada trabajo.</span></div>
+        <div class="fr1"><div class="fg"><div class="fl">Tarifa por hora ($)</div><input id="set-labor" type="number" step="1" placeholder="103" oninput="saveSettings()"></div></div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Referencia: Dealer Toyota ~$103/hr · Meineke ~$88/hr · Independiente PR ~$65-85/hr</div>
+      </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-building-store"></i> Datos del taller</div><div class="cb">
+        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Nombre del taller</div><input id="set-name" placeholder="Pit Stop" oninput="saveSettings()"></div></div>
+        <div class="fr"><div class="fg"><div class="fl">Teléfono</div><input id="set-phone" placeholder="787-000-0000" oninput="saveSettings()"></div><div class="fg"><div class="fl">Ubicación</div><input id="set-addr" placeholder="Bayamón, PR" oninput="saveSettings()"></div></div>
+      </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-database"></i> Datos</div><div class="cb">
+        <button class="btn full" onclick="exportBackup()" style="margin-bottom:8px"><i class="ti ti-download"></i> Exportar respaldo (backup)</button>
+        <button class="btn full" onclick="document.getElementById('import-file').click()"><i class="ti ti-upload"></i> Importar respaldo</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(event)">
+        <div style="font-size:11px;color:var(--gray-400);margin-top:8px;line-height:1.5">Exporta tus datos regularmente. Si reseteas el iPad o borras Safari, esto te permite recuperar todo.</div>
+      </div></div>
+      <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:12px">ShopFlow v1.0 · by Pit Stop</div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0};
+var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
 var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA: Piezas instaladas tienen garantía de 30 días o 1,000 millas. No cubre piezas del cliente ni daños por negligencia.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
@@ -334,7 +363,7 @@ var MC=[{id:'aceites',l:'Aceites'},{id:'frenos',l:'Frenos'},{id:'suspension',l:'
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'firma1',l:'Firma 1'},{id:'inspeccion',l:'Inspección'},{id:'servicios',l:'Servicios'},{id:'denegados',l:'Denegados'},{id:'estimado',l:'Estimado'},{id:'firma2',l:'Firma 2'},{id:'cierre',l:'Cierre'}];
 
 function saveDB(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}}
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;}catch(e){}}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
 
@@ -349,6 +378,7 @@ function go(p){
   if(p==='menu'){MO=[];renderMenuCats();renderMenuSvcs();updMCC();}
   if(p==='finanzas'){renderPL();}
   if(p==='historial'){renderHistDia();}
+  if(p==='ajustes'){initAjustes();}
 }
 
 function renderHome(){
@@ -401,7 +431,7 @@ function buildPane(id){
 
   if(id==='denegados')return '<div class="tb2"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Ítems en ROJO de la inspección aparecen aquí automáticamente.</span></div><div id="den-auto"></div><div class="card"><div class="ch">Agregar denegado</div><div class="cb"><div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div><div class="fr"><div class="fg"><div class="fl">Precio estimado</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente</option></select></div></div><div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas al 10%, riesgo de seguridad..."></textarea></div></div><button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button></div></div><div id="den-list"></div><div id="den-sig-w" style="display:none"><div class="card"><div class="ch">Firma — reconocimiento denegados</div><div class="cb"><div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">El cliente reconoce haber sido informado y decide no autorizar estos servicios.</div><canvas id="sig-den" class="sig-pad" width="600" height="90"></canvas><div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div></div>';
 
-  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div class="er"><span>Subtotal</span><span id="est-sub">$0.00</span></div><div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
+  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
   if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Exportar PDF</button></div>';
   return '';
@@ -478,27 +508,41 @@ function renderROSvcMenu(){
   var svcs=(MS[activeCat]||[]).filter(function(s){return !q||s.n.toLowerCase().includes(q);});
   var el=document.getElementById('ro-sl');if(el)el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('');
 }
-function addSvcRO(id,n,p){var ex=RO.servicios.find(function(s){return s.id===id;});if(ex){ex.qty=(ex.qty||1)+1;}else RO.servicios.push({id:id,n:n,p:p,qty:1,ep:p});renderROSO();}
+function addSvcRO(id,n,p){RO.servicios.push({id:id,uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:n,p:p,qty:1,ep:p,parts:[],laborHours:0});renderROSO();}
 function renderROSO(){
   var el=document.getElementById('ro-so');if(!el)return;
+  var rate=DB.settings.laborRate||103;
   el.innerHTML=RO.servicios.length?RO.servicios.map(function(s,i){
-    var parts=DB.serviceParts[s.id]||[];
-    var partsCount=parts.length;
-    var partsCost=parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);
-    return '<div style="background:var(--gray-50);border-radius:var(--r-sm);border:1.5px solid var(--gray-200);margin-bottom:6px;padding:8px 10px">'+
-      '<div style="display:flex;align-items:center;gap:8px"><span class="oi-n">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><input type="number" value="'+s.ep+'" step="0.01" style="width:70px;font-size:12px;font-weight:700;color:var(--red);text-align:right" oninput="RO.servicios['+i+'].ep=parseFloat(this.value)||0;updROSub()"><button onclick="RO.servicios.splice('+i+',1);renderROSO();" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>'+
-      '<button class="btn sm" onclick="openPartsModal(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\')" style="width:100%;margin-top:7px;justify-content:center;font-size:11px;'+(partsCount>0?'background:var(--green-light);border-color:var(--green);color:var(--green)':'')+'"><i class="ti ti-receipt"></i> '+(partsCount>0?partsCount+' pieza'+(partsCount>1?'s':'')+' · $'+partsCost.toFixed(2)+' costo':'Agregar piezas compradas')+'</button>'+
+    if(!s.parts)s.parts=[];
+    if(typeof s.laborHours!=='number')s.laborHours=0;
+    var partsCount=s.parts.length;
+    var partsCost=s.parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);
+    var partsSell=s.parts.reduce(function(sum,p){return sum+(p.sellPrice*p.qty);},0);
+    var laborCost=s.laborHours*rate;
+    var lineTotal=(s.ep||0)*(s.qty||1)+partsSell+laborCost;
+    return '<div style="background:var(--white);border-radius:var(--r-md);border:1.5px solid var(--gray-200);margin-bottom:8px;padding:10px 12px;box-shadow:0 1px 2px rgba(0,0,0,.04)">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="oi-n" style="font-size:13px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><button onclick="removeROSvc('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
+        '<div><div class="fl" style="margin-bottom:2px">Labor / servicio ($)</div><input type="number" value="'+s.ep+'" step="0.01" style="font-size:12px;font-weight:700;color:var(--red)" oninput="RO.servicios['+i+'].ep=parseFloat(this.value)||0;renderROSO()"></div>'+
+        '<div><div class="fl" style="margin-bottom:2px">Horas labor <span style="color:var(--blue)">@$'+rate+'</span></div><div style="display:flex;gap:4px"><input type="number" value="'+s.laborHours+'" step="0.1" min="0" style="font-size:12px;font-weight:700" oninput="RO.servicios['+i+'].laborHours=parseFloat(this.value)||0;renderROSO()"><button class="btn sm blue" onclick="aiLaborEstimate('+i+')" style="padding:5px 8px;flex-shrink:0" title="Estimar con AI"><i class="ti ti-sparkles"></i></button></div></div>'+
+      '</div>'+
+      (s.laborHours>0?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Mano de obra: '+s.laborHours+'h × $'+rate+' = <strong style="color:var(--navy)">$'+laborCost.toFixed(2)+'</strong></div>':'')+
+      '<button class="btn sm" onclick="openPartsModalRO('+i+')" style="width:100%;justify-content:center;font-size:11px;'+(partsCount>0?'background:var(--green-light);border-color:var(--green);color:var(--green)':'')+'"><i class="ti ti-receipt"></i> '+(partsCount>0?partsCount+' pieza'+(partsCount>1?'s':'')+' · costo $'+partsCost.toFixed(2)+' · venta $'+partsSell.toFixed(2):'Agregar piezas compradas')+'</button>'+
+      '<div style="text-align:right;margin-top:7px;padding-top:7px;border-top:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400)">Total línea:</span> <strong style="color:var(--red);font-size:14px">$'+lineTotal.toFixed(2)+'</strong></div>'+
     '</div>';
   }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin servicios.</div>';
   updROSub();
 }
-function updROSub(){var sub=RO.servicios.reduce(function(s,i){return s+(i.ep||0)*(i.qty||1);},0);var el=document.getElementById('ro-sub');if(el)el.textContent='$'+sub.toFixed(2);}
-
-function renderAutoRecs(){
-  var el=document.getElementById('den-auto');if(!el)return;
-  var autos=RO.denegados.filter(function(d){return d.auto;});
-  if(!autos.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Sin ítems críticos aún.</div>';return;}
-  el.innerHTML='<div class="st">De la inspección — críticos</div>'+autos.map(function(r){return '<div class="ri"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:12px;font-weight:700;color:var(--amber)">'+r.nombre+'</span><span class="badge br">Crítico</span></div><div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">'+r.nota+'</div><div style="display:flex;gap:6px"><input type="number" placeholder="Precio est." step="0.01" style="flex:1;font-size:12px" oninput="setAutoDenPrice(\''+r.autoId+'\',this.value)"><button class="btn sm a" onclick="confirmAutoDen(\''+r.autoId+'\')" style="white-space:nowrap">Confirmar</button></div></div>';}).join('');
+function removeROSvc(i){RO.servicios.splice(i,1);renderROSO();}
+function updROSub(){
+  var rate=DB.settings.laborRate||103;
+  var sub=RO.servicios.reduce(function(s,i){
+    var laborSvc=(i.ep||0)*(i.qty||1);
+    var parts=(i.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);
+    var labor=(i.laborHours||0)*rate;
+    return s+laborSvc+parts+labor;
+  },0);
+  var el=document.getElementById('ro-sub');if(el)el.textContent='$'+sub.toFixed(2);
 }
 function setAutoDenPrice(aid,v){var r=RO.denegados.find(function(x){return x.autoId===aid;});if(r)r.precio=parseFloat(v)||0;}
 function confirmAutoDen(aid){var r=RO.denegados.find(function(x){return x.autoId===aid;});if(r)r.confirmed=true;renderDenList();}
@@ -522,7 +566,7 @@ function rmDen(i){var conf=RO.denegados.filter(function(d){return !d.auto||(d.au
 function buildEstSum(){
   var veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
   var cli=document.getElementById('est-cli');if(cli)cli.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400);font-size:11px">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Tablilla</span><span>'+(RO.vehiculo.tag||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Odómetro</span><span>'+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi</span></div>';
-  var il=document.getElementById('est-items');if(il)il.innerHTML=RO.servicios.map(function(s){return '<div class="er"><span>'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span>$'+((s.ep||0)*(s.qty||1)).toFixed(2)+'</span></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';
+  var rate=DB.settings.laborRate||103;var il=document.getElementById('est-items');if(il)il.innerHTML=RO.servicios.map(function(s){var laborC=(s.laborHours||0)*rate;var partsC=(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);var lineT=(s.ep||0)*(s.qty||1)+laborC+partsC;return '<div style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-weight:700;font-size:12px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>'+((s.laborHours>0||partsC>0)?'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+((s.ep||0)>0?'Servicio $'+((s.ep||0)*(s.qty||1)).toFixed(2):'')+(s.laborHours>0?' · Labor '+s.laborHours+'h $'+laborC.toFixed(2):'')+(partsC>0?' · Piezas $'+partsC.toFixed(2):'')+'</div>':'')+'</div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';
   var dn=document.getElementById('est-next');if(dn)dn.value=RO.nextDate;
   calcEst();
   var denConf=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
@@ -530,11 +574,25 @@ function buildEstSum(){
   if(de&&denConf.length){var dt=denConf.reduce(function(s,d){return s+(d.precio||0);},0);de.innerHTML='<div style="background:var(--amber-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px"><div style="font-weight:700;color:var(--amber);margin-bottom:5px"><i class="ti ti-alert-triangle"></i> Recomendados no autorizados</div>'+denConf.map(function(d){return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>'+d.nombre+'</span><span>$'+(d.precio||0).toFixed(2)+'</span></div>';}).join('')+'<div style="border-top:1px solid rgba(0,0,0,.1);margin-top:5px;padding-top:5px;font-weight:700;display:flex;justify-content:space-between"><span>Total denegado</span><span>$'+dt.toFixed(2)+'</span></div></div>';}else if(de)de.innerHTML='';
 }
 function calcEst(){
-  var sub=RO.servicios.reduce(function(s,i){return s+(i.ep||0)*(i.qty||1);},0);
+  var rate=DB.settings.laborRate||103;
+  var svcTotal=0,laborTotal=0,partsTotal=0;
+  RO.servicios.forEach(function(i){
+    svcTotal+=(i.ep||0)*(i.qty||1);
+    laborTotal+=(i.laborHours||0)*rate;
+    partsTotal+=(i.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);
+  });
+  var sub=svcTotal+laborTotal+partsTotal;
   var d=RO.descuento||0;var ad=sub*(1-d/100);var ivu=ad*.115;var tot=ad+ivu;RO.total=tot;
   var ss=document.getElementById('est-sub');if(ss)ss.textContent='$'+sub.toFixed(2);
   var iv=document.getElementById('est-ivu');if(iv)iv.textContent='$'+ivu.toFixed(2);
   var tf=document.getElementById('est-tot');if(tf)tf.textContent='$'+tot.toFixed(2);
+  // breakdown
+  var bd=document.getElementById('est-breakdown');
+  if(bd){
+    bd.innerHTML='<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Servicios/labor base</span><span>$'+svcTotal.toFixed(2)+'</span></div>'+
+      (laborTotal>0?'<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Mano de obra ('+RO.servicios.reduce(function(s,i){return s+(i.laborHours||0);},0).toFixed(1)+'h @ $'+rate+')</span><span>$'+laborTotal.toFixed(2)+'</span></div>':'')+
+      (partsTotal>0?'<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Piezas</span><span>$'+partsTotal.toFixed(2)+'</span></div>':'');
+  }
   return tot;
 }
 
@@ -564,9 +622,31 @@ function exportPDF(){
   doc.text('Vehículo: '+veh,14,y);doc.text('Tablilla: '+(RO.vehiculo.tag||'—'),110,y);y+=5;
   doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi',14,y);y+=5;
   if(RO.queja){var ql=doc.splitTextToSize('Queja: '+RO.queja,180);doc.text(ql,14,y);y+=ql.length*4;}
-  y+=2;doc.setFont(undefined,'bold');doc.text('SERVICIOS',14,y);y+=1;doc.line(14,y,196,y);y+=5;doc.setFont(undefined,'normal');
-  RO.servicios.forEach(function(s){doc.text('• '+s.n+(s.qty>1?' ×'+s.qty:''),16,y);doc.text('$'+((s.ep||0)*(s.qty||1)).toFixed(2),196,y,{align:'right'});y+=5;});
-  var sub=RO.servicios.reduce(function(s,i){return s+(i.ep||0)*(i.qty||1);},0);var ivu=sub*.115;
+  var rate=DB.settings.laborRate||103;
+  y+=2;doc.setFont(undefined,'bold');doc.setFontSize(9);doc.text('SERVICIOS Y PIEZAS',14,y);y+=1;doc.line(14,y,196,y);y+=5;doc.setFont(undefined,'normal');doc.setFontSize(9);
+  var sub=0;
+  RO.servicios.forEach(function(s){
+    // Service line
+    doc.setFont(undefined,'bold');doc.text(s.n+(s.qty>1?' ×'+s.qty:''),16,y);
+    var svcAmt=(s.ep||0)*(s.qty||1);
+    doc.text('$'+svcAmt.toFixed(2),196,y,{align:'right'});y+=5;sub+=svcAmt;doc.setFont(undefined,'normal');
+    // Labor line
+    if(s.laborHours>0){var laborC=s.laborHours*rate;doc.setFontSize(8);doc.setTextColor(80,80,80);doc.text('   Mano de obra: '+s.laborHours+'h × $'+rate+'/hr',18,y);doc.text('$'+laborC.toFixed(2),196,y,{align:'right'});y+=4;sub+=laborC;doc.setTextColor(0,0,0);doc.setFontSize(9);}
+    // Parts lines - each with part number and customer price
+    if(s.parts&&s.parts.length){
+      s.parts.forEach(function(p){
+        doc.setFontSize(8);doc.setTextColor(80,80,80);
+        var partLabel='   Pieza: '+p.name+(p.qty>1?' ×'+p.qty:'')+(p.partNum?' (#'+p.partNum+')':'');
+        var pl=doc.splitTextToSize(partLabel,150);
+        doc.text(pl,18,y);
+        doc.text('$'+(p.sellPrice*p.qty).toFixed(2),196,y,{align:'right'});
+        y+=pl.length*4;sub+=p.sellPrice*p.qty;
+        doc.setTextColor(0,0,0);doc.setFontSize(9);
+      });
+    }
+    y+=1;
+  });
+  var ivu=sub*.115;
   y+=2;doc.line(140,y,196,y);y+=4;doc.text('Subtotal',140,y);doc.text('$'+sub.toFixed(2),196,y,{align:'right'});y+=4;doc.text('IVU 11.5%',140,y);doc.text('$'+ivu.toFixed(2),196,y,{align:'right'});y+=4;
   doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setFillColor(11,31,58);doc.rect(120,y-4,76,8,'F');doc.setTextColor(255,255,255);doc.text('TOTAL: $'+RO.total.toFixed(2),196,y+1,{align:'right'});doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');doc.setFontSize(9);y+=10;
   doc.text('Método: '+(RO.pago||'—')+'  Estado: '+(RO.estado==='pagado'?'PAGADO':'PENDIENTE'),14,y);y+=8;
@@ -606,18 +686,17 @@ function saveMO(){if(!MO.length){alert('Agrega servicios primero.');return;}var 
 function finTab(id){document.querySelectorAll('#finanzas .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#fin-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#fin-tabs .tab');var ids=['f-pl','f-sup','f-inv','f-gas'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});if(id==='f-pl')renderPL();if(id==='f-sup')renderSup();if(id==='f-inv')renderInv();if(id==='f-gas')renderGas();}
 function renderPL(){
   var now=new Date();var m=now.getMonth();var a=now.getFullYear();
+  var rate=DB.settings.laborRate||103;
   var ords=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d.getMonth()===m&&d.getFullYear()===a;});
   var gas=DB.gastos.filter(function(g){var d=new Date(g.fecha);return d.getMonth()===m&&d.getFullYear()===a;});
   var ing=ords.reduce(function(s,o){return s+(o.total||0);},0);
   var gastos=gas.reduce(function(s,g){return s+g.monto;},0);
-  // Parts cost: sum cost of all parts logged on services used in this month's orders
-  var partsCost=0;var partsSell=0;
+  // Parts cost & sell, and labor revenue - read from each order's services
+  var partsCost=0,partsSell=0,laborRev=0;
   ords.forEach(function(o){
-    var seen={};
     (o.servicios||[]).forEach(function(sv){
-      if(seen[sv.id])return; seen[sv.id]=1;
-      var parts=DB.serviceParts[sv.id]||[];
-      parts.forEach(function(p){partsCost+=p.cost*p.qty;partsSell+=p.sellPrice*p.qty;});
+      (sv.parts||[]).forEach(function(p){partsCost+=p.cost*p.qty;partsSell+=p.sellPrice*p.qty;});
+      laborRev+=(sv.laborHours||0)*rate;
     });
   });
   var ganBruta=ing-partsCost;
@@ -632,6 +711,7 @@ function renderPL(){
     '</div>'+
     '<div class="card"><div class="ch">P&L — '+MESES[m]+' '+a+'</div><div class="cb">'+
       '<div class="er"><span>Ingresos brutos</span><span style="font-weight:700;color:var(--green)">$'+ing.toFixed(2)+'</span></div>'+
+      (laborRev>0?'<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, labor</span><span style="color:var(--navy)">$'+laborRev.toFixed(2)+'</span></div>':'')+
       '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">— Costo de piezas</span><span style="color:var(--red)">— $'+partsCost.toFixed(2)+'</span></div>'+
       '<div class="er" style="font-weight:700"><span>Ganancia bruta</span><span>$'+ganBruta.toFixed(2)+'</span></div>'+
       '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">— Gastos operacionales</span><span style="color:var(--red)">— $'+gastos.toFixed(2)+'</span></div>'+
@@ -657,9 +737,105 @@ function renderGas(){var now=new Date();var m=now.getMonth();var a=now.getFullYe
 function saveG(){var d=document.getElementById('gd').value;var m=parseFloat(document.getElementById('gm').value);if(!d||isNaN(m)||m<=0){alert('Completa descripción y monto.');return;}DB.gastos.push({id:'G-'+Date.now(),desc:d,cat:document.getElementById('gc').value,monto:m,fecha:document.getElementById('gf').value||new Date().toISOString().split('T')[0]});document.getElementById('gd').value='';document.getElementById('gm').value='';saveDB();renderGas();}
 
 
+
+// ============ PER-JOB PARTS (RO) ============
+var currentROPartIdx=null;
+var partsContext='menu'; // 'menu' or 'ro'
+function openPartsModalRO(svcIdx){
+  partsContext='ro';
+  currentROPartIdx=svcIdx;
+  var svc=RO.servicios[svcIdx];
+  if(!svc.parts)svc.parts=[];
+  document.getElementById('pm-title').textContent='Piezas — '+svc.n;
+  document.getElementById('pm-sub').textContent='Para esta orden específica';
+  var d=document.getElementById('pp-date');if(d)d.value=new Date().toISOString().split('T')[0];
+  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pp-qty').value='1';
+  calcPartProfit();
+  renderPartsListRO();
+  document.getElementById('parts-modal').style.display='block';
+}
+function renderPartsListRO(){
+  var svc=RO.servicios[currentROPartIdx];
+  if(!svc)return;
+  var parts=svc.parts||[];
+  var el=document.getElementById('pm-list');
+  if(!parts.length){el.innerHTML='<div style="text-align:center;padding:16px;font-size:12px;color:var(--gray-400)">Sin piezas registradas para este servicio.</div>';document.getElementById('pm-total').textContent='$0.00';return;}
+  el.innerHTML='<div class="st" style="margin-top:6px">Piezas registradas</div>'+parts.map(function(p,i){
+    var tcost=p.cost*p.qty;var tsell=p.sellPrice*p.qty;var profit=tsell-tcost;
+    return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--white)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div><div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+'</div></div><button onclick="deletePartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button></div>'+
+      '<div style="display:flex;gap:6px;font-size:11px"><div style="flex:1;background:var(--red-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">COSTO</div><div style="color:var(--red);font-weight:700">$'+tcost.toFixed(2)+'</div></div><div style="flex:1;background:var(--blue-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">VENTA</div><div style="color:var(--blue);font-weight:700">$'+tsell.toFixed(2)+'</div></div><div style="flex:1;background:var(--green-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">GANANCIA</div><div style="color:var(--green);font-weight:700">$'+profit.toFixed(2)+'</div></div></div>'+
+    '</div>';
+  }).join('');
+  var total=parts.reduce(function(s,p){return s+(p.sellPrice*p.qty);},0);
+  document.getElementById('pm-total').textContent='$'+total.toFixed(2);
+}
+function deletePartRO(i){
+  if(!confirm('¿Eliminar esta pieza?'))return;
+  RO.servicios[currentROPartIdx].parts.splice(i,1);
+  renderPartsListRO();
+}
+
+// ============ AI LABOR ESTIMATE ============
+function aiLaborEstimate(svcIdx){
+  var svc=RO.servicios[svcIdx];
+  var veh=RO.vehiculo||{};
+  var vehStr=(veh.year||'')+' '+(veh.make||'')+' '+(veh.model||'');
+  if(!veh.year||!veh.make||!veh.model){
+    alert('Primero completa el año, marca y modelo del vehículo en el paso Cliente para una estimación precisa.');
+    return;
+  }
+  var btn=event.target.closest('button');
+  var origHTML=btn?btn.innerHTML:'';
+  if(btn){btn.innerHTML='<i class="ti ti-loader"></i>';btn.disabled=true;}
+  var prompt='Eres un experto en tiempos de labor automotriz (flat rate / Mitchell / factory labor times). '+
+    'Necesito el tiempo de labor estimado en HORAS para este trabajo:\n\n'+
+    'Vehículo: '+vehStr+'\n'+
+    'Trabajo: '+svc.n+'\n\n'+
+    'Responde SOLO con un objeto JSON sin texto adicional, sin markdown, con este formato exacto:\n'+
+    '{"hours": 2.5, "confidence": "media", "note": "breve nota sobre el estimado y si varía por motor/transmisión/4x4"}\n\n'+
+    'El campo hours debe ser un número decimal de horas de labor flat-rate típico. '+
+    'El campo confidence debe ser "alta", "media" o "baja". '+
+    'El campo note máximo 15 palabras en español.';
+  
+  fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-sonnet-4-6",
+      max_tokens:300,
+      messages:[{role:"user",content:prompt}]
+    })
+  }).then(function(r){return r.json();}).then(function(data){
+    if(btn){btn.innerHTML=origHTML;btn.disabled=false;}
+    var text='';
+    if(data.content&&data.content.length){data.content.forEach(function(b){if(b.type==='text')text+=b.text;});}
+    text=text.replace(/```json/g,'').replace(/```/g,'').trim();
+    try{
+      var result=JSON.parse(text);
+      var hrs=parseFloat(result.hours);
+      if(isNaN(hrs)){throw new Error('no hours');}
+      var rate=DB.settings.laborRate||103;
+      var cost=hrs*rate;
+      var confColor=result.confidence==='alta'?'var(--green)':result.confidence==='baja'?'var(--red)':'var(--amber)';
+      if(confirm('ESTIMADO AI para '+svc.n+'\n'+vehStr+'\n\n⏱ '+hrs+' horas de labor\n💵 '+hrs+'h × $'+rate+' = $'+cost.toFixed(2)+'\n📊 Confianza: '+(result.confidence||'media')+'\n\n'+(result.note||'')+'\n\n⚠️ Esto es un ESTIMADO. Verifica con Mitchell/factory para precisión.\n\n¿Usar este tiempo?')){
+        RO.servicios[svcIdx].laborHours=hrs;
+        renderROSO();
+      }
+    }catch(err){
+      alert('No se pudo obtener el estimado. Ingresa las horas manualmente usando tu acceso a Mitchell o tiempos de fábrica.');
+    }
+  }).catch(function(err){
+    if(btn){btn.innerHTML=origHTML;btn.disabled=false;}
+    alert('El estimado AI no está disponible en este momento (requiere conexión). Ingresa las horas de labor manualmente.');
+  });
+}
+
 // ============ PARTS TRACKING ============
 var currentPartService=null;
 function openPartsModal(svcId,svcName){
+  partsContext='menu';
   currentPartService={id:svcId,name:svcName};
   document.getElementById('pm-title').textContent='Piezas del servicio';
   document.getElementById('pm-sub').textContent=svcName;
@@ -673,11 +849,10 @@ function openPartsModal(svcId,svcName){
 }
 function closePartsModal(){
   document.getElementById('parts-modal').style.display='none';
-  // Refresh whichever view is active
   var menuEl=document.getElementById('menu');
-  if(menuEl&&menuEl.classList.contains('v'))renderMenuSvcs();
+  if(menuEl&&menuEl.classList.contains('v')){partsContext='menu';renderMenuSvcs();}
   var roEl=document.getElementById('ro');
-  if(roEl&&roEl.classList.contains('v'))renderROSO();
+  if(roEl&&roEl.classList.contains('v')){renderROSO();}
 }
 function calcPartProfit(){
   var cost=parseFloat((document.getElementById('pp-cost')||{value:0}).value)||0;
@@ -691,6 +866,7 @@ function calcPartProfit(){
   pel.style.color=profit>=0?'var(--green)':'var(--red)';
 }
 function savePart(){
+  if(partsContext==='ro'){savePartRO();return;}
   if(!currentPartService)return;
   var name=document.getElementById('pp-name').value;
   if(!name){alert('Ingresa el nombre de la pieza.');return;}
@@ -727,6 +903,28 @@ function savePart(){
   calcPartProfit();
   renderPartsList();
 }
+function savePartRO(){
+  var svc=RO.servicios[currentROPartIdx];
+  if(!svc)return;
+  var name=document.getElementById('pp-name').value;
+  if(!name){alert('Ingresa el nombre de la pieza.');return;}
+  var cost=parseFloat(document.getElementById('pp-cost').value)||0;
+  var qty=parseInt(document.getElementById('pp-qty').value)||1;
+  var sell=parseFloat(document.getElementById('pp-sell').value)||0;
+  var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]};
+  if(!svc.parts)svc.parts=[];
+  svc.parts.push(part);
+  if(confirm('¿Restar esta pieza del inventario?\n\n'+name+' (x'+qty+')')){
+    var inv=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
+    if(inv){inv.qty=Math.max(0,inv.qty-qty);}else{DB.inventario.push({id:'INV-'+Date.now(),nombre:name,cat:'Piezas de servicio',costo:cost,precio:sell,qty:0,min:2,loc:'',sku:part.partNum||''});}
+    saveDB();
+  }
+  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('pp-qty').value='1';
+  calcPartProfit();
+  renderPartsListRO();
+}
+
 function renderPartsList(){
   if(!currentPartService)return;
   var parts=DB.serviceParts[currentPartService.id]||[];
@@ -889,9 +1087,10 @@ function openRODetail(roId){
   var denConf=(o.denegados||[]).filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
   var sub=(o.servicios||[]).reduce(function(s,sv){return s+((sv.ep||sv.precio||0)*(sv.qty||1));},0);
   var ivu=sub*0.115;
-  // Gather all parts for this RO's services
-  var allParts=[];
-  (o.servicios||[]).forEach(function(sv){var parts=DB.serviceParts[sv.id]||[];parts.forEach(function(p){allParts.push(p);});});
+  // Gather all parts + labor for this RO's services (new per-job structure)
+  var rate=DB.settings.laborRate||103;
+  var allParts=[];var laborTotal=0;
+  (o.servicios||[]).forEach(function(sv){(sv.parts||[]).forEach(function(p){allParts.push(p);});laborTotal+=(sv.laborHours||0)*rate;});
   var partsCost=allParts.reduce(function(s,p){return s+p.cost*p.qty;},0);
   var partsSell=allParts.reduce(function(s,p){return s+p.sellPrice*p.qty;},0);
 
@@ -918,7 +1117,7 @@ function openRODetail(roId){
   }
   // Services
   html+='<div class="card"><div class="ch"><i class="ti ti-tools"></i> Servicios realizados</div><div class="cb">'+
-    (o.servicios||[]).map(function(sv){return '<div class="er"><span>'+(sv.n||sv.nombre)+((sv.qty||1)>1?' ×'+sv.qty:'')+'</span><span style="font-weight:700">$'+((sv.ep||sv.precio||0)*(sv.qty||1)).toFixed(2)+'</span></div>';}).join('')+
+    (o.servicios||[]).map(function(sv){var laborC=(sv.laborHours||0)*rate;return '<div style="padding:5px 0;border-bottom:1px solid var(--gray-100)"><div class="er" style="border:none;padding:2px 0"><span style="font-weight:700">'+(sv.n||sv.nombre)+((sv.qty||1)>1?' ×'+sv.qty:'')+'</span><span style="font-weight:700">$'+((sv.ep||sv.precio||0)*(sv.qty||1)).toFixed(2)+'</span></div>'+(sv.laborHours>0?'<div style="font-size:10px;color:var(--gray-400)">Mano de obra: '+sv.laborHours+'h × $'+rate+' = $'+laborC.toFixed(2)+'</div>':'')+'</div>';}).join('')+
     '<div class="er" style="margin-top:4px"><span>Subtotal</span><span>$'+sub.toFixed(2)+'</span></div>'+
     '<div class="er"><span>IVU (11.5%)</span><span>$'+ivu.toFixed(2)+'</span></div>'+
     '<div class="tot-bar"><span>Total</span><span>$'+(o.total||0).toFixed(2)+'</span></div>'+
@@ -953,9 +1152,8 @@ function openRODetail(roId){
 function reExportPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});
   if(!o){alert('Orden no encontrada.');return;}
-  // Temporarily set RO to this order and call export
   var savedRO=RO;
-  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0};
+  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0};
   exportPDF();
   RO=savedRO;
 }
@@ -963,6 +1161,48 @@ function reExportPDF(roId){
 function deleteRO(roId){
   var idx=DB.ordenes.findIndex(function(x){return x.id===roId;});
   if(idx>-1){DB.ordenes.splice(idx,1);saveDB();alert('Orden eliminada.');go('historial');}
+}
+
+
+// ============ AJUSTES / SETTINGS ============
+function initAjustes(){
+  document.getElementById('set-labor').value=DB.settings.laborRate||103;
+  document.getElementById('set-name').value=DB.settings.shopName||'';
+  document.getElementById('set-phone').value=DB.settings.shopPhone||'';
+  document.getElementById('set-addr').value=DB.settings.shopAddress||'';
+}
+function saveSettings(){
+  DB.settings.laborRate=parseFloat(document.getElementById('set-labor').value)||103;
+  DB.settings.shopName=document.getElementById('set-name').value;
+  DB.settings.shopPhone=document.getElementById('set-phone').value;
+  DB.settings.shopAddress=document.getElementById('set-addr').value;
+  saveDB();
+}
+function exportBackup(){
+  var data=JSON.stringify(DB,null,2);
+  var blob=new Blob([data],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='ShopFlow_backup_'+new Date().toISOString().split('T')[0]+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importBackup(e){
+  var f=e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(ev){
+    try{
+      var imported=JSON.parse(ev.target.result);
+      if(!confirm('¿Reemplazar todos los datos actuales con el respaldo? Esto no se puede deshacer.'))return;
+      DB=imported;
+      if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};
+      if(!DB.serviceParts)DB.serviceParts={};
+      saveDB();
+      alert('Respaldo importado correctamente.');
+      initAjustes();
+    }catch(err){alert('Error al leer el archivo. Asegúrate que sea un respaldo válido de ShopFlow.');}
+  };
+  r.readAsText(f);
 }
 
 // INIT
