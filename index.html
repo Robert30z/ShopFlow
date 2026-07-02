@@ -318,6 +318,11 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Nombre del taller</div><input id="set-name" placeholder="Pit Stop" oninput="saveSettings()"></div></div>
         <div class="fr"><div class="fg"><div class="fl">Teléfono</div><input id="set-phone" placeholder="787-000-0000" oninput="saveSettings()"></div><div class="fg"><div class="fl">Ubicación</div><input id="set-addr" placeholder="Bayamón, PR" oninput="saveSettings()"></div></div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-sparkles"></i> Inteligencia Artificial</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Las funciones AI (diagnóstico, piezas, labor) usan tu propia API key de Anthropic. Créala en console.anthropic.com. Se guarda solo en este dispositivo.</span></div>
+        <div class="fr1"><div class="fg"><div class="fl">API key de Anthropic</div><input id="set-aikey" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveSettings()"></div></div>
+        <div id="set-aikey-status" style="font-size:11px;color:var(--gray-400);margin-top:6px">Sin configurar — los botones AI mostrarán un aviso.</div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-database"></i> Datos</div><div class="cb">
         <button class="btn full" onclick="exportBackup()" style="margin-bottom:8px"><i class="ti ti-download"></i> Exportar respaldo (backup)</button>
         <button class="btn full" onclick="document.getElementById('import-file').click()"><i class="ti ti-upload"></i> Importar respaldo</button>
@@ -369,6 +374,27 @@ function saveDB(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e)
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
+
+// ============ AI HELPER ============
+// La API key se guarda en Ajustes (localStorage) — nunca en el código ni en el repo.
+var AI_NO_KEY_HTML='<div style="color:var(--amber)"><i class="ti ti-key"></i> AI requiere tu API key de Anthropic. Ve a <strong>Ajustes ⚙️ → Inteligencia Artificial</strong> para configurarla.</div>';
+function aiFetch(msg,maxTokens){
+  var key=((DB.settings&&DB.settings.aiKey)||'').trim();
+  if(!key)return Promise.reject(new Error('NO_KEY'));
+  return fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({model:'claude-opus-4-8',max_tokens:maxTokens||600,messages:[{role:'user',content:msg}]})
+  }).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  });
+}
 
 function go(p){
   document.querySelectorAll('.pg').forEach(function(x){x.classList.remove('v');});
@@ -603,10 +629,7 @@ function aiPartDescribe(partName){
     '\nResponde SOLO con JSON sin markdown:\n'+
     '{"desc":"descripción técnica de 1-2 líneas","spec":"especificación clave (viscosidad, dimensión, etc)","note":"consejo de instalación o compatibilidad","compatible":"sí/no/depende — si aplica al vehículo indicado"}\n'+
     'Máximo 20 palabras por campo. En español pero términos técnicos en inglés.';
-  fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,messages:[{role:'user',content:msg}]})
-  }).then(function(r){return r.json();}).then(function(data){
+  aiFetch(msg,400).then(function(data){
     var text='';
     if(data.content)data.content.forEach(function(b){if(b.type==='text')text+=b.text;});
     text=text.replace(/```json/g,'').replace(/```/g,'').trim();
@@ -619,7 +642,10 @@ function aiPartDescribe(partName){
       if(veh&&r.compatible)html+='<span style="color:'+(r.compatible.includes('sí')?'var(--green)':'var(--amber)')+'">✓ Compatibilidad con '+veh+': '+r.compatible+'</span>';
       box.innerHTML=html;
     }catch(e){box.style.display='none';}
-  }).catch(function(){box.style.display='none';});
+  }).catch(function(err){
+    if(err&&err.message==='NO_KEY'){box.innerHTML=AI_NO_KEY_HTML;}
+    else{box.style.display='none';}
+  });
 }
 
 // ============ AI DIAGNOSTIC SUMMARY ============
@@ -639,10 +665,7 @@ function aiDiagnosticSummary(){
     'Responde SOLO con JSON sin markdown:\n'+
     '{"platform":"descripción breve de la plataforma","problems":[{"area":"sistema afectado","issue":"problema específico","severity":"alta/media/baja","mileage":"rango de millas típico si aplica","fix":"reparación típica en 5-8 palabras"}],"tsbs":"boletines técnicos o recalls conocidos en 1-2 líneas o null","tip":"consejo rápido para el técnico"}\n'+
     'Máximo 5 problemas más comunes y relevantes. En español pero términos técnicos en inglés.';
-  fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:msg}]})
-  }).then(function(r){return r.json();}).then(function(data){
+  aiFetch(msg,800).then(function(data){
     if(btn){btn.innerHTML=orig;btn.disabled=false;}
     var text='';
     if(data.content)data.content.forEach(function(b){if(b.type==='text')text+=b.text;});
@@ -669,9 +692,9 @@ function aiDiagnosticSummary(){
     }catch(e){
       if(el)el.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> No se pudo obtener el diagnóstico. Verifica la conexión.</div>';
     }
-  }).catch(function(){
+  }).catch(function(err){
     if(btn){btn.innerHTML=orig;btn.disabled=false;}
-    if(el)el.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> AI no disponible.</div>';
+    if(el)el.innerHTML=(err&&err.message==='NO_KEY')?AI_NO_KEY_HTML:'<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> AI no disponible. Verifica la conexión y tu API key en Ajustes.</div>';
   });
 }
 
@@ -743,7 +766,25 @@ function updROSub(){
   var el=document.getElementById('ro-sub');if(el)el.textContent='$'+sub.toFixed(2);
 }
 function setAutoDenPrice(aid,v){var r=RO.denegados.find(function(x){return x.autoId===aid;});if(r)r.precio=parseFloat(v)||0;}
-function confirmAutoDen(aid){var r=RO.denegados.find(function(x){return x.autoId===aid;});if(r)r.confirmed=true;renderDenList();}
+function confirmAutoDen(aid){var r=RO.denegados.find(function(x){return x.autoId===aid;});if(r)r.confirmed=true;renderAutoRecs();renderDenList();}
+function renderAutoRecs(){
+  var el=document.getElementById('den-auto');if(!el)return;
+  // setInsp ya crea las entradas auto (autoId = id del ítem); aquí solo se sincroniza nota y se renderizan las pendientes
+  RO.denegados.forEach(function(d){
+    if(d.auto&&RO.inspNotes&&RO.inspNotes[d.autoId])d.nota=RO.inspNotes[d.autoId];
+  });
+  var pend=RO.denegados.filter(function(d){return d.auto&&!d.confirmed;});
+  if(!pend.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="st" style="margin-top:4px;color:var(--red)">Detectados en inspección ('+pend.length+')</div>'+pend.map(function(d){
+    return '<div class="ri" style="border-left:3px solid var(--red)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:700">'+d.nombre+'</span><span class="badge br">crítico</span></div>'+
+      (d.nota?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;font-style:italic">'+d.nota+'</div>':'')+
+      '<div style="display:flex;gap:8px;align-items:center">'+
+        '<input type="number" placeholder="Precio est. $" step="0.01" value="'+(d.precio||'')+'" style="flex:1;font-size:12px" oninput="setAutoDenPrice(\''+d.autoId+'\',this.value)">'+
+        '<button class="btn sm a" onclick="confirmAutoDen(\''+d.autoId+'\')"><i class="ti ti-plus"></i> Registrar</button>'+
+      '</div></div>';
+  }).join('');
+}
 function addDen(){
   var n=document.getElementById('den-n').value;if(!n){alert('Ingresa el servicio.');return;}
   RO.denegados.push({nombre:n,precio:parseFloat(document.getElementById('den-p').value)||0,urgencia:document.getElementById('den-u').value,nota:document.getElementById('den-nota').value});
@@ -797,11 +838,11 @@ function calcEst(){
 function saveRO(){
   if(!RO.cliente){alert('Agrega el nombre del cliente.');gotoStep(0);return;}
   if(!RO.servicios.length){alert('Agrega al menos un servicio.');gotoStep(4);return;}
-  RO.total=calcEst();
+  RO.total=Math.round(calcEst()*100)/100;
   RO.id=nextRONum();
   DB.ordenes.push(JSON.parse(JSON.stringify(RO)));
   autoSaveCli();
-  DB.garage.push({id:'GAR-'+Date.now(),cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
+  DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
   saveDB();alert('Orden '+RO.id+' guardada. $'+RO.total.toFixed(2));go('home');
 }
 function autoSaveCli(){if(!RO.cliente)return;var ex=DB.clientes.find(function(c){return c.nombre.toLowerCase()===RO.cliente.toLowerCase();});var veh={tag:RO.vehiculo.tag,desc:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim()};if(!ex){DB.clientes.push({id:'CLI-'+Date.now(),nombre:RO.cliente,tel:RO.tel,email:RO.email,vehiculos:veh.tag?[veh]:[],nextReminder:RO.nextDate,creado:new Date().toISOString()});}else{if(veh.tag&&!ex.vehiculos.find(function(v){return v.tag===veh.tag;}))ex.vehiculos.push(veh);if(RO.nextDate)ex.nextReminder=RO.nextDate;}}
@@ -980,7 +1021,7 @@ function renderGarage(){
 function setGS(id,val){var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.estado=val;if(val==='ready'&&!c.readyTime){c.readyTime=new Date().toISOString();c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Listo. Timer iniciado.');}if(val==='entregado'){c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Entregado.');}saveDB();renderGarage();}
 function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());inp.value='';saveDB();renderGarage();}
 
-function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){return !q||o.cliente.toLowerCase().includes(q)||(o.id||'').toLowerCase().includes(q)||((o.vehiculo&&o.vehiculo.tag)||'').toLowerCase().includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){var veh=o.vehiculo?(o.vehiculo.year+' '+o.vehiculo.make+' '+o.vehiculo.model).trim():'—';return '<div style="padding:12px 16px;background:var(--white);border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">'+o.id+'</span><span class="badge '+(o.estado==='pagado'?'bg':'ba')+'">'+(o.estado==='pagado'?'Pagado':'Pendiente')+'</span></div><div style="font-size:14px;font-weight:700">'+o.cliente+'</div><div style="font-size:12px;color:var(--gray-400)">'+veh+'</div><div style="display:flex;justify-content:space-between;margin-top:5px"><span style="font-size:11px;color:var(--gray-400)">'+new Date(o.fecha).toLocaleDateString('es-PR',{day:'numeric',month:'short',year:'numeric'})+'</span><span style="font-size:15px;font-weight:700;color:var(--red)">$'+(o.total||0).toFixed(2)+'</span></div></div>';}).join('');}
+function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){return !q||o.cliente.toLowerCase().includes(q)||(o.id||'').toLowerCase().includes(q)||((o.vehiculo&&o.vehiculo.tag)||'').toLowerCase().includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
 
 function renderClientes(){var q=(document.getElementById('cli-q')||{value:''}).value.toLowerCase();var list=DB.clientes.filter(function(c){return !q||c.nombre.toLowerCase().includes(q);});var el=document.getElementById('clientes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin clientes. Se crean automáticamente al guardar una RO.</div>';return;}el.innerHTML=list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var total=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).reduce(function(s,o){return s+(o.total||0);},0);var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).length;return '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100)"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1"><div style="font-size:13px;font-weight:700">'+c.nombre+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div></div></div>';}).join('');}
 
@@ -991,7 +1032,7 @@ function updMCC(){var c=MO.reduce(function(s,o){return s+o.qty;},0);var el=docum
 function renderMOItems(){var el=document.getElementById('menu-oi');if(!el)return;el.innerHTML=MO.map(function(o,i){return '<div class="oi"><span class="oi-n">'+o.n+(o.qty>1?' ×'+o.qty:'')+'</span><span style="font-weight:700;color:var(--red);margin-right:8px">$'+(o.p*o.qty).toFixed(2)+'</span><button onclick="MO.splice('+i+',1);updMCC();renderMOItems();" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var el2=document.getElementById('menu-tot');if(el2)el2.textContent='$'+(sub*1.115).toFixed(2);}
 function toggleMO(){var p=document.getElementById('menu-op');if(p)p.style.display=p.style.display==='none'?'block':'none';}
 function clearMO(){MO=[];updMCC();renderMOItems();}
-function saveMO(){if(!MO.length){alert('Agrega servicios primero.');return;}var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var id=nextRONum();DB.ordenes.push({id:id,fecha:new Date().toISOString(),cliente:'Orden rápida del menú',tel:'',vehiculo:{},servicios:MO.map(function(o){return{id:o.id,n:o.n,p:o.p,qty:o.qty,ep:o.p};}),total:sub*1.115,pago:'ATH Móvil',estado:'pagado',insp:{},denegados:[]});saveDB();clearMO();alert('Guardado como '+id);go('ordenes');}
+function saveMO(){if(!MO.length){alert('Agrega servicios primero.');return;}var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var id=nextRONum();DB.ordenes.push({id:id,fecha:new Date().toISOString(),cliente:'Orden rápida del menú',tel:'',vehiculo:{},servicios:MO.map(function(o){return{id:o.id,n:o.n,p:o.p,qty:o.qty,ep:o.p};}),total:Math.round(sub*1.115*100)/100,pago:'ATH Móvil',estado:'pagado',insp:{},denegados:[]});saveDB();clearMO();alert('Guardado como '+id);go('ordenes');}
 
 function finTab(id){document.querySelectorAll('#finanzas .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#fin-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#fin-tabs .tab');var ids=['f-pl','f-sup','f-inv','f-gas'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});if(id==='f-pl')renderPL();if(id==='f-sup')renderSup();if(id==='f-inv')renderInv();if(id==='f-gas')renderGas();}
 function renderPL(){
@@ -1080,11 +1121,7 @@ function aiPartSuggest(){
     'Da números de parte comunes (Fram, Mobil, AC Delco, etc.) cuando los sepas. '+
     'Máximo 4 partes. Notas breves. Responde en español pero mantén nombres técnicos en inglés.';
 
-  fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,messages:[{role:"user",content:prompt}]})
-  }).then(function(r){return r.json();}).then(function(data){
+  aiFetch(prompt,600).then(function(data){
     if(btn){btn.innerHTML=orig;btn.disabled=false;}
     var text='';
     if(data.content&&data.content.length){data.content.forEach(function(b){if(b.type==='text')text+=b.text;});}
@@ -1103,7 +1140,7 @@ function aiPartSuggest(){
     }
   }).catch(function(err){
     if(btn){btn.innerHTML=orig;btn.disabled=false;}
-    if(resultEl)resultEl.innerHTML='<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> AI no disponible (requiere conexión). Ingresa las partes manualmente.</div>';
+    if(resultEl)resultEl.innerHTML=(err&&err.message==='NO_KEY')?AI_NO_KEY_HTML:'<div style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> AI no disponible (requiere conexión). Ingresa las partes manualmente.</div>';
   });
 }
 function usePartSuggestion(nameEnc,numEnc){
@@ -1176,15 +1213,7 @@ function aiLaborEstimate(svcIdx){
     'El campo confidence debe ser "alta", "media" o "baja". '+
     'El campo note máximo 15 palabras en español.';
   
-  fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      model:"claude-sonnet-4-6",
-      max_tokens:300,
-      messages:[{role:"user",content:prompt}]
-    })
-  }).then(function(r){return r.json();}).then(function(data){
+  aiFetch(prompt,300).then(function(data){
     if(btn){btn.innerHTML=origHTML;btn.disabled=false;}
     var text='';
     if(data.content&&data.content.length){data.content.forEach(function(b){if(b.type==='text')text+=b.text;});}
@@ -1205,7 +1234,7 @@ function aiLaborEstimate(svcIdx){
     }
   }).catch(function(err){
     if(btn){btn.innerHTML=origHTML;btn.disabled=false;}
-    alert('El estimado AI no está disponible en este momento (requiere conexión). Ingresa las horas de labor manualmente.');
+    alert((err&&err.message==='NO_KEY')?'AI requiere tu API key de Anthropic. Configúrala en Ajustes ⚙️ → Inteligencia Artificial.':'El estimado AI no está disponible en este momento (requiere conexión). Ingresa las horas de labor manualmente.');
   });
 }
 
@@ -1544,7 +1573,11 @@ function reExportPDF(roId){
 
 function deleteRO(roId){
   var idx=DB.ordenes.findIndex(function(x){return x.id===roId;});
-  if(idx>-1){DB.ordenes.splice(idx,1);saveDB();alert('Orden eliminada.');go('historial');}
+  if(idx>-1){
+    DB.ordenes.splice(idx,1);
+    DB.garage=DB.garage.filter(function(g){return g.roId!==roId;});
+    saveDB();alert('Orden eliminada.');go('historial');
+  }
 }
 
 
@@ -1554,13 +1587,23 @@ function initAjustes(){
   document.getElementById('set-name').value=DB.settings.shopName||'';
   document.getElementById('set-phone').value=DB.settings.shopPhone||'';
   document.getElementById('set-addr').value=DB.settings.shopAddress||'';
+  document.getElementById('set-aikey').value=DB.settings.aiKey||'';
+  updAiKeyStatus();
 }
 function saveSettings(){
   DB.settings.laborRate=parseFloat(document.getElementById('set-labor').value)||103;
   DB.settings.shopName=document.getElementById('set-name').value;
   DB.settings.shopPhone=document.getElementById('set-phone').value;
   DB.settings.shopAddress=document.getElementById('set-addr').value;
+  DB.settings.aiKey=document.getElementById('set-aikey').value.trim();
+  updAiKeyStatus();
   saveDB();
+}
+function updAiKeyStatus(){
+  var st=document.getElementById('set-aikey-status');if(!st)return;
+  var k=(DB.settings.aiKey||'').trim();
+  if(!k){st.textContent='Sin configurar — los botones AI mostrarán un aviso.';st.style.color='var(--gray-400)';}
+  else{st.innerHTML='<i class="ti ti-check"></i> Configurada ('+k.slice(0,10)+'…). Las funciones AI están activas.';st.style.color='var(--green)';}
 }
 function exportBackup(){
   var data=JSON.stringify(DB,null,2);
@@ -1648,7 +1691,6 @@ function adjInv(id,d){
 }
 function openAddInv(){
   _invEditId=null;
-  var f=document.getElementById('inv-form');if(!f)return;
   ['inv-fn','inv-sku','inv-brand','inv-desc','inv-loc','inv-sup'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('inv-cat-sel').value='General';
   document.getElementById('inv-cost').value='';document.getElementById('inv-price').value='';

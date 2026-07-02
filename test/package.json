@@ -1,0 +1,11 @@
+{
+  "name": "shopflow-smoke",
+  "private": true,
+  "description": "Headless smoke test for ShopFlow — run before pushing to main",
+  "scripts": {
+    "test": "node smoke.js"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  }
+}
