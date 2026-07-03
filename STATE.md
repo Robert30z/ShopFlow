@@ -4,6 +4,17 @@
 
 ## Last updated: 2026-07-03
 
+## New 2026-07-03 (later 2): Cloud backup + terms v3
+- **Auto-backup to private GitHub repo**: every saveDB schedules a push (45s debounce) of the full
+  DB (minus aiKey + backup token) to `shopflow_backup.json` in a user-owned PRIVATE repo via the
+  GitHub contents API. Ajustes card: repo + fine-grained token (Contents R/W, single repo),
+  status w/ last-backup time, "Respaldar ahora" and "Restaurar" (restore keeps local secrets).
+  Git history of the backup repo = point-in-time recovery. NOT yet live-tested against the real
+  GitHub API — Roberto must create repo + token and hit "Respaldar ahora" once to confirm.
+- **TERMS_VERSION=3**: customer-supplied-parts jobs now carry NO warranty at all (parts or labor);
+  30d/1,000mi warranty applies only when Pit Stop supplied the part. Old ROs keep their frozen v2.
+- Smoke test now 37 checks.
+
 ## New 2026-07-03 (later): Terms version-stamping + 30-day warranty + photo evidence
 - `TERMS_VERSION=2` / `TERMS_DATE` constants; DISC clause 2 now covers **mano de obra y piezas
   suplidas por Pit Stop, 30 días / 1,000 millas**, excludes customer parts / wear items / misuse.

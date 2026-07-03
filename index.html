@@ -324,6 +324,16 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="fr1"><div class="fg"><div class="fl">API key de Anthropic</div><input id="set-aikey" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveSettings()"></div></div>
         <div id="set-aikey-status" style="font-size:11px;color:var(--gray-400);margin-top:6px">Sin configurar — los botones AI mostrarán un aviso.</div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-cloud-upload"></i> Respaldo automático en la nube</div><div class="cb">
+        <div class="tip-box" style="background:var(--green-light);color:var(--green)"><i class="ti ti-shield-lock" style="font-size:16px;flex-shrink:0"></i><span>Cada cambio se sube solo a un repositorio PRIVADO tuyo de GitHub. Si el iPad se pierde o Safari borra los datos, restauras todo con un toque.</span></div>
+        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Repositorio (usuario/repo)</div><input id="set-bk-repo" placeholder="Robert30z/shopflow-backup" autocapitalize="off" autocomplete="off" oninput="saveSettings()"></div></div>
+        <div class="fr1"><div class="fg"><div class="fl">Token de GitHub (fine-grained, solo ese repo, permiso Contents)</div><input id="set-bk-token" type="password" placeholder="github_pat_..." autocomplete="off" oninput="saveSettings()"></div></div>
+        <div id="set-bk-status" style="font-size:11px;margin-top:8px;margin-bottom:8px">Sin configurar.</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn full" onclick="cloudBackup(true)"><i class="ti ti-cloud-up"></i> Respaldar ahora</button>
+          <button class="btn full" onclick="restoreFromCloud()"><i class="ti ti-cloud-down"></i> Restaurar</button>
+        </div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-database"></i> Datos</div><div class="cb">
         <button class="btn full" onclick="exportBackup()" style="margin-bottom:8px"><i class="ti ti-download"></i> Exportar respaldo (backup)</button>
         <button class="btn full" onclick="document.getElementById('import-file').click()"><i class="ti ti-upload"></i> Importar respaldo</button>
@@ -342,8 +352,8 @@ var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Se
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
-var TERMS_VERSION=2,TERMS_DATE='2026-07-03';
-var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA (30 DÍAS): La mano de obra y las piezas suplidas por Pit Stop tienen garantía de 30 días o 1,000 millas, lo que ocurra primero. Las piezas suplidas por Pit Stop mantienen además la garantía del fabricante. NO cubre: piezas suplidas por el cliente, piezas de desgaste normal (frenos, gomas, wipers, bombillas, filtros), ni daños por negligencia, mal uso, accidente o modificaciones posteriores al servicio.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
+var TERMS_VERSION=3,TERMS_DATE='2026-07-03';
+var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA (30 DÍAS — SOLO PIEZAS SUPLIDAS POR PIT STOP): La mano de obra y las piezas tienen garantía de 30 días o 1,000 millas (lo que ocurra primero) ÚNICAMENTE cuando la pieza fue suplida por Pit Stop. Las piezas suplidas por Pit Stop mantienen además la garantía del fabricante. TRABAJOS CON PIEZAS SUPLIDAS POR EL CLIENTE NO TIENEN GARANTÍA ALGUNA, ni en la pieza ni en la mano de obra: si la pieza del cliente falla, el diagnóstico y el reemplazo se cobran como trabajo nuevo. Tampoco cubre piezas de desgaste normal (frenos, gomas, wipers, bombillas, filtros) ni daños por negligencia, mal uso, accidente o modificaciones posteriores al servicio.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
 
 var IZ=[
   {id:'elec',z:'Electrical',items:[{id:'bat',l:'Battery / terminals'},{id:'alt',l:'Alternator'},{id:'star',l:'Starter'},{id:'fus',l:'Fuses'}]},
@@ -373,7 +383,11 @@ var MC=[{id:'aceites',l:'Oil & Filter'},{id:'frenos',l:'Brakes'},{id:'suspension
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'firma1',l:'Firma 1'},{id:'inspeccion',l:'Inspección'},{id:'servicios',l:'Servicios'},{id:'denegados',l:'Denegados'},{id:'estimado',l:'Estimado'},{id:'firma2',l:'Firma 2'},{id:'cierre',l:'Cierre'}];
 
 function saveDB(){
-  try{localStorage.setItem('sf_v1',JSON.stringify(DB));return true;}
+  try{
+    localStorage.setItem('sf_v1',JSON.stringify(DB));
+    scheduleCloudBackup();
+    return true;
+  }
   catch(e){
     alert('⚠️ ALMACENAMIENTO LLENO — LOS DATOS NO SE GUARDARON.\n\nExporta un respaldo en Ajustes AHORA y elimina órdenes viejas con muchas fotos para liberar espacio.');
     return false;
@@ -402,6 +416,78 @@ function aiFetch(msg,maxTokens){
     if(!r.ok)throw new Error('HTTP '+r.status);
     return r.json();
   });
+}
+
+// ============ RESPALDO EN LA NUBE (GitHub privado) ============
+// Cada cambio se sube (con retraso de 45s) a un repo PRIVADO de GitHub del usuario.
+// El token y la API key de AI nunca se incluyen en el contenido del respaldo.
+var _cbTimer=null,_cbBusy=false;
+function backupCfg(){var b=(DB.settings&&DB.settings.backup)||{};return (b.token&&b.repo)?b:null;}
+function scheduleCloudBackup(){
+  if(!backupCfg())return;
+  clearTimeout(_cbTimer);
+  _cbTimer=setTimeout(function(){cloudBackup(false);},45000);
+}
+function ghHeaders(t){return{'Authorization':'Bearer '+t,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'};}
+function cloudBackupPayload(){
+  var copy=JSON.parse(JSON.stringify(DB));
+  if(copy.settings){delete copy.settings.aiKey;delete copy.settings.backup;}
+  return JSON.stringify(copy);
+}
+function cloudBackup(manual){
+  var cfg=backupCfg();
+  if(!cfg){if(manual)alert('Configura primero el repo y el token en esta pantalla.');return;}
+  if(_cbBusy)return;
+  _cbBusy=true;
+  var url='https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json';
+  fetch(url,{headers:ghHeaders(cfg.token)})
+    .then(function(r){return r.status===404?{sha:null}:r.json();})
+    .then(function(cur){
+      var body={message:'ShopFlow auto-backup '+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(cloudBackupPayload())))};
+      if(cur&&cur.sha)body.sha=cur.sha;
+      return fetch(url,{method:'PUT',headers:ghHeaders(cfg.token),body:JSON.stringify(body)});
+    })
+    .then(function(r){
+      _cbBusy=false;
+      if(r.ok){
+        DB.settings.backup.last=new Date().toISOString();
+        try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}
+        updBackupStatus();
+        if(manual)alert('Respaldo subido a GitHub ✓');
+      }else{
+        updBackupStatus('error HTTP '+r.status);
+        if(manual)alert('Error al respaldar (HTTP '+r.status+'). Verifica que el repo exista y el token tenga permiso de Contents.');
+      }
+    })
+    .catch(function(){_cbBusy=false;updBackupStatus('sin conexión');if(manual)alert('Sin conexión. El respaldo se reintenta con el próximo cambio.');});
+}
+function restoreFromCloud(){
+  var cfg=backupCfg();
+  if(!cfg){alert('Configura primero el repo y el token.');return;}
+  if(!confirm('¿Restaurar desde la nube?\n\nEsto REEMPLAZA los datos de este dispositivo con el último respaldo de GitHub. No se puede deshacer.'))return;
+  fetch('https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json',{headers:ghHeaders(cfg.token)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(j){
+      var txt=decodeURIComponent(escape(atob((j.content||'').replace(/\n/g,''))));
+      var data=JSON.parse(txt);
+      if(!data||!data.ordenes)throw new Error('respaldo inválido');
+      var keep={aiKey:DB.settings.aiKey,backup:DB.settings.backup};
+      DB=data;DB.settings=DB.settings||{};DB.settings.aiKey=keep.aiKey;DB.settings.backup=keep.backup;
+      if(!DB.serviceParts)DB.serviceParts={};
+      saveDB();
+      alert('Datos restaurados desde la nube ✓ ('+DB.ordenes.length+' órdenes)');
+      go('home');
+    })
+    .catch(function(e){alert('No se pudo restaurar: '+e.message);});
+}
+function updBackupStatus(err){
+  var st=document.getElementById('set-bk-status');if(!st)return;
+  var cfg=backupCfg();
+  if(!cfg){st.textContent='Sin configurar — los datos solo viven en este dispositivo.';st.style.color='var(--red)';return;}
+  if(err){st.textContent='⚠ Último intento falló ('+err+'). Reintenta con "Respaldar ahora".';st.style.color='var(--amber)';return;}
+  var last=DB.settings.backup.last;
+  st.innerHTML=last?('<i class="ti ti-cloud-check"></i> Último respaldo: '+new Date(last).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):'Configurado — aún sin respaldos. Toca "Respaldar ahora".';
+  st.style.color=last?'var(--green)':'var(--amber)';
 }
 
 function go(p){
@@ -1723,6 +1809,10 @@ function initAjustes(){
   document.getElementById('set-addr').value=DB.settings.shopAddress||'';
   document.getElementById('set-aikey').value=DB.settings.aiKey||'';
   updAiKeyStatus();
+  var bk=DB.settings.backup||{};
+  document.getElementById('set-bk-repo').value=bk.repo||'';
+  document.getElementById('set-bk-token').value=bk.token||'';
+  updBackupStatus();
 }
 function saveSettings(){
   DB.settings.laborRate=parseFloat(document.getElementById('set-labor').value)||103;
@@ -1731,6 +1821,10 @@ function saveSettings(){
   DB.settings.shopAddress=document.getElementById('set-addr').value;
   DB.settings.aiKey=document.getElementById('set-aikey').value.trim();
   updAiKeyStatus();
+  DB.settings.backup=DB.settings.backup||{};
+  DB.settings.backup.repo=document.getElementById('set-bk-repo').value.trim();
+  DB.settings.backup.token=document.getElementById('set-bk-token').value.trim();
+  updBackupStatus();
   saveDB();
 }
 function updAiKeyStatus(){

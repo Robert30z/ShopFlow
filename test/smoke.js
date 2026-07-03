@@ -135,9 +135,9 @@ function check(ok, name, detail) {
   const legal = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('sf_v1'));
     const o = d.ordenes.find(x => x.cliente === 'Draft Cliente');
-    return { termsV: o && o.terms && o.terms.v, termsFrozen: !!(o && o.terms && o.terms.text && o.terms.text.includes('GARANTÍA (30 DÍAS)')), fotos: o && o.fotos ? o.fotos.length : 0 };
+    return { termsV: o && o.terms && o.terms.v, termsFrozen: !!(o && o.terms && o.terms.text && o.terms.text.includes('NO TIENEN GARANTÍA ALGUNA')), fotos: o && o.fotos ? o.fotos.length : 0 };
   });
-  check(legal.termsV === 2 && legal.termsFrozen, 'Terms v2 snapshot frozen at signature', JSON.stringify(legal));
+  check(legal.termsV === 3 && legal.termsFrozen, 'Terms v3 snapshot frozen at signature (customer-parts exclusion)', JSON.stringify(legal));
   check(legal.fotos === 1, 'Photo persisted in saved draft', `fotos=${legal.fotos}`);
   // Detail shows signature evidence + Continuar
   await page.evaluate(`go('home')`);
@@ -177,6 +177,21 @@ function check(ok, name, detail) {
   check(final.estado !== 'abierta', 'Completed RO left abierta state', final.estado);
   check(final.keptInk, 'Signature ink survived completion');
   check(final.garage === 1, 'Garage entry created once', `garage=${final.garage}`);
+
+  // ===== Cloud backup UI + unconfigured no-op =====
+  await page.evaluate(`go('ajustes')`);
+  await page.waitForTimeout(400);
+  const bk = await page.evaluate(() => ({
+    hasRepo: !!document.getElementById('set-bk-repo'),
+    hasToken: !!document.getElementById('set-bk-token'),
+    status: (document.getElementById('set-bk-status') || {}).textContent || '',
+  }));
+  check(bk.hasRepo && bk.hasToken, 'Cloud backup config UI present');
+  check(bk.status.includes('Sin configurar'), 'Backup status warns when unconfigured', bk.status.slice(0, 60));
+  const ePre2 = errors.length;
+  await page.evaluate(`scheduleCloudBackup();saveDB()`);
+  await page.waitForTimeout(400);
+  check(errors.length === ePre2, 'Backup no-ops safely without config');
 
   // Delete RO removes garage entry (no orphans)
   await page.evaluate(`go('historial')`);
