@@ -4,6 +4,17 @@
 
 ## Last updated: 2026-07-03
 
+## New 2026-07-03 (later): Terms version-stamping + 30-day warranty + photo evidence
+- `TERMS_VERSION=2` / `TERMS_DATE` constants; DISC clause 2 now covers **mano de obra y piezas
+  suplidas por Pit Stop, 30 días / 1,000 millas**, excludes customer parts / wear items / misuse.
+- On first signature, the current terms text is FROZEN into `RO.terms` {v, fecha, text}. PDFs print
+  the frozen text with "v2 — vigentes y aceptados al firmar (fecha)". Editing DISC later never
+  changes what old ROs show. When editing terms in the future: bump TERMS_VERSION + TERMS_DATE.
+- Photos are now `{d: dataURL, t: ISO}` (old string format still supported via fotoSrc/fotoTime).
+  Capture timestamp shows on wizard grid, RO detail "Fotos de entrada" gallery, and the new
+  full-screen viewer (tap thumbnail → prev/next + "Capturada: <fecha completa>").
+- Smoke test now 34 checks.
+
 ## New 2026-07-03: Open RO (draft save) + real signature persistence — "the legal SAVE button"
 - Signature pads now persist the actual ink (canvas → PNG dataURL in `RO.sigData`) plus signing
   timestamp (`RO.sigTimes`) the moment the customer lifts their finger. Survives app close.

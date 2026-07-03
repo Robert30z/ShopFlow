@@ -342,7 +342,8 @@ var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Se
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
-var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA: Piezas instaladas tienen garantía de 30 días o 1,000 millas. No cubre piezas del cliente ni daños por negligencia.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
+var TERMS_VERSION=2,TERMS_DATE='2026-07-03';
+var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA (30 DÍAS): La mano de obra y las piezas suplidas por Pit Stop tienen garantía de 30 días o 1,000 millas, lo que ocurra primero. Las piezas suplidas por Pit Stop mantienen además la garantía del fabricante. NO cubre: piezas suplidas por el cliente, piezas de desgaste normal (frenos, gomas, wipers, bombillas, filtros), ni daños por negligencia, mal uso, accidente o modificaciones posteriores al servicio.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
 
 var IZ=[
   {id:'elec',z:'Electrical',items:[{id:'bat',l:'Battery / terminals'},{id:'alt',l:'Alternator'},{id:'star',l:'Starter'},{id:'fus',l:'Fuses'}]},
@@ -448,7 +449,7 @@ function initRO(){
     setTimeout(fillROInputs,140);
     return;
   }
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
   curStep=0;
   buildSteps();buildPanes();
@@ -546,6 +547,8 @@ function initSP(cid,key){
       try{
         RO.sigData=RO.sigData||{};RO.sigData[key]=c.toDataURL('image/png');
         RO.sigTimes=RO.sigTimes||{};RO.sigTimes[key]=new Date().toISOString();
+        // Congela los términos vigentes en el momento de la primera firma (version stamp)
+        if(!RO.terms)RO.terms={v:TERMS_VERSION,fecha:new Date().toISOString(),text:DISC};
       }catch(e){}
     }
   }
@@ -580,27 +583,30 @@ function handlePhotos(e){
         if(w>max||h>max){var k=Math.min(max/w,max/h);w=Math.round(w*k);h=Math.round(h*k);}
         var cv=document.createElement('canvas');cv.width=w;cv.height=h;
         cv.getContext('2d').drawImage(img,0,0,w,h);
-        RO.fotos.push(cv.toDataURL('image/jpeg',0.72));
+        RO.fotos.push({d:cv.toDataURL('image/jpeg',0.72),t:new Date().toISOString()});
         done++;
         if(done===files.length)renderPhotosGrid();
       };
-      img.onerror=function(){RO.fotos.push(ev.target.result);done++;if(done===files.length)renderPhotosGrid();};
+      img.onerror=function(){RO.fotos.push({d:ev.target.result,t:new Date().toISOString()});done++;if(done===files.length)renderPhotosGrid();};
       img.src=ev.target.result;
     };
     r.readAsDataURL(f);
   });
 }
+function fotoSrc(f){return typeof f==='string'?f:f.d;}
+function fotoTime(f){return (typeof f==='string'||!f.t)?null:f.t;}
 function renderPhotosGrid(){
   var grid=document.getElementById('photo-grid-dyn');
   var lbl=document.getElementById('photo-count-lbl');
   if(!grid)return;
   var photos=RO.fotos||[];
   if(lbl)lbl.textContent=photos.length?photos.length+' foto'+(photos.length!==1?'s':'')+ ' capturada'+(photos.length!==1?'s':''):'Sin fotos todavía';
-  grid.innerHTML=photos.map(function(src,i){
+  grid.innerHTML=photos.map(function(f,i){
+    var t=fotoTime(f);
     return '<div style="position:relative;aspect-ratio:1;border-radius:var(--r-md);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+
-      '<img src="'+src+'" style="width:100%;height:100%;object-fit:cover">'+
+      '<img src="'+fotoSrc(f)+'" style="width:100%;height:100%;object-fit:cover">'+
       '<button onclick="deletePhoto('+i+')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>'+
-      '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:3px">FOTO '+(i+1)+'</div>'+
+      '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:3px">'+(t?new Date(t).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'FOTO '+(i+1))+'</div>'+
     '</div>';
   }).join('');
 }
@@ -1022,11 +1028,12 @@ function exportPDF(){
     doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');y+=14;
   }
 
-  // Terms
+  // Terms — imprime la versión congelada al momento de la firma (version stamp), no la actual
   if(y>210){doc.addPage();y=14;}
   doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'bold');
-  doc.text('TÉRMINOS Y CONDICIONES',14,y);y+=4;doc.setFont(undefined,'normal');
-  doc.splitTextToSize(DISC.replace(/\n\n/g,'\n'),182).forEach(function(l){
+  var termsHdr='TÉRMINOS Y CONDICIONES'+(RO.terms?('  ·  v'+RO.terms.v+' — vigentes y aceptados al firmar ('+new Date(RO.terms.fecha).toLocaleDateString('es-PR')+')'):'');
+  doc.text(termsHdr,14,y);y+=4;doc.setFont(undefined,'normal');
+  doc.splitTextToSize((RO.terms?RO.terms.text:DISC).replace(/\n\n/g,'\n'),182).forEach(function(l){
     if(y>278){doc.addPage();y=14;}doc.text(l,14,y);y+=3.2;
   });
 
@@ -1603,7 +1610,21 @@ function openRODetail(roId){
           '<img src="'+o.sigData[p[0]]+'" style="width:100%;max-width:300px;border:1px solid var(--gray-200);border-radius:6px;background:#fff">'+'</div>';
       }
     });
+    if(o.terms)html+='<div style="font-size:10px;color:var(--gray-400);margin-top:4px"><i class="ti ti-file-certificate"></i> Términos v'+o.terms.v+' aceptados el '+new Date(o.terms.fecha).toLocaleString('es-PR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+' (texto congelado en esta orden)</div>';
     html+='</div></div>';
+  }
+  // Photo evidence — condición del vehículo al recibirlo
+  if(o.fotos&&o.fotos.length){
+    html+='<div class="card"><div class="ch"><i class="ti ti-camera"></i> Fotos de entrada ('+o.fotos.length+')</div><div class="cb">'+
+      '<div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">Condición documentada del vehículo ANTES del trabajo. Toca una foto para ampliarla.</div>'+
+      '<div class="photo-grid">'+o.fotos.map(function(f,i){
+        var t=fotoTime(f);
+        return '<div onclick="openFotoViewer(\''+o.id+'\','+i+')" style="position:relative;aspect-ratio:1;border-radius:var(--r-md);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15);cursor:pointer">'+
+          '<img src="'+fotoSrc(f)+'" style="width:100%;height:100%;object-fit:cover">'+
+          '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:3px">'+(t?new Date(t).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'FOTO '+(i+1))+'</div>'+
+        '</div>';
+      }).join('')+'</div>'+
+    '</div></div>';
   }
   // Client & vehicle
   html+='<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente y vehículo</div><div class="cb"><div style="display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13px">'+
@@ -1657,11 +1678,29 @@ function openRODetail(roId){
   go('ro-detail');
 }
 
+var _fvOrden=null,_fvIdx=0;
+function openFotoViewer(roId,idx){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});
+  if(!o||!o.fotos||!o.fotos.length)return;
+  _fvOrden=o;_fvIdx=idx||0;
+  document.getElementById('foto-viewer').style.display='flex';
+  updFotoViewer();
+}
+function updFotoViewer(){
+  var f=_fvOrden.fotos[_fvIdx];if(!f)return;
+  document.getElementById('foto-viewer-img').src=fotoSrc(f);
+  var t=fotoTime(f);
+  document.getElementById('foto-viewer-caption').innerHTML=_fvOrden.id+' · Foto '+(_fvIdx+1)+' de '+_fvOrden.fotos.length+(t?'<br><span style="font-weight:400;font-size:11px;color:rgba(255,255,255,.7)">Capturada: '+new Date(t).toLocaleString('es-PR',{weekday:'short',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</span>':'');
+}
+function navFotoViewer(dir){
+  var n=_fvOrden.fotos.length;_fvIdx=(_fvIdx+dir+n)%n;updFotoViewer();
+}
+function closeFotoViewer(){document.getElementById('foto-viewer').style.display='none';}
 function reExportPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});
   if(!o){alert('Orden no encontrada.');return;}
   var savedRO=RO;
-  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[]};
+  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[],terms:o.terms||null};
   exportPDF();
   RO=savedRO;
 }
@@ -1881,6 +1920,15 @@ document.addEventListener('click',hideSplash,{once:true});
 </script>
 
 <!-- PDF SHARE SHEET -->
+<div id="foto-viewer" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.92);flex-direction:column;align-items:center;justify-content:center" onclick="closeFotoViewer()">
+  <img id="foto-viewer-img" style="max-width:96%;max-height:80%;object-fit:contain;border-radius:8px">
+  <div id="foto-viewer-caption" style="color:#fff;font-size:13px;font-weight:700;margin-top:12px;text-align:center"></div>
+  <div style="display:flex;gap:10px;margin-top:14px">
+    <button class="btn" onclick="event.stopPropagation();navFotoViewer(-1)" style="background:rgba(255,255,255,.15);color:#fff;border:none"><i class="ti ti-chevron-left"></i></button>
+    <button class="btn" onclick="closeFotoViewer()" style="background:rgba(255,255,255,.15);color:#fff;border:none"><i class="ti ti-x"></i> Cerrar</button>
+    <button class="btn" onclick="event.stopPropagation();navFotoViewer(1)" style="background:rgba(255,255,255,.15);color:#fff;border:none"><i class="ti ti-chevron-right"></i></button>
+  </div>
+</div>
 <div id="pdf-share-modal" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center">
   <div style="background:var(--white);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:20px 20px 32px">
     <div style="text-align:center;margin-bottom:18px">

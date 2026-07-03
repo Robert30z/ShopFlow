@@ -103,6 +103,16 @@ function check(ok, name, detail) {
   await page.waitForTimeout(600);
   await page.fill('#c-n', 'Draft Cliente');
   await page.fill('#v-y', '2018'); await page.fill('#v-ma', 'Ford'); await page.fill('#v-mo', 'F-150');
+  // photo with timestamp (1x1 png → compressed jpeg object)
+  await page.evaluate(`gotoStep(1)`);
+  await page.waitForTimeout(300);
+  const fs = require('fs'), os = require('os');
+  const tmpPng = require('path').join(os.tmpdir(), 'sf_smoke_photo.png');
+  fs.writeFileSync(tmpPng, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+  await page.locator('#pan-1 input[type="file"]').setInputFiles(tmpPng);
+  await page.waitForTimeout(700);
+  const foto = await page.evaluate(() => { const f = (RO.fotos || [])[0]; return f ? { obj: typeof f === 'object', hasT: !!f.t, jpeg: (f.d || '').startsWith('data:image/jpeg') } : null; });
+  check(foto && foto.obj && foto.hasT, 'Photo saved with timestamp', JSON.stringify(foto));
   await page.evaluate(`gotoStep(2)`); // firma 1
   await page.waitForTimeout(400);
   const sigBox = await page.locator('#sig-1').boundingBox();
@@ -122,6 +132,13 @@ function check(ok, name, detail) {
   });
   check(draft && draft.estado === 'abierta', 'Draft saved with estado abierta', JSON.stringify(draft));
   check(draft && draft.hasInk && draft.hasTime, 'Signature INK + timestamp persisted', draft ? `ink:${draft.hasInk} time:${draft.hasTime}` : 'no draft');
+  const legal = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('sf_v1'));
+    const o = d.ordenes.find(x => x.cliente === 'Draft Cliente');
+    return { termsV: o && o.terms && o.terms.v, termsFrozen: !!(o && o.terms && o.terms.text && o.terms.text.includes('GARANTÍA (30 DÍAS)')), fotos: o && o.fotos ? o.fotos.length : 0 };
+  });
+  check(legal.termsV === 2 && legal.termsFrozen, 'Terms v2 snapshot frozen at signature', JSON.stringify(legal));
+  check(legal.fotos === 1, 'Photo persisted in saved draft', `fotos=${legal.fotos}`);
   // Detail shows signature evidence + Continuar
   await page.evaluate(`go('home')`);
   await page.waitForTimeout(300);
@@ -129,6 +146,13 @@ function check(ok, name, detail) {
   await page.waitForTimeout(500);
   const detailHasSig = await page.locator('#ro-detail-body img[src^="data:image/png"]').count();
   check(detailHasSig > 0, 'Detail shows stored signature image');
+  const detailFotos = await page.locator('#ro-detail-body [onclick^="openFotoViewer"]').count();
+  check(detailFotos === 1, 'Detail shows photo evidence grid', `thumbnails=${detailFotos}`);
+  await page.locator('#ro-detail-body [onclick^="openFotoViewer"]').first().click();
+  await page.waitForTimeout(400);
+  const viewer = await page.evaluate(() => ({ visible: document.getElementById('foto-viewer').style.display === 'flex', caption: document.getElementById('foto-viewer-caption').textContent }));
+  check(viewer.visible && viewer.caption.includes('Capturada'), 'Photo viewer opens with capture timestamp', viewer.caption.slice(0, 80));
+  await page.evaluate(`closeFotoViewer()`);
   await vclick(`[onclick^="continueRO"]`);
   await page.waitForTimeout(900);
   const resumed = await page.evaluate(() => ({
