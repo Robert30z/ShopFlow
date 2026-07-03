@@ -180,6 +180,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   <div class="act" id="ro-nav">
     <button class="btn" id="ro-prev" onclick="prevStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
     <button class="btn g" id="ro-save" onclick="saveOpenRO()" title="Guardar sin completar — protege firmas y fotos"><i class="ti ti-device-floppy"></i></button>
+    <button class="btn" id="ro-print" onclick="workOrderPDF()" title="Imprimir orden de trabajo (papel para el técnico)"><i class="ti ti-printer"></i></button>
     <div style="flex:1;text-align:center;font-size:11px;color:var(--gray-400);align-self:center" id="ro-step-lbl"></div>
     <button class="btn p" id="ro-next" onclick="nextStep()">Siguiente <i class="ti ti-arrow-right"></i></button>
   </div>
@@ -382,7 +383,7 @@ var MS={
 };
 var MC=[{id:'aceites',l:'Oil & Filter'},{id:'frenos',l:'Brakes'},{id:'suspension',l:'Suspension'},{id:'ac',l:'A/C'},{id:'electrico',l:'Electrical'},{id:'motor',l:'Engine'},{id:'transmision',l:'Transmission'},{id:'diagnostico',l:'Diagnostic'},{id:'neumaticos',l:'Tires'},{id:'general',l:'General'}];
 
-var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'firma1',l:'Firma 1'},{id:'inspeccion',l:'Inspección'},{id:'servicios',l:'Servicios'},{id:'denegados',l:'Denegados'},{id:'estimado',l:'Estimado'},{id:'firma2',l:'Firma 2'},{id:'cierre',l:'Cierre'}];
+var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'servicios',l:'Servicios'},{id:'estimado',l:'Estimado'},{id:'firma1',l:'Autorización'},{id:'inspeccion',l:'Inspección'},{id:'denegados',l:'Denegados'},{id:'firma2',l:'Firma Final'},{id:'cierre',l:'Cierre'}];
 
 function saveDB(){
   try{
@@ -537,7 +538,7 @@ function initRO(){
     setTimeout(fillROInputs,140);
     return;
   }
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
   curStep=0;
   buildSteps();buildPanes();
@@ -580,11 +581,11 @@ function buildPane(id){
 
 
 
-  if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de inspección':'Autorización para trabajar';var desc=id==='firma1'?'El cliente autoriza a Pit Stop a inspeccionar y diagnosticar el vehículo.':'El cliente autoriza a Pit Stop a realizar los servicios indicados por el total presentado.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="170"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
+  if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de servicios y precios':'Autorización final (entrega)';var desc=id==='firma1'?'El cliente autoriza los servicios y precios presentados en el estimado, y la inspección/diagnóstico del vehículo.':'El cliente confirma el total final, incluyendo servicios agregados o ajustados durante el trabajo.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="170"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
 
   if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--navy);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"></div>';}).join('')+'</div></div>';});return h;}
 
-  if(id==='servicios')return '<div class="sw"><i class="ti ti-search si"></i><input id="ro-sq" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div><div class="cat-scroll" id="ro-sc"></div><div id="ro-sl"></div><div class="dv"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden</div><button class="btn sm" onclick="RO.servicios=[];renderROSO()"><i class="ti ti-trash"></i></button></div><div id="ro-so"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div><div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas técnicas</div><textarea id="tech-n" placeholder="Observaciones del técnico..." oninput="RO.techNotes=this.value"></textarea></div>';
+  if(id==='servicios')return '<div class="sw"><i class="ti ti-search si"></i><input id="ro-sq" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div><div class="cat-scroll" id="ro-sc"></div><div id="ro-sl"></div><button class="btn sm full" onclick="addManualSvc()" style="margin:8px 0;justify-content:center"><i class="ti ti-plus"></i> Servicio manual (nombre y precio libre)</button><div class="dv"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden</div><button class="btn sm" onclick="RO.servicios=[];renderROSO()"><i class="ti ti-trash"></i></button></div><div id="ro-so"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div><div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas (salen en el recibo y la orden de trabajo)</div><textarea id="tech-n" placeholder="Ej: Cliente trajo su alternador — sin garantía" oninput="RO.techNotes=this.value"></textarea></div>';
 
   if(id==='denegados')return '<div class="tb2"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Ítems en ROJO de la inspección aparecen aquí automáticamente.</span></div><div id="den-auto"></div><div class="card"><div class="ch">Agregar denegado</div><div class="cb"><div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div><div class="fr"><div class="fg"><div class="fl">Precio estimado</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente</option></select></div></div><div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas al 10%, riesgo de seguridad..."></textarea></div></div><button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button></div></div><div id="den-list"></div><div id="den-sig-w" style="display:none"><div class="card"><div class="ch">Firma — reconocimiento denegados</div><div class="cb"><div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">El cliente reconoce haber sido informado y decide no autorizar estos servicios.</div><canvas id="sig-den" class="sig-pad" width="600" height="90"></canvas><div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div></div>';
 
@@ -607,8 +608,8 @@ function gotoStep(n){
   // Re-render photo grid when entering fotos step
   if(STEPS[n]&&STEPS[n].id==='fotos'){setTimeout(function(){renderPhotosGrid();},80);}
 
-  if(n===6)buildEstSum();
-  if(n===5){renderAutoRecs();renderDenList();}
+  if(n===3)buildEstSum();
+  if(n===6){renderAutoRecs();renderDenList();}
   if(n===8){var cn=document.getElementById('cier-next');if(cn)cn.value=RO.nextDate;}
 }
 function nextStep(){if(curStep<8)gotoStep(curStep+1);}
@@ -641,13 +642,24 @@ function initSP(cid,key){
         RO.sigTimes=RO.sigTimes||{};RO.sigTimes[key]=new Date().toISOString();
         // Congela los términos vigentes en el momento de la primera firma (version stamp)
         if(!RO.terms)RO.terms={v:TERMS_VERSION,fecha:new Date().toISOString(),text:DISC};
+        // Firma de autorización: congela QUÉ se autorizó (servicios + precios + total)
+        if(key==='sig1'){
+          var rate=DB.settings.laborRate||103;
+          calcEst();
+          RO.auth1={
+            fecha:new Date().toISOString(),
+            total:Math.round(RO.total*100)/100,
+            rate:rate,
+            items:RO.servicios.map(function(s){return{n:s.n,ep:s.ep||0,qty:s.qty||1,laborHours:s.laborHours||0,partsTotal:(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0)};})
+          };
+        }
       }catch(e){}
     }
   }
   c.addEventListener('mousedown',st);c.addEventListener('mousemove',dw);c.addEventListener('mouseup',sp);c.addEventListener('mouseleave',sp);
   c.addEventListener('touchstart',st,{passive:false});c.addEventListener('touchmove',dw,{passive:false});c.addEventListener('touchend',sp);
 }
-function clearSig(cid,key){var c=document.getElementById(cid);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height);RO[key]=false;if(RO.sigData)delete RO.sigData[key];if(RO.sigTimes)delete RO.sigTimes[key];var s=document.getElementById('st-'+key);if(s){s.textContent='Sin firma';s.style.color='';}}
+function clearSig(cid,key){var c=document.getElementById(cid);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height);RO[key]=false;if(RO.sigData)delete RO.sigData[key];if(RO.sigTimes)delete RO.sigTimes[key];if(key==='sig1')RO.auth1=null;var s=document.getElementById('st-'+key);if(s){s.textContent='Sin firma';s.style.color='';}}
 function restoreSigs(){
   if(!RO.sigData)return;
   [['sig-1','sig1'],['sig-2','sig2'],['sig-den','sigDen']].forEach(function(p){
@@ -888,6 +900,11 @@ function renderROSvcMenu(){
   var el=document.getElementById('ro-sl');if(el)el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('');
 }
 function addSvcRO(id,n,p){RO.servicios.push({id:id,uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:n,p:p,qty:1,ep:p,parts:[],laborHours:0});renderROSO();}
+function addManualSvc(){
+  var n=prompt('Nombre del servicio (ej: Diagnóstico check engine):');if(!n)return;
+  var p=parseFloat(prompt('Precio ($):'));if(isNaN(p))p=0;
+  addSvcRO('manual-'+Date.now(),n,p);
+}
 function renderROSO(){
   var el=document.getElementById('ro-so');if(!el)return;
   var rate=DB.settings.laborRate||103;
@@ -1011,7 +1028,7 @@ function saveOpenRO(){
 }
 function saveRO(){
   if(!RO.cliente){alert('Agrega el nombre del cliente.');gotoStep(0);return;}
-  if(!RO.servicios.length){alert('Agrega al menos un servicio.');gotoStep(4);return;}
+  if(!RO.servicios.length){alert('Agrega al menos un servicio.');gotoStep(2);return;}
   calcEst();RO.total=Math.round(RO.total*100)/100;
   var sel=document.getElementById('est-estado');
   if(sel)RO.estado=sel.value;else if(RO.estado==='abierta')RO.estado='pagado';
@@ -1122,6 +1139,19 @@ function exportPDF(){
     doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');y+=14;
   }
 
+  // Notas (salen en el recibo — ej. "cliente trajo su alternador")
+  if(RO.techNotes){
+    if(y>250){doc.addPage();y=14;}
+    doc.setFontSize(9);doc.setTextColor(0,0,0);doc.setFont(undefined,'bold');
+    doc.text('NOTAS',14,y);y+=1;
+    doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');
+    doc.splitTextToSize(RO.techNotes,180).forEach(function(l){
+      if(y>278){doc.addPage();y=14;}doc.text(l,14,y);y+=4.5;
+    });
+    y+=4;
+  }
+
   // Terms — imprime la versión congelada al momento de la firma (version stamp), no la actual
   if(y>210){doc.addPage();y=14;}
   doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'bold');
@@ -1189,6 +1219,118 @@ function downloadPDF(){
   var a=document.createElement('a');a.href=_pdfUrl;a.download=_pdfFilename;a.click();
 }
 function closePDFShare(){document.getElementById('pdf-share-modal').style.display='none';}
+
+// ============ ORDEN DE TRABAJO (papel para el técnico, con precios + firma) ============
+function workOrderPDF(){
+  if(typeof window.jspdf==='undefined'){alert('PDF cargando...');return;}
+  if(!RO.cliente){alert('Completa el nombre del cliente primero.');return;}
+  var doc=new window.jspdf.jsPDF();var y=0;
+  var rate=DB.settings.laborRate||103;
+
+  // Header
+  doc.setFillColor(11,31,58);doc.rect(0,0,210,24,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(16);doc.setFont(undefined,'bold');
+  doc.text('ORDEN DE TRABAJO',14,11);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');
+  doc.text((DB.settings.shopName||'Pit Stop')+' · '+(DB.settings.shopAddress||'Bayamón, PR'),14,18);
+  doc.setFontSize(13);doc.setFont(undefined,'bold');
+  doc.text(RO.id,196,11,{align:'right'});
+  doc.setFontSize(8);doc.setFont(undefined,'normal');
+  doc.text((RO.estado==='abierta'?'ABIERTA · ':'')+new Date(RO.fecha).toLocaleString('es-PR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),196,18,{align:'right'});
+  y=32;doc.setTextColor(0,0,0);
+
+  // Cliente y vehículo
+  var veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('CLIENTE Y VEHÍCULO',14,y);y+=1;
+  doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
+  doc.setFont(undefined,'normal');
+  doc.text('Cliente: '+RO.cliente,14,y);doc.text('Tel: '+(RO.tel||'—'),110,y);y+=5;
+  doc.text('Vehículo: '+(veh||'—'),14,y);doc.text('Tablilla: '+(RO.vehiculo.tag||'—')+(RO.vehiculo.color?' · '+RO.vehiculo.color:''),110,y);y+=5;
+  doc.text('Odómetro entrada: '+(RO.vehiculo.odoIn||'—')+' mi',14,y);
+  if(RO.vehiculo.vin)doc.text('VIN: '+RO.vehiculo.vin,110,y);
+  y+=8;
+
+  // Queja — la misión del técnico
+  doc.setFont(undefined,'bold');doc.text('QUEJA DEL CLIENTE',14,y);y+=1;
+  doc.line(14,y,196,y);y+=6;
+  doc.setFontSize(11);
+  var qLines=doc.splitTextToSize(RO.queja||'(sin queja registrada)',178);
+  doc.setFillColor(241,243,245);doc.rect(14,y-4,182,qLines.length*5+6,'F');
+  qLines.forEach(function(l){doc.text(l,17,y+1);y+=5;});
+  y+=8;doc.setFontSize(9);
+
+  // Servicios autorizados (con precios) — del snapshot firmado si existe
+  var items=(RO.auth1&&RO.auth1.items)?RO.auth1.items:RO.servicios.map(function(s){return{n:s.n,ep:s.ep||0,qty:s.qty||1,laborHours:s.laborHours||0,partsTotal:(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0)};});
+  var woRate=(RO.auth1&&RO.auth1.rate)||rate;
+  doc.setFont(undefined,'bold');
+  doc.text('SERVICIOS AUTORIZADOS'+(RO.auth1?'':' (ESTIMADO — SIN FIRMAR)'),14,y);y+=1;
+  doc.line(14,y,196,y);y+=6;
+  doc.setFont(undefined,'normal');
+  var woTotal=0;
+  items.forEach(function(s,i){
+    if(y>240){doc.addPage();y=14;}
+    var laborC=(s.laborHours||0)*woRate;
+    var lineT=(s.ep||0)*(s.qty||1)+laborC+(s.partsTotal||0);
+    woTotal+=lineT;
+    doc.setFont(undefined,'bold');doc.setFontSize(10);
+    doc.text((i+1)+'. '+s.n+(s.qty>1?' ×'+s.qty:''),14,y);
+    doc.text('$'+lineT.toFixed(2),196,y,{align:'right'});y+=5;
+    doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(100,100,100);
+    var det=[];
+    if(s.ep)det.push('Servicio $'+((s.ep||0)*(s.qty||1)).toFixed(2));
+    if(s.laborHours)det.push('Labor '+s.laborHours+'h × $'+woRate+' = $'+laborC.toFixed(2));
+    if(s.partsTotal)det.push('Piezas $'+s.partsTotal.toFixed(2));
+    if(det.length)doc.text(det.join('  ·  '),18,y);
+    doc.setTextColor(0,0,0);doc.setFontSize(9);y+=6;
+  });
+  var subT=(RO.auth1?RO.auth1.total:Math.round(woTotal*1.115*100)/100);
+  doc.setDrawColor(11,31,58);doc.line(120,y,196,y);y+=5;
+  doc.setFont(undefined,'bold');doc.setFontSize(11);
+  doc.text('TOTAL ESTIMADO (con IVU):',120,y,{align:'left'});y+=6;
+  doc.text('$'+subT.toFixed(2),196,y-6,{align:'right'});
+  doc.setFontSize(9);y+=4;
+
+  // Notas
+  if(RO.techNotes){
+    if(y>240){doc.addPage();y=14;}
+    doc.setFont(undefined,'bold');doc.text('NOTAS',14,y);y+=1;
+    doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');
+    doc.splitTextToSize(RO.techNotes,178).forEach(function(l){doc.text(l,14,y);y+=4.5;});
+    y+=4;
+  }
+
+  // Firma de autorización
+  if(y>235){doc.addPage();y=14;}
+  doc.setFont(undefined,'bold');doc.text('AUTORIZACIÓN DEL CLIENTE',14,y);y+=1;
+  doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=5;
+  doc.setFont(undefined,'normal');
+  var sigD=RO.sigData&&RO.sigData.sig1;
+  if(sigD){
+    try{doc.addImage(sigD,'PNG',14,y,90,30);doc.rect(14,y,90,30);}catch(e){doc.line(14,y+15,104,y+15);}
+    var when=(RO.sigTimes&&RO.sigTimes.sig1)?new Date(RO.sigTimes.sig1).toLocaleString('es-PR'):'';
+    doc.text('Firmado: '+when,120,y+15);
+  }else{
+    doc.setTextColor(180,60,60);doc.text('*** PENDIENTE DE FIRMA ***',14,y+15);doc.setTextColor(0,0,0);
+    doc.line(120,y+20,196,y+20);
+  }
+  y+=38;
+  doc.setFontSize(7);doc.setTextColor(150,150,150);
+  doc.text('Documento interno de taller — no es recibo. '+(DB.settings.shopName||'Pit Stop')+' · ShopFlow',14,y);
+
+  var blob=doc.output('blob');
+  _pdfBlob=blob;_pdfUrl=URL.createObjectURL(blob);
+  _pdfFilename='ShopFlow_WO_'+RO.id+'.pdf';
+  document.getElementById('pdf-share-modal').style.display='flex';
+}
+function printWorkOrder(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});
+  if(!o){alert('Orden no encontrada.');return;}
+  var savedRO=RO;
+  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,vehiculo:o.vehiculo||{},queja:o.queja||'',servicios:o.servicios||[],estado:o.estado,techNotes:o.techNotes||'',auth1:o.auth1||null,sigData:o.sigData||{},sigTimes:o.sigTimes||{},total:o.total||0};
+  workOrderPDF();
+  RO=savedRO;
+}
 
 
 function gTab(id){document.querySelectorAll('#garage .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#g-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#g-tabs .tab');var ids=['g-act','g-lst','g-ent'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});renderGarage();}
@@ -1707,6 +1849,10 @@ function openRODetail(roId){
     if(o.terms)html+='<div style="font-size:10px;color:var(--gray-400);margin-top:4px"><i class="ti ti-file-certificate"></i> Términos v'+o.terms.v+' aceptados el '+new Date(o.terms.fecha).toLocaleString('es-PR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+' (texto congelado en esta orden)</div>';
     html+='</div></div>';
   }
+  // Notas
+  if(o.techNotes){
+    html+='<div class="card"><div class="ch"><i class="ti ti-note"></i> Notas</div><div class="cb"><div style="font-size:13px;line-height:1.5">'+o.techNotes+'</div></div></div>';
+  }
   // Photo evidence — condición del vehículo al recibirlo
   if(o.fotos&&o.fotos.length){
     html+='<div class="card"><div class="ch"><i class="ti ti-camera"></i> Fotos de entrada ('+o.fotos.length+')</div><div class="cb">'+
@@ -1764,6 +1910,7 @@ function openRODetail(roId){
   // Actions
   if(o.estado==='abierta'){
     html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px;background:var(--blue);color:#fff;border-color:var(--blue)"><i class="ti ti-player-play"></i> Continuar orden (ABIERTA)</button>';
+    html+='<button class="btn full" onclick="printWorkOrder(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-printer"></i> Imprimir orden de trabajo</button>';
   }
   if(o.estado==='pendiente'){
     html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+(o.total||0).toFixed(2)+'</button>';
@@ -1833,7 +1980,7 @@ function reExportPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});
   if(!o){alert('Orden no encontrada.');return;}
   var savedRO=RO;
-  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[],terms:o.terms||null};
+  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[],terms:o.terms||null,auth1:o.auth1||null};
   exportPDF();
   RO=savedRO;
 }

@@ -4,6 +4,19 @@
 
 ## Last updated: 2026-07-03
 
+## New 2026-07-03 (later 4): Real intake flow + work order
+- Wizard order now matches the shop: Cliente → Fotos → **Servicios → Estimado → FIRMA de
+  autorización** → Inspección → Denegados → Firma final → Cierre. Services + prices exist BEFORE
+  the customer signs (diag $80 case; oil+coolant upsell case).
+- `RO.auth1` frozen at signature: itemized services (svc price, labor h × rate, parts) + total.
+- `workOrderPDF()`: ORDEN DE TRABAJO with prices + embedded authorization signature — printer
+  button in wizard nav + abierta detail. Paper copy for the car/técnico.
+- `techNotes` prints on receipt (NOTAS), work order, and RO detail. "+ Servicio manual" button.
+- Step-index hooks moved: buildEstSum n===3, renderAutoRecs/DenList n===6. saveRO redirect gotoStep(2).
+- **Pages deploy note**: deploy-step failures were the ~10-deploys/hour Pages rate limit (build job
+  was green). If deploy fails: wait for the hour window, next push retriggers. .nojekyll added anyway.
+- Smoke = 49 checks.
+
 ## New 2026-07-03 (later 3): Offline PWA + WhatsApp + payment tracking
 - **Offline**: sw.js (network-first shell, cache-first CDN/assets — bump CACHE_V on strategy change)
   + manifest.json + icons (180/192/512). App verified loading fully with network cut. Installable

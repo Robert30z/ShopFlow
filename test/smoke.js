@@ -34,15 +34,15 @@ function check(ok, name, detail) {
   await page.waitForTimeout(500);
   await page.fill('#c-n', 'Smoke Test');
   await page.fill('#v-y', '2020'); await page.fill('#v-ma', 'Toyota'); await page.fill('#v-mo', 'Corolla');
-  await page.evaluate(`gotoStep(3)`);
+  await page.evaluate(`gotoStep(5)`); // inspección (nuevo orden)
   await page.locator('[id^="ibr-"]').first().click(); // rojo
-  await page.evaluate(`gotoStep(5)`);
+  await page.evaluate(`gotoStep(6)`); // denegados
   await page.waitForTimeout(400);
   const autoDen = await page.locator('#den-auto').textContent();
   check((autoDen || '').includes('Detectados'), 'Auto-denegado from red inspection', (autoDen || '').slice(0, 60).trim());
   try { await vclick('#den-auto [onclick^="confirmAutoDen"]'); check(true, 'Confirm auto-denegado'); }
   catch (e) { check(false, 'Confirm auto-denegado', e.message.split('\n')[0]); }
-  await page.evaluate(`gotoStep(4)`);
+  await page.evaluate(`gotoStep(2)`); // servicios (nuevo orden)
   await page.waitForTimeout(300);
   await page.locator('#ro-sl [onclick^="addSvcRO"]').filter({ visible: true }).first().click();
   await page.evaluate(`gotoStep(8)`);
@@ -90,7 +90,7 @@ function check(ok, name, detail) {
   await page.evaluate(`go('ro')`);
   await page.waitForTimeout(400);
   await page.fill('#v-y', '2020'); await page.fill('#v-ma', 'Toyota'); await page.fill('#v-mo', 'Corolla');
-  await page.evaluate(`gotoStep(3)`);
+  await page.evaluate(`gotoStep(5)`); // inspección (nuevo orden)
   const ePre = errors.length;
   await vclick(`[onclick="aiDiagnosticSummary()"]`);
   await page.waitForTimeout(800);
@@ -114,13 +114,34 @@ function check(ok, name, detail) {
   await page.waitForTimeout(700);
   const foto = await page.evaluate(() => { const f = (RO.fotos || [])[0]; return f ? { obj: typeof f === 'object', hasT: !!f.t, jpeg: (f.d || '').startsWith('data:image/jpeg') } : null; });
   check(foto && foto.obj && foto.hasT, 'Photo saved with timestamp', JSON.stringify(foto));
-  await page.evaluate(`gotoStep(2)`); // firma 1
+  // servicios ANTES de la firma (flujo real de intake) + notas
+  await page.evaluate(`gotoStep(2)`);
+  await page.waitForTimeout(300);
+  await page.locator('#ro-sl [onclick^="addSvcRO"]').filter({ visible: true }).first().click();
+  await page.fill('#tech-n', 'Cliente trajo su alternador — sin garantía');
+  await page.evaluate(`RO.techNotes=document.getElementById('tech-n').value`);
+  await page.evaluate(`gotoStep(4)`); // firma de autorización (nuevo orden)
   await page.waitForTimeout(400);
   const sigBox = await page.locator('#sig-1').boundingBox();
   await page.mouse.move(sigBox.x + 30, sigBox.y + 60);
   await page.mouse.down();
   for (let i = 1; i <= 5; i++) await page.mouse.move(sigBox.x + 30 + i * 60, sigBox.y + 60 + (i % 2 ? -20 : 20), { steps: 3 });
   await page.mouse.up();
+  await page.waitForTimeout(300);
+  // auth1 snapshot: la firma congela QUÉ se autorizó (items + total)
+  const auth1 = await page.evaluate(() => RO.auth1 ? { items: RO.auth1.items.length, total: RO.auth1.total, hasRate: !!RO.auth1.rate } : null);
+  check(auth1 && auth1.items === 1 && auth1.total > 0 && auth1.hasRate, 'auth1 snapshot frozen at signature (items+total+rate)', JSON.stringify(auth1));
+  // Work order PDF from wizard (con precios + firma)
+  const woDl = page.waitForEvent('download', { timeout: 8000 }).catch(() => null);
+  await vclick('#ro-print');
+  await page.waitForTimeout(1500);
+  const woModal = await page.locator('#pdf-share-modal').isVisible();
+  const woName = await page.evaluate(`_pdfFilename`);
+  check(woModal && woName.startsWith('ShopFlow_WO_'), 'Work order PDF generated', woName);
+  await page.locator(`[onclick="downloadPDF()"]`).filter({ visible: true }).first().click();
+  const woFile = await woDl;
+  check(!!woFile && woFile.suggestedFilename().startsWith('ShopFlow_WO_'), 'Work order downloads', woFile ? woFile.suggestedFilename() : 'none');
+  await page.locator(`[onclick="closePDFShare()"]`).filter({ visible: true }).first().click();
   await page.waitForTimeout(300);
   const dB = dialogs.length;
   await vclick('#ro-save');
@@ -154,6 +175,10 @@ function check(ok, name, detail) {
   const viewer = await page.evaluate(() => ({ visible: document.getElementById('foto-viewer').style.display === 'flex', caption: document.getElementById('foto-viewer-caption').textContent }));
   check(viewer.visible && viewer.caption.includes('Capturada'), 'Photo viewer opens with capture timestamp', viewer.caption.slice(0, 80));
   await page.evaluate(`closeFotoViewer()`);
+  const detailNotas = await page.evaluate(() => document.getElementById('ro-detail-body').innerText.includes('Cliente trajo su alternador'));
+  check(detailNotas, 'Detail shows Notas (customer-brought part line)');
+  const woBtnDetail = await page.locator(`#ro-detail-body [onclick^="printWorkOrder"]`).count();
+  check(woBtnDetail === 1, 'Work order print button in abierta detail');
   await vclick(`[onclick^="continueRO"]`);
   await page.waitForTimeout(900);
   const resumed = await page.evaluate(() => ({
@@ -162,10 +187,7 @@ function check(ok, name, detail) {
   }));
   check(resumed.name === 'Draft Cliente', 'Resume restores client fields', resumed.name);
   check(resumed.sigLabel.includes('capturada'), 'Resume restores signature', resumed.sigLabel);
-  // Complete the resumed RO
-  await page.evaluate(`gotoStep(4)`);
-  await page.waitForTimeout(300);
-  await page.locator('#ro-sl [onclick^="addSvcRO"]').filter({ visible: true }).first().click();
+  // Complete the resumed RO (service was added before signing — new flow)
   await page.evaluate(`gotoStep(8)`);
   await page.locator(`#pan-8 [onclick="saveRO()"]`).click();
   await page.waitForTimeout(500);
