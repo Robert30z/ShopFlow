@@ -98,6 +98,62 @@ function check(ok, name, detail) {
   check((aiBox || '').includes('API key'), 'AI no-key message shown', (aiBox || '').slice(0, 60).trim());
   check(errors.length === ePre, 'AI no-key path throws no errors');
 
+  // ===== OPEN RO (draft) lifecycle: save with signature, resume, complete =====
+  await page.evaluate(`go('ro')`);
+  await page.waitForTimeout(600);
+  await page.fill('#c-n', 'Draft Cliente');
+  await page.fill('#v-y', '2018'); await page.fill('#v-ma', 'Ford'); await page.fill('#v-mo', 'F-150');
+  await page.evaluate(`gotoStep(2)`); // firma 1
+  await page.waitForTimeout(400);
+  const sigBox = await page.locator('#sig-1').boundingBox();
+  await page.mouse.move(sigBox.x + 30, sigBox.y + 60);
+  await page.mouse.down();
+  for (let i = 1; i <= 5; i++) await page.mouse.move(sigBox.x + 30 + i * 60, sigBox.y + 60 + (i % 2 ? -20 : 20), { steps: 3 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const dB = dialogs.length;
+  await vclick('#ro-save');
+  await page.waitForTimeout(500);
+  check(dialogs.slice(dB).join('').includes('ABIERTA'), 'Save open RO (draft)', dialogs[dialogs.length - 1]);
+  const draft = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('sf_v1'));
+    const o = d.ordenes.find(x => x.cliente === 'Draft Cliente');
+    return o ? { estado: o.estado, hasInk: !!(o.sigData && o.sigData.sig1 && o.sigData.sig1.startsWith('data:image/png')), hasTime: !!(o.sigTimes && o.sigTimes.sig1), id: o.id } : null;
+  });
+  check(draft && draft.estado === 'abierta', 'Draft saved with estado abierta', JSON.stringify(draft));
+  check(draft && draft.hasInk && draft.hasTime, 'Signature INK + timestamp persisted', draft ? `ink:${draft.hasInk} time:${draft.hasTime}` : 'no draft');
+  // Detail shows signature evidence + Continuar
+  await page.evaluate(`go('home')`);
+  await page.waitForTimeout(300);
+  await page.evaluate(`openRODetail('${draft.id}')`);
+  await page.waitForTimeout(500);
+  const detailHasSig = await page.locator('#ro-detail-body img[src^="data:image/png"]').count();
+  check(detailHasSig > 0, 'Detail shows stored signature image');
+  await vclick(`[onclick^="continueRO"]`);
+  await page.waitForTimeout(900);
+  const resumed = await page.evaluate(() => ({
+    name: document.getElementById('c-n').value,
+    sigLabel: document.getElementById('st-sig1') ? document.getElementById('st-sig1').textContent : '',
+  }));
+  check(resumed.name === 'Draft Cliente', 'Resume restores client fields', resumed.name);
+  check(resumed.sigLabel.includes('capturada'), 'Resume restores signature', resumed.sigLabel);
+  // Complete the resumed RO
+  await page.evaluate(`gotoStep(4)`);
+  await page.waitForTimeout(300);
+  await page.locator('#ro-sl [onclick^="addSvcRO"]').filter({ visible: true }).first().click();
+  await page.evaluate(`gotoStep(8)`);
+  await page.locator(`#pan-8 [onclick="saveRO()"]`).click();
+  await page.waitForTimeout(500);
+  const final = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('sf_v1'));
+    const matches = d.ordenes.filter(x => x.cliente === 'Draft Cliente');
+    return { count: matches.length, estado: matches[0] && matches[0].estado, keptInk: !!(matches[0] && matches[0].sigData && matches[0].sigData.sig1), garage: d.garage.filter(g => g.roId === matches[0].id).length };
+  });
+  check(final.count === 1, 'Complete upserts (no duplicate order)', `count=${final.count}`);
+  check(final.estado !== 'abierta', 'Completed RO left abierta state', final.estado);
+  check(final.keptInk, 'Signature ink survived completion');
+  check(final.garage === 1, 'Garage entry created once', `garage=${final.garage}`);
+
   // Delete RO removes garage entry (no orphans)
   await page.evaluate(`go('historial')`);
   await page.waitForTimeout(400);
@@ -105,8 +161,8 @@ function check(ok, name, detail) {
   await page.waitForTimeout(400);
   await vclick(`[onclick*="deleteRO"]`);
   await page.waitForTimeout(500);
-  const after = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, g: d.garage.length }; });
-  check(after.o === 0 && after.g === 0, 'deleteRO cleans garage entry', JSON.stringify(after));
+  const after = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, g: d.garage.length, orphans: d.garage.filter(g => !d.ordenes.find(o => o.id === g.roId)).length }; });
+  check(after.o === 1 && after.orphans === 0, 'deleteRO cleans garage entry (no orphans)', JSON.stringify(after));
 
   console.log('\nPage errors: ' + (errors.join(' | ') || '(none)'));
   console.log(`\n=== ${failures === 0 ? 'SMOKE TEST PASSED' : failures + ' FAILURE(S)'} ===`);

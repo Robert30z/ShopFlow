@@ -177,6 +177,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="ro-panes-wrap"></div>
   <div class="act" id="ro-nav">
     <button class="btn" id="ro-prev" onclick="prevStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
+    <button class="btn g" id="ro-save" onclick="saveOpenRO()" title="Guardar sin completar — protege firmas y fotos"><i class="ti ti-device-floppy"></i></button>
     <div style="flex:1;text-align:center;font-size:11px;color:var(--gray-400);align-self:center" id="ro-step-lbl"></div>
     <button class="btn p" id="ro-next" onclick="nextStep()">Siguiente <i class="ti ti-arrow-right"></i></button>
   </div>
@@ -370,7 +371,13 @@ var MC=[{id:'aceites',l:'Oil & Filter'},{id:'frenos',l:'Brakes'},{id:'suspension
 
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'firma1',l:'Firma 1'},{id:'inspeccion',l:'Inspección'},{id:'servicios',l:'Servicios'},{id:'denegados',l:'Denegados'},{id:'estimado',l:'Estimado'},{id:'firma2',l:'Firma 2'},{id:'cierre',l:'Cierre'}];
 
-function saveDB(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}}
+function saveDB(){
+  try{localStorage.setItem('sf_v1',JSON.stringify(DB));return true;}
+  catch(e){
+    alert('⚠️ ALMACENAMIENTO LLENO — LOS DATOS NO SE GUARDARON.\n\nExporta un respaldo en Ajustes AHORA y elimina órdenes viejas con muchas fotos para liberar espacio.');
+    return false;
+  }
+}
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
@@ -416,7 +423,7 @@ function renderHome(){
   var dd=document.getElementById('hdate');if(dd)dd.textContent=MESES[now.getMonth()]+' '+now.getDate();
   var today=now.toDateString();
   var to=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;});
-  var hoy=to.reduce(function(s,o){return s+(o.total||0);},0);
+  var hoy=to.reduce(function(s,o){return s+(o.estado==='abierta'?0:(o.total||0));},0);
   var active=DB.garage.filter(function(c){return c.estado!=='entregado';}).length;
   var pend=DB.ordenes.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+(o.total||0);},0);
   document.getElementById('h-hoy').textContent='$'+hoy.toFixed(0);
@@ -433,12 +440,34 @@ function renderHome(){
 }
 
 function initRO(){
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
+  if(_resumeRO){
+    RO=_resumeRO;_resumeRO=null;
+    curStep=0;buildSteps();buildPanes();
+    document.getElementById('ro-id-lbl').textContent=RO.id+' · ABIERTA';
+    updNav();
+    setTimeout(fillROInputs,140);
+    return;
+  }
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
   curStep=0;
   buildSteps();buildPanes();
   document.getElementById('ro-id-lbl').textContent=RO.id;
   updNav();
+}
+var _resumeRO=null;
+function continueRO(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o){alert('Orden no encontrada.');return;}
+  _resumeRO=JSON.parse(JSON.stringify(o));
+  _resumeRO.fotos=_resumeRO.fotos||[];_resumeRO.servicios=_resumeRO.servicios||[];_resumeRO.denegados=_resumeRO.denegados||[];_resumeRO.insp=_resumeRO.insp||{};
+  _resumeRO.sigData=_resumeRO.sigData||{};_resumeRO.sigTimes=_resumeRO.sigTimes||{};
+  go('ro');
+}
+function fillROInputs(){
+  var m={'c-n':RO.cliente,'c-t':RO.tel,'c-e':RO.email,'v-y':RO.vehiculo.year,'v-ma':RO.vehiculo.make,'v-mo':RO.vehiculo.model,'v-t':RO.vehiculo.tag,'v-c':RO.vehiculo.color,'v-o1':RO.vehiculo.odoIn,'v-o2':RO.vehiculo.odoOut,'v-vin':RO.vehiculo.vin,'v-q':RO.queja,'tech-n':RO.techNotes};
+  Object.keys(m).forEach(function(id){var e=document.getElementById(id);if(e&&m[id])e.value=m[id];});
+  Object.keys(RO.insp||{}).forEach(function(iid){setInsp('',iid,RO.insp[iid]);var n=document.getElementById('in-'+iid);if(n&&RO.inspNotes&&RO.inspNotes[iid])n.value=RO.inspNotes[iid];});
+  renderROSO();restoreSigs();
 }
 
 function buildSteps(){
@@ -448,7 +477,7 @@ function buildSteps(){
 function buildPanes(){
   var w=document.getElementById('ro-panes-wrap');
   w.innerHTML=STEPS.map(function(s,i){return '<div class="pan'+(i===0?' active':'')+'" id="pan-'+i+'">'+buildPane(s.id)+'</div>';}).join('');
-  setTimeout(function(){initSigs();renderROSvcMenu();},50);
+  setTimeout(function(){initSigs();restoreSigs();renderROSvcMenu();},50);
 }
 
 function buildPane(id){
@@ -510,11 +539,32 @@ function initSP(cid,key){
   function pos(e){var r=c.getBoundingClientRect();var sc=c.width/r.width;if(e.touches&&e.touches[0])return{x:(e.touches[0].clientX-r.left)*sc,y:(e.touches[0].clientY-r.top)*sc};return{x:(e.clientX-r.left)*sc,y:(e.clientY-r.top)*sc};}
   function st(e){e.preventDefault();dr=true;var p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);}
   function dw(e){e.preventDefault();if(!dr)return;var p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();RO[key]=true;var s=document.getElementById('st-'+key);if(s){s.textContent='Firma capturada ✓';s.style.color='var(--green)';}}
-  function sp(){dr=false;}
+  function sp(){
+    if(dr){
+      dr=false;
+      // Guarda la tinta real + hora de firma — esta es la evidencia legal
+      try{
+        RO.sigData=RO.sigData||{};RO.sigData[key]=c.toDataURL('image/png');
+        RO.sigTimes=RO.sigTimes||{};RO.sigTimes[key]=new Date().toISOString();
+      }catch(e){}
+    }
+  }
   c.addEventListener('mousedown',st);c.addEventListener('mousemove',dw);c.addEventListener('mouseup',sp);c.addEventListener('mouseleave',sp);
   c.addEventListener('touchstart',st,{passive:false});c.addEventListener('touchmove',dw,{passive:false});c.addEventListener('touchend',sp);
 }
-function clearSig(cid,key){var c=document.getElementById(cid);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height);RO[key]=false;var s=document.getElementById('st-'+key);if(s){s.textContent='Sin firma';s.style.color='';}}
+function clearSig(cid,key){var c=document.getElementById(cid);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height);RO[key]=false;if(RO.sigData)delete RO.sigData[key];if(RO.sigTimes)delete RO.sigTimes[key];var s=document.getElementById('st-'+key);if(s){s.textContent='Sin firma';s.style.color='';}}
+function restoreSigs(){
+  if(!RO.sigData)return;
+  [['sig-1','sig1'],['sig-2','sig2'],['sig-den','sigDen']].forEach(function(p){
+    var c=document.getElementById(p[0]);var d=RO.sigData[p[1]];
+    if(!c||!d)return;
+    var ctx=c.getContext('2d');var img=new Image();
+    img.onload=function(){ctx.clearRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);};
+    img.src=d;
+    var s=document.getElementById('st-'+p[1]);
+    if(s){s.textContent='Firma capturada ✓'+(RO.sigTimes&&RO.sigTimes[p[1]]?' · '+new Date(RO.sigTimes[p[1]]).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'');s.style.color='var(--green)';}
+  });
+}
 
 function handlePhotos(e){
   var files=Array.from(e.target.files);if(!files.length)return;
@@ -523,9 +573,19 @@ function handlePhotos(e){
   files.forEach(function(f){
     var r=new FileReader();
     r.onload=function(ev){
-      RO.fotos.push(ev.target.result);
-      done++;
-      if(done===files.length)renderPhotosGrid();
+      // Comprime a max 1280px / JPEG 72% — evita llenar el almacenamiento del navegador
+      var img=new Image();
+      img.onload=function(){
+        var max=1280,w=img.width,h=img.height;
+        if(w>max||h>max){var k=Math.min(max/w,max/h);w=Math.round(w*k);h=Math.round(h*k);}
+        var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        RO.fotos.push(cv.toDataURL('image/jpeg',0.72));
+        done++;
+        if(done===files.length)renderPhotosGrid();
+      };
+      img.onerror=function(){RO.fotos.push(ev.target.result);done++;if(done===files.length)renderPhotosGrid();};
+      img.src=ev.target.result;
     };
     r.readAsDataURL(f);
   });
@@ -798,7 +858,7 @@ function renderDenList(){
   if(!conf.length){el.innerHTML='';if(sw)sw.style.display='none';return;}
   el.innerHTML='<div class="st" style="margin-top:4px">Denegados confirmados</div>'+conf.map(function(d,i){return '<div class="ri"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:700">'+d.nombre+'</span><button onclick="rmDen('+i+')" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray-400)"><i class="ti ti-x"></i></button></div><div style="display:flex;justify-content:space-between"><span class="badge '+(d.urgencia==='urgente'?'br':d.urgencia==='importante'?'ba':'bb')+'">'+d.urgencia+'</span><span style="font-size:13px;font-weight:700;color:var(--red)">$'+(d.precio||0).toFixed(2)+'</span></div>'+(d.nota?'<div style="font-size:11px;color:var(--gray-500);margin-top:4px;font-style:italic">'+d.nota+'</div>':'')+' </div>';}).join('');
   if(sw)sw.style.display='block';
-  setTimeout(function(){initSP('sig-den','sigDen');},50);
+  setTimeout(function(){initSP('sig-den','sigDen');restoreSigs();},50);
 }
 function rmDen(i){var conf=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});var item=conf[i];if(item.auto){item.confirmed=false;}else{var idx=RO.denegados.indexOf(item);if(idx>-1)RO.denegados.splice(idx,1);}renderDenList();}
 
@@ -835,15 +895,33 @@ function calcEst(){
   return tot;
 }
 
+function upsertRO(){
+  var idx=DB.ordenes.findIndex(function(x){return x.id===RO.id;});
+  if(idx===-1){RO.id=nextRONum();DB.ordenes.push(JSON.parse(JSON.stringify(RO)));}
+  else{DB.ordenes[idx]=JSON.parse(JSON.stringify(RO));}
+}
+function saveOpenRO(){
+  if(!RO.cliente){alert('Agrega el nombre del cliente antes de guardar.');gotoStep(0);return;}
+  RO.estado='abierta';
+  calcEst();RO.total=Math.round(RO.total*100)/100;
+  upsertRO();autoSaveCli();
+  if(!saveDB())return;
+  document.getElementById('ro-id-lbl').textContent=RO.id+' · ABIERTA';
+  alert('Orden '+RO.id+' guardada como ABIERTA ✓\n\nFirmas, fotos e inspección protegidas. Puedes cerrar la app y continuarla luego desde Órdenes → '+RO.id+'.');
+}
 function saveRO(){
   if(!RO.cliente){alert('Agrega el nombre del cliente.');gotoStep(0);return;}
   if(!RO.servicios.length){alert('Agrega al menos un servicio.');gotoStep(4);return;}
-  RO.total=Math.round(calcEst()*100)/100;
-  RO.id=nextRONum();
-  DB.ordenes.push(JSON.parse(JSON.stringify(RO)));
+  calcEst();RO.total=Math.round(RO.total*100)/100;
+  var sel=document.getElementById('est-estado');
+  if(sel)RO.estado=sel.value;else if(RO.estado==='abierta')RO.estado='pagado';
+  upsertRO();
   autoSaveCli();
-  DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
-  saveDB();alert('Orden '+RO.id+' guardada. $'+RO.total.toFixed(2));go('home');
+  if(!DB.garage.find(function(g){return g.roId===RO.id;})){
+    DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
+  }
+  if(!saveDB())return;
+  alert('Orden '+RO.id+' guardada. $'+RO.total.toFixed(2));go('home');
 }
 function autoSaveCli(){if(!RO.cliente)return;var ex=DB.clientes.find(function(c){return c.nombre.toLowerCase()===RO.cliente.toLowerCase();});var veh={tag:RO.vehiculo.tag,desc:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim()};if(!ex){DB.clientes.push({id:'CLI-'+Date.now(),nombre:RO.cliente,tel:RO.tel,email:RO.email,vehiculos:veh.tag?[veh]:[],nextReminder:RO.nextDate,creado:new Date().toISOString()});}else{if(veh.tag&&!ex.vehiculos.find(function(v){return v.tag===veh.tag;}))ex.vehiculos.push(veh);if(RO.nextDate)ex.nextReminder=RO.nextDate;}}
 
@@ -960,22 +1038,25 @@ function exportPDF(){
   doc.setFont(undefined,'normal');doc.setFontSize(8);
   doc.text('Al firmar, el cliente autoriza los trabajos realizados y acepta los términos y condiciones.',14,y);y+=6;
 
-  // Try to embed actual sig2 canvas
-  var sigCanvas=document.getElementById('sig-2');
-  if(sigCanvas&&RO.sig2){
-    try{
-      var sigImg=sigCanvas.toDataURL('image/png');
-      doc.addImage(sigImg,'PNG',14,y,90,30);
-      doc.rect(14,y,90,30);
-    }catch(e){doc.line(14,y+15,104,y+15);}
-  }else{
-    doc.setTextColor(150,150,150);doc.text('(Sin firma digital capturada)',14,y+15);
-    doc.line(14,y+20,104,y+20);
-  }
-  doc.setTextColor(0,0,0);
-  doc.text('Firma del cliente',14,y+32);
-  doc.text('Fecha: '+new Date().toLocaleDateString('es-PR'),120,y+15);
-  doc.line(120,y+20,196,y+20);
+  // Embed stored signature ink (survives after the wizard closes) with real signing timestamps
+  [['sig1','sig-1','Autorización de inspección'],['sig2','sig-2','Autorización de trabajos']].forEach(function(sg){
+    var data=(RO.sigData&&RO.sigData[sg[0]])||null;
+    if(!data&&RO[sg[0]]){var lc=document.getElementById(sg[1]);if(lc){try{data=lc.toDataURL('image/png');}catch(e){}}}
+    if(!data&&sg[0]==='sig1')return; // omite sig1 si nunca se firmó (formato viejo)
+    if(y>250){doc.addPage();y=14;}
+    if(data){
+      try{doc.addImage(data,'PNG',14,y,90,30);doc.rect(14,y,90,30);}catch(e){doc.line(14,y+15,104,y+15);}
+    }else{
+      doc.setTextColor(150,150,150);doc.text('(Sin firma digital capturada)',14,y+15);
+      doc.line(14,y+20,104,y+20);doc.setTextColor(0,0,0);
+    }
+    doc.setTextColor(0,0,0);
+    doc.text(sg[2],14,y+35);
+    var when=(RO.sigTimes&&RO.sigTimes[sg[0]])?('Firmado: '+new Date(RO.sigTimes[sg[0]]).toLocaleString('es-PR')):('Fecha: '+new Date(RO.fecha).toLocaleDateString('es-PR'));
+    doc.text(when,120,y+15);
+    doc.line(120,y+20,196,y+20);
+    y+=42;
+  });
 
   // Output as blob and show share sheet
   var blob=doc.output('blob');
@@ -1418,10 +1499,10 @@ function roCardHTML(o){
   var time=new Date(o.fecha).toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'});
   var inspR=Object.values(o.insp||{}).filter(function(v){return v==='rojo';}).length;
   var denCount=(o.denegados||[]).filter(function(d){return !d.auto||(d.auto&&d.confirmed);}).length;
-  return '<div onclick="openRODetail(\''+o.id+'\')" style="background:var(--white);border-radius:var(--r-lg);padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;border-left:4px solid '+(o.estado==='pagado'?'var(--green)':'var(--amber)')+'">'+
+  return '<div onclick="openRODetail(\''+o.id+'\')" style="background:var(--white);border-radius:var(--r-lg);padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;border-left:4px solid '+(o.estado==='pagado'?'var(--green)':o.estado==='abierta'?'var(--blue)':'var(--amber)')+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
       '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:700;color:var(--navy)">'+o.id+'</span><span style="font-size:11px;color:var(--gray-400)">'+time+'</span></div>'+
-      '<span class="badge '+(o.estado==='pagado'?'bg':'ba')+'">'+(o.estado==='pagado'?'Pagado':'Pendiente')+'</span>'+
+      '<span class="badge '+(o.estado==='pagado'?'bg':o.estado==='abierta'?'bb':'ba')+'">'+(o.estado==='pagado'?'Pagado':o.estado==='abierta'?'Abierta':'Pendiente')+'</span>'+
     '</div>'+
     '<div style="font-size:13px;font-weight:700">'+o.cliente+'</div>'+
     '<div style="font-size:12px;color:var(--gray-400);margin-top:1px">'+veh+(o.vehiculo&&o.vehiculo.tag?' · '+o.vehiculo.tag:'')+'</div>'+
@@ -1509,10 +1590,21 @@ function openRODetail(roId){
 
   var html='<div style="padding:14px 16px">';
   // Status banner
-  html+='<div style="background:'+(o.estado==='pagado'?'var(--green-light)':'var(--amber-light)')+';border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
+  html+='<div style="background:'+(o.estado==='pagado'?'var(--green-light)':o.estado==='abierta'?'var(--blue-light)':'var(--amber-light)')+';border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
     '<div><div style="font-size:11px;color:var(--gray-500);font-weight:600">'+new Date(o.fecha).toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div><div style="font-size:11px;color:var(--gray-500)">'+new Date(o.fecha).toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+'</div></div>'+
-    '<span class="badge '+(o.estado==='pagado'?'bg':'ba')+'" style="font-size:12px">'+(o.estado==='pagado'?'PAGADO':'PENDIENTE')+'</span>'+
+    '<span class="badge '+(o.estado==='pagado'?'bg':o.estado==='abierta'?'bb':'ba')+'" style="font-size:12px">'+(o.estado==='pagado'?'PAGADO':o.estado==='abierta'?'ABIERTA':'PENDIENTE')+'</span>'+
   '</div>';
+  // Signature evidence (legal proof)
+  if(o.sigData&&(o.sigData.sig1||o.sigData.sig2)){
+    html+='<div class="card"><div class="ch"><i class="ti ti-writing-sign"></i> Firmas del cliente</div><div class="cb">';
+    [['sig1','Autorización de inspección'],['sig2','Autorización de trabajos']].forEach(function(p){
+      if(o.sigData[p[0]]){
+        html+='<div style="margin-bottom:10px"><div style="font-size:11px;color:var(--gray-500);font-weight:600;margin-bottom:4px">'+p[1]+(o.sigTimes&&o.sigTimes[p[0]]?' · firmada '+new Date(o.sigTimes[p[0]]).toLocaleString('es-PR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'')+'</div>'+
+          '<img src="'+o.sigData[p[0]]+'" style="width:100%;max-width:300px;border:1px solid var(--gray-200);border-radius:6px;background:#fff">'+'</div>';
+      }
+    });
+    html+='</div></div>';
+  }
   // Client & vehicle
   html+='<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente y vehículo</div><div class="cb"><div style="display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13px">'+
     '<span style="color:var(--gray-400)">Cliente</span><span style="font-weight:700">'+o.cliente+'</span>'+
@@ -1555,6 +1647,9 @@ function openRODetail(roId){
     html+='<div style="background:var(--green-light);border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px"><i class="ti ti-bell" style="color:var(--green);font-size:20px"></i><div><div style="font-size:11px;color:var(--gray-500);font-weight:600">Próximo mantenimiento</div><div style="font-size:13px;font-weight:700;color:var(--green)">'+new Date(o.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'})+'</div></div></div>';
   }
   // Actions
+  if(o.estado==='abierta'){
+    html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px;background:var(--blue);color:#fff;border-color:var(--blue)"><i class="ti ti-player-play"></i> Continuar orden (ABIERTA)</button>';
+  }
   html+='<button class="btn p full" onclick="reExportPDF(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-file-type-pdf"></i> Generar / Ver PDF</button>';
   html+='<button class="btn full" onclick="if(confirm(\'¿Eliminar esta orden permanentemente?\'))deleteRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Eliminar orden</button>';
   html+='</div>';
@@ -1566,7 +1661,7 @@ function reExportPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});
   if(!o){alert('Orden no encontrada.');return;}
   var savedRO=RO;
-  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0};
+  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[]};
   exportPDF();
   RO=savedRO;
 }

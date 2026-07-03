@@ -2,7 +2,23 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-02
+## Last updated: 2026-07-03
+
+## New 2026-07-03: Open RO (draft save) + real signature persistence — "the legal SAVE button"
+- Signature pads now persist the actual ink (canvas → PNG dataURL in `RO.sigData`) plus signing
+  timestamp (`RO.sigTimes`) the moment the customer lifts their finger. Survives app close.
+- 💾 button in the wizard nav = `saveOpenRO()`: saves at ANY step (only requires client name),
+  estado `'abierta'`, upserts by RO id. Blue "Abierta" badge in Órdenes/Historial/detail.
+- RO detail for abiertas: shows stored signature images w/ timestamps + "Continuar orden" button
+  → `continueRO()` reloads everything into the wizard (fields, inspection, photos, signatures re-drawn).
+- Completing a resumed RO upserts (no duplicates), creates the garage entry once, estado from the
+  Estimado select. PDFs now embed BOTH stored signatures with real signing timestamps (re-export
+  works forever, no more "(Sin firma digital capturada)").
+- Photos now compressed on capture (max 1280px, JPEG 72%) — protects localStorage quota.
+- `saveDB()` failure is no longer silent: loud alert telling the user to export backup + free space.
+- Smoke test extended to 29 checks covering the full draft lifecycle.
+
+## Previous: 2026-07-02
 
 ## What's built and verified working
 - 10 screens: home dashboard, RO wizard (9 steps), garage, órdenes, clientes, menú/POS,
