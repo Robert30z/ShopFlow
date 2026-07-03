@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ShopFlow">
 <meta name="theme-color" content="#0B1F3A">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>ShopFlow — Auto Service Management</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/tabler-icons.min.css">
 <style>
@@ -518,9 +520,9 @@ function renderHome(){
   document.getElementById('h-cobrar').textContent='$'+pend.toFixed(0);
   document.getElementById('h-ords').textContent=DB.ordenes.length;
   var notifs=[];
-  DB.ordenes.forEach(function(o){if(!o.nextDate)return;var d=new Date(o.nextDate);var diff=Math.floor((d-now)/86400000);if(diff>=0&&diff<=14)notifs.push({t:o.cliente+' — mantenimiento en '+diff+'d',c:diff<=3?'var(--red)':'var(--amber)'}); });
+  DB.ordenes.forEach(function(o){if(!o.nextDate)return;var d=new Date(o.nextDate);var diff=Math.floor((d-now)/86400000);if(diff>=0&&diff<=14)notifs.push({t:o.cliente+' — mantenimiento en '+diff+'d',c:diff<=3?'var(--red)':'var(--amber)',id:o.id,tel:o.tel}); });
   var nel=document.getElementById('home-notifs');
-  nel.innerHTML=notifs.length?notifs.map(function(n){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+n.c+'"><div style="font-size:12px;font-weight:600">'+n.t+'</div></div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin notificaciones pendientes.</div>';
+  nel.innerHTML=notifs.length?notifs.map(function(n){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+n.c+'"><div style="font-size:12px;font-weight:600;flex:1">'+n.t+'</div>'+(n.tel?'<button onclick="waRemind(\''+n.id+'\')" style="background:#25D366;border:none;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-brand-whatsapp"></i> Recordar</button>':'')+'</div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin notificaciones pendientes.</div>';
   // Update inventory label
   var invLbl=document.getElementById('home-inv-lbl');
   if(invLbl){var low=DB.inventario.filter(function(i){return i.qty<=i.min;}).length;invLbl.innerHTML=DB.inventario.length+' items'+(low>0?' · <span style="color:var(--red);font-weight:700">'+low+' bajo stock</span>':'');}
@@ -535,7 +537,7 @@ function initRO(){
     setTimeout(fillROInputs,140);
     return;
   }
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pagado',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
   curStep=0;
   buildSteps();buildPanes();
@@ -564,7 +566,11 @@ function buildSteps(){
 function buildPanes(){
   var w=document.getElementById('ro-panes-wrap');
   w.innerHTML=STEPS.map(function(s,i){return '<div class="pan'+(i===0?' active':'')+'" id="pan-'+i+'">'+buildPane(s.id)+'</div>';}).join('');
-  setTimeout(function(){initSigs();restoreSigs();renderROSvcMenu();},50);
+  setTimeout(function(){
+    initSigs();restoreSigs();renderROSvcMenu();
+    var se=document.getElementById('est-estado');if(se)se.value=(RO.estado==='abierta'||RO.estado==='pendiente')?'pendiente':'pagado';
+    var sp2=document.getElementById('est-pago');if(sp2&&RO.pago)sp2.value=RO.pago;
+  },50);
 }
 
 function buildPane(id){
@@ -582,7 +588,7 @@ function buildPane(id){
 
   if(id==='denegados')return '<div class="tb2"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Ítems en ROJO de la inspección aparecen aquí automáticamente.</span></div><div id="den-auto"></div><div class="card"><div class="ch">Agregar denegado</div><div class="cb"><div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div><div class="fr"><div class="fg"><div class="fl">Precio estimado</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente</option></select></div></div><div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas al 10%, riesgo de seguridad..."></textarea></div></div><button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button></div></div><div id="den-list"></div><div id="den-sig-w" style="display:none"><div class="card"><div class="ch">Firma — reconocimiento denegados</div><div class="cb"><div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">El cliente reconoce haber sido informado y decide no autorizar estos servicios.</div><canvas id="sig-den" class="sig-pad" width="600" height="90"></canvas><div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div></div>';
 
-  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
+  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
   if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
@@ -959,6 +965,8 @@ function buildEstSum(){
   var cli=document.getElementById('est-cli');if(cli)cli.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400);font-size:11px">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Tablilla</span><span>'+(RO.vehiculo.tag||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Odómetro</span><span>'+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi</span></div>';
   var rate=DB.settings.laborRate||103;var il=document.getElementById('est-items');if(il)il.innerHTML=RO.servicios.map(function(s){var laborC=(s.laborHours||0)*rate;var partsC=(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);var lineT=(s.ep||0)*(s.qty||1)+laborC+partsC;return '<div style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-weight:700;font-size:12px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>'+((s.laborHours>0||partsC>0)?'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+((s.ep||0)>0?'Servicio $'+((s.ep||0)*(s.qty||1)).toFixed(2):'')+(s.laborHours>0?' · Labor '+s.laborHours+'h $'+laborC.toFixed(2):'')+(partsC>0?' · Piezas $'+partsC.toFixed(2):'')+'</div>':'')+'</div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';
   var dn=document.getElementById('est-next');if(dn)dn.value=RO.nextDate;
+  var se=document.getElementById('est-estado');if(se)se.value=(RO.estado==='abierta'||RO.estado==='pendiente')?'pendiente':'pagado';
+  var sp2=document.getElementById('est-pago');if(sp2&&RO.pago)sp2.value=RO.pago;
   calcEst();
   var denConf=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
   var de=document.getElementById('est-den');
@@ -1757,11 +1765,50 @@ function openRODetail(roId){
   if(o.estado==='abierta'){
     html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px;background:var(--blue);color:#fff;border-color:var(--blue)"><i class="ti ti-player-play"></i> Continuar orden (ABIERTA)</button>';
   }
+  if(o.estado==='pendiente'){
+    html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+(o.total||0).toFixed(2)+'</button>';
+  }
+  if(o.tel){
+    html+='<button class="btn full" onclick="waRecibo(\''+o.id+'\')" style="margin-bottom:8px;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>';
+  }
   html+='<button class="btn p full" onclick="reExportPDF(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-file-type-pdf"></i> Generar / Ver PDF</button>';
   html+='<button class="btn full" onclick="if(confirm(\'¿Eliminar esta orden permanentemente?\'))deleteRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Eliminar orden</button>';
   html+='</div>';
   document.getElementById('ro-detail-body').innerHTML=html;
   go('ro-detail');
+}
+
+function markPaid(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  if(!confirm('¿Marcar la orden '+o.id+' como PAGADA ($'+(o.total||0).toFixed(2)+' vía '+(o.pago||'—')+')?'))return;
+  o.estado='pagado';o.pagadoFecha=new Date().toISOString();
+  saveDB();openRODetail(roId);
+}
+
+// ============ WHATSAPP ============
+function waNum(tel){var d=(tel||'').replace(/\D/g,'');if(d.length===10)d='1'+d;return d.length>=11?d:null;}
+function waSend(tel,text){
+  var n=waNum(tel);
+  if(!n){alert('Esta orden no tiene un número de teléfono válido (10 dígitos).');return;}
+  window.open('https://wa.me/'+n+'?text='+encodeURIComponent(text),'_blank');
+}
+function waRecibo(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'';
+  var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
+    'Su orden '+o.id+(veh?' ('+veh+')':'')+' está lista.\n'+
+    'Total: $'+(o.total||0).toFixed(2)+(o.estado==='pagado'?' — PAGADO ✓':' — pendiente de pago ('+(o.pago||'ATH Móvil')+')')+'\n\n'+
+    'El recibo en PDF se lo comparto en el próximo mensaje. ¡Gracias por confiar en nosotros!';
+  waSend(o.tel,msg);
+}
+function waRemind(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'su vehículo';
+  var fecha=o.nextDate?new Date(o.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long'}):'pronto';
+  var msg='Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+    'Le toca el mantenimiento de '+veh+' ('+fecha+'). ¿Le coordino una cita esta semana?\n\n'+
+    'Vamos hasta donde usted esté 🚗🔧';
+  waSend(o.tel,msg);
 }
 
 var _fvOrden=null,_fvIdx=0;
@@ -1995,6 +2042,12 @@ function calcInvMargin(){
 }
 // INIT
 loadDB();
+// Registra el service worker — la app abre offline (señal mala en la calle)
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
 
 var now=new Date();
 document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate();

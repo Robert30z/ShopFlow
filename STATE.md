@@ -4,6 +4,19 @@
 
 ## Last updated: 2026-07-03
 
+## New 2026-07-03 (later 3): Offline PWA + WhatsApp + payment tracking
+- **Offline**: sw.js (network-first shell, cache-first CDN/assets — bump CACHE_V on strategy change)
+  + manifest.json + icons (180/192/512). App verified loading fully with network cut. Installable
+  from Safari "Add to Home Screen". NOTE: single-file rule now has 3 sanctioned satellites
+  (sw.js, manifest.json, icons) — no build step, still no npm deps.
+- **WhatsApp** (wa.me deep links, no backend): "Enviar por WhatsApp" in RO detail (receipt summary;
+  PDF still shared via native sheet), green "Recordar" button on home maintenance notifs
+  (pre-written reminder). waNum() normalizes PR 10-digit → 1XXXXXXXXXX.
+- **Payment tracking**: new ROs default estado 'pendiente' (select synced at pane build AND step 6,
+  Pendiente first option); green "Marcar PAGADO" button in detail sets estado+pagadoFecha.
+  "Hoy"/"Por cobrar" tiles now reflect reality.
+- Smoke test now 44 checks + separate offline reload verification.
+
 ## New 2026-07-03 (later 2): Cloud backup + terms v3
 - **Auto-backup to private GitHub repo**: every saveDB schedules a push (45s debounce) of the full
   DB (minus aiKey + backup token) to `shopflow_backup.json` in a user-owned PRIVATE repo via the

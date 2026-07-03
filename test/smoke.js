@@ -102,6 +102,7 @@ function check(ok, name, detail) {
   await page.evaluate(`go('ro')`);
   await page.waitForTimeout(600);
   await page.fill('#c-n', 'Draft Cliente');
+  await page.fill('#c-t', '787-555-0100');
   await page.fill('#v-y', '2018'); await page.fill('#v-ma', 'Ford'); await page.fill('#v-mo', 'F-150');
   // photo with timestamp (1x1 png → compressed jpeg object)
   await page.evaluate(`gotoStep(1)`);
@@ -174,9 +175,46 @@ function check(ok, name, detail) {
     return { count: matches.length, estado: matches[0] && matches[0].estado, keptInk: !!(matches[0] && matches[0].sigData && matches[0].sigData.sig1), garage: d.garage.filter(g => g.roId === matches[0].id).length };
   });
   check(final.count === 1, 'Complete upserts (no duplicate order)', `count=${final.count}`);
-  check(final.estado !== 'abierta', 'Completed RO left abierta state', final.estado);
+  check(final.estado === 'pendiente', 'Completed RO defaults to PENDIENTE (not pagado)', final.estado);
   check(final.keptInk, 'Signature ink survived completion');
   check(final.garage === 1, 'Garage entry created once', `garage=${final.garage}`);
+
+  // ===== Marcar pagado + WhatsApp =====
+  const draftId = await page.evaluate(() => JSON.parse(localStorage.getItem('sf_v1')).ordenes.find(x => x.cliente === 'Draft Cliente').id);
+  await page.evaluate(`openRODetail('${draftId}')`);
+  await page.waitForTimeout(500);
+  const waBtn = await page.locator(`#ro-detail-body [onclick^="waRecibo"]`).count();
+  check(waBtn === 1, 'WhatsApp receipt button shown (order has phone)');
+  await page.locator(`#ro-detail-body [onclick^="markPaid"]`).first().click();
+  await page.waitForTimeout(600);
+  const paid = await page.evaluate(() => { const o = JSON.parse(localStorage.getItem('sf_v1')).ordenes.find(x => x.cliente === 'Draft Cliente'); return { estado: o.estado, fecha: !!o.pagadoFecha }; });
+  check(paid.estado === 'pagado' && paid.fecha, 'Marcar pagado works + records payment date', JSON.stringify(paid));
+  const waNumOk = await page.evaluate(`waNum('787-555-0100')`);
+  check(waNumOk === '17875550100', 'waNum normalizes PR phone', waNumOk);
+  // Reminder button on home for upcoming maintenance
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('sf_v1'));
+    d.ordenes.find(x => x.cliente === 'Draft Cliente').nextDate = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
+    localStorage.setItem('sf_v1', JSON.stringify(d));
+    DB = JSON.parse(localStorage.getItem('sf_v1'));
+    go('home');
+  });
+  await page.waitForTimeout(400);
+  const remindBtn = await page.locator(`#home-notifs [onclick^="waRemind"]`).count();
+  check(remindBtn >= 1, 'WhatsApp reminder button on home notification', `buttons=${remindBtn}`);
+
+  // ===== PWA: manifest, icons, service worker =====
+  const pwa = await page.evaluate(async () => ({
+    manifestLink: !!document.querySelector('link[rel="manifest"]'),
+    sw: (await fetch('sw.js')).ok,
+    manifest: (await fetch('manifest.json')).ok,
+    icon192: (await fetch('icon-192.png')).ok,
+    icon512: (await fetch('icon-512.png')).ok,
+    swReg: !!(await navigator.serviceWorker.getRegistration()),
+  }));
+  check(pwa.manifestLink && pwa.manifest, 'Manifest linked and served');
+  check(pwa.sw && pwa.icon192 && pwa.icon512, 'Service worker + icons served');
+  check(pwa.swReg, 'Service worker registered');
 
   // ===== Cloud backup UI + unconfigured no-op =====
   await page.evaluate(`go('ajustes')`);
