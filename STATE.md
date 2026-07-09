@@ -2,7 +2,33 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-03
+## Last updated: 2026-07-09
+
+## New 2026-07-09: v1.4 — the "client-ready" feature pack (gap analysis vs Shopmonkey/Tekmetric/AutoLeap)
+Six features added in one pass, all end-to-end tested + covered by new smoke checks (suite now 60):
+- **Citas/Agenda**: new `citas` screen (create/confirm/complete/no-show/delete), `DB.citas`,
+  home shows "Citas de hoy" + tile counter, WhatsApp confirmation (`waCita`), and
+  **"Iniciar RO"** prefills the wizard from the cita (parses "2019 Honda Civic" → year/make/model)
+  and marks the cita completada. `_citaPrefill` applied in `initRO`.
+- **Seguimientos** (home queue, `getSeguimientos()`): 3-day post-service follow-up (`waFollowUp`,
+  stamps `o.segFu`) → then Google-review request (`waReview`, needs `settings.reviewLink`,
+  stamps `o.segRev`) → 6-month win-back per client (`waWinback`, stamps `c.winbackAt`, 90d cooldown).
+- **DVI**: `waDVI(roId)` WhatsApp summary (verde count, amarillo/rojo lists w/ inspection notes +
+  presupuesto from denegados) and `dviPDF(roId)` full inspection PDF (colored sections, photos ≤6,
+  courtesy disclaimer) via `sharePDFDoc` (native sheet, falls back to download). Buttons in RO detail
+  appear when the RO has inspection data.
+- **Cobros/ATH Móvil**: Ajustes card "Cobros y reseñas" → `settings.athMovil` + `settings.reviewLink`.
+  "Cobrar por WhatsApp" button on pendiente ROs (`waCobro`: total + ATH number). `markPaid` now
+  prompts for the actual payment method (prefilled with RO's método).
+- **KPIs**: new Finanzas tab (f-kpi): ticket promedio 90d, approval rate (aprobado$ vs denegado$),
+  x cobrar, 8-week revenue bar chart (CSS only, single green hue), top 5 servicios by revenue,
+  client retention (repeat %).
+- **VIN decode**: `decodeVIN` now calls NHTSA vPIC (free, CORS-ok) at 17 chars (auto-fires from the
+  VIN input), autofills empty año/marca/modelo + shows trim/engine; falls back to old WMI decode
+  offline (`decodeVINLocal`). Verified against the real API (1HGCM82633A004352 → 2003 Honda Accord).
+Schema adds (all backward-compatible, guarded in loadDB): `DB.citas`, `o.segFu/segRev`, `c.winbackAt`,
+`settings.athMovil/reviewLink`. Also fixed favicon 404 (only console error found in the 07-09 diagnostic).
+
 
 ## New 2026-07-03 (later 4): Real intake flow + work order
 - Wizard order now matches the shop: Cliente → Fotos → **Servicios → Estimado → FIRMA de

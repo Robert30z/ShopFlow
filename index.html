@@ -156,6 +156,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       <div class="st">Acciones rápidas</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div class="mc" onclick="go('ro')"><div class="mi" style="background:var(--red-light)"><i class="ti ti-clipboard-plus" style="color:var(--red);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Nueva RO</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">9 pasos completos</div></div>
+        <div class="mc" onclick="go('citas')"><div class="mi" style="background:var(--blue-light)"><i class="ti ti-calendar-time" style="color:var(--blue);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Citas</div><div id="home-citas-lbl" style="font-size:11px;color:var(--gray-400);margin-top:2px">Agenda del día</div></div>
         <div class="mc" onclick="go('garage')"><div class="mi" style="background:var(--amber-light)"><i class="ti ti-building-garage" style="color:var(--amber);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Garage</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Vehículos activos</div></div>
         <div class="mc" onclick="go('ordenes')"><div class="mi" style="background:var(--green-light)"><i class="ti ti-clipboard-list" style="color:var(--green);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Órdenes</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Historial completo</div></div>
         <div class="mc" onclick="go('clientes')"><div class="mi" style="background:var(--blue-light)"><i class="ti ti-users" style="color:var(--blue);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Clientes</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Base de datos</div></div>
@@ -164,8 +165,12 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="mc" onclick="go('historial')"><div class="mi" style="background:#FFF0E6"><i class="ti ti-history" style="color:#D2691E;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Historial</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Resumen del día y ROs</div></div>
         <div class="mc" onclick="go('inventario')"><div class="mi" style="background:#EEF2FF"><i class="ti ti-package" style="color:#4F46E5;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Inventario</div><div id="home-inv-lbl" style="font-size:11px;color:var(--gray-400);margin-top:2px">Piezas y partes</div></div>
       </div>
+      <div class="st">Citas de hoy</div>
+      <div id="home-citas"></div>
       <div class="st">Notificaciones</div>
       <div id="home-notifs"></div>
+      <div class="st">Seguimientos</div>
+      <div id="home-segs"></div>
     </div>
   </div>
 </div>
@@ -265,12 +270,14 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   </div>
   <div class="tabs" id="fin-tabs">
     <div class="tab active" onclick="finTab('f-pl')">P&L</div>
+    <div class="tab" onclick="finTab('f-kpi')">KPIs</div>
     <div class="tab" onclick="finTab('f-sup')">Suplidores</div>
     <div class="tab" onclick="finTab('f-inv')">Inventario</div>
     <div class="tab" onclick="finTab('f-gas')">Gastos</div>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0">
     <div id="f-pl" class="tp active"></div>
+    <div id="f-kpi" class="tp"></div>
     <div id="f-sup" class="tp"></div>
     <div id="f-inv" class="tp"></div>
     <div id="f-gas" class="tp"></div>
@@ -294,6 +301,15 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
     <div id="h-todas" class="tp"></div>
     <div id="h-clientes" class="tp"></div>
   </div>
+</div>
+
+<div id="citas" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i> Inicio</button>
+    <div style="color:#fff;font-size:14px;font-weight:700">Citas</div>
+    <div id="citas-ct" style="font-size:11px;color:rgba(255,255,255,.5)"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="citas-body"></div>
 </div>
 
 <div id="ro-detail" class="pg">
@@ -322,6 +338,11 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       <div class="card"><div class="ch"><i class="ti ti-building-store"></i> Datos del taller</div><div class="cb">
         <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Nombre del taller</div><input id="set-name" placeholder="Pit Stop" oninput="saveSettings()"></div></div>
         <div class="fr"><div class="fg"><div class="fl">Teléfono</div><input id="set-phone" placeholder="787-000-0000" oninput="saveSettings()"></div><div class="fg"><div class="fl">Ubicación</div><input id="set-addr" placeholder="Bayamón, PR" oninput="saveSettings()"></div></div>
+      </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-cash"></i> Cobros y reseñas</div><div class="cb">
+        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">ATH Móvil (número o link de pago)</div><input id="set-ath" placeholder="787-000-0000 o athmovil.com/..." autocapitalize="off" oninput="saveSettings()"></div></div>
+        <div class="fr1"><div class="fg"><div class="fl">Link de reseña de Google</div><input id="set-review" placeholder="https://g.page/r/..." autocapitalize="off" oninput="saveSettings()"></div></div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Se usan en los botones de cobro por WhatsApp y en los seguimientos (pedir reseña).</div>
       </div></div>
       <div class="card"><div class="ch"><i class="ti ti-sparkles"></i> Inteligencia Artificial</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Las funciones AI (diagnóstico, piezas, labor) usan tu propia API key de Anthropic. Créala en console.anthropic.com. Se guarda solo en este dispositivo.</span></div>
@@ -353,7 +374,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
+var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
 var TERMS_VERSION=3,TERMS_DATE='2026-07-03';
@@ -397,7 +418,7 @@ function saveDB(){
     return false;
   }
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
 
@@ -507,6 +528,7 @@ function go(p){
   if(p==='historial'){renderHistDia();}
   if(p==='ajustes'){initAjustes();}
   if(p==='inventario'){renderInventario();}
+  if(p==='citas'){renderCitas();}
 }
 
 function renderHome(){
@@ -528,6 +550,7 @@ function renderHome(){
   // Update inventory label
   var invLbl=document.getElementById('home-inv-lbl');
   if(invLbl){var low=DB.inventario.filter(function(i){return i.qty<=i.min;}).length;invLbl.innerHTML=DB.inventario.length+' items'+(low>0?' · <span style="color:var(--red);font-weight:700">'+low+' bajo stock</span>':'');}
+  renderHomeCitas();renderHomeSegs();
 }
 
 function initRO(){
@@ -541,10 +564,12 @@ function initRO(){
   }
   RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
+  if(_citaPrefill)applyCitaPrefill();
   curStep=0;
   buildSteps();buildPanes();
   document.getElementById('ro-id-lbl').textContent=RO.id;
   updNav();
+  if(RO.cliente)setTimeout(fillROInputs,160);
 }
 var _resumeRO=null;
 function continueRO(roId){
@@ -576,7 +601,7 @@ function buildPanes(){
 }
 
 function buildPane(id){
-  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase()"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
+  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase();if(this.value.length===17)decodeVIN(this.value)"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
 
   if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Tira todas las fotos que necesites.</span></div><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Tomar / Seleccionar Fotos<input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
 
@@ -761,12 +786,11 @@ function closeVINScanner(){
   var vid=document.getElementById('vin-video');if(vid&&vid.srcObject){vid.srcObject.getTracks().forEach(function(t){t.stop();});vid.srcObject=null;}
   document.getElementById('vin-scanner-modal').style.display='none';
 }
-function decodeVIN(vin){
-  // Basic WMI decode — first 3 chars
-  if(!vin||vin.length<3)return;
+function decodeVINLocal(vin){
+  // Offline fallback — WMI mini-decode, first 3 chars
   var info=document.getElementById('vin-decode-info');if(!info)return;
   var wmi=vin.substring(0,3).toUpperCase();
-  var year=vin[9];
+  var year=vin[9]||'';
   var yearMap={A:2010,B:2011,C:2012,D:2013,E:2014,F:2015,G:2016,H:2017,J:2018,K:2019,L:2020,M:2021,N:2022,P:2023,R:2024,S:2025};
   var makes={
     '1HG':'Honda','2HG':'Honda','JHM':'Honda','1G1':'Chevrolet','1GT':'GMC','2G1':'Chevrolet','1FA':'Ford','1FT':'Ford','2FA':'Ford','3FA':'Ford','1GC':'Chevrolet/GMC','1TY':'Toyota','JT':'Toyota','KM8':'Hyundai','KNA':'Kia','1N4':'Nissan','JN1':'Nissan','WBA':'BMW','WBS':'BMW','WDB':'Mercedes','WDC':'Mercedes','WVW':'Volkswagen','1VW':'Volkswagen','SAL':'Land Rover','SCA':'Rolls-Royce','YV1':'Volvo'
@@ -775,10 +799,43 @@ function decodeVIN(vin){
   if(!make&&wmi.startsWith('JT'))make='Toyota';
   var yr=yearMap[year.toUpperCase()]||'—';
   info.style.display='block';
-  info.innerHTML='<strong><i class="ti ti-info-circle"></i> VIN decodificado:</strong><br>'+
+  info.innerHTML='<strong><i class="ti ti-info-circle"></i> VIN (decodificación local — sin internet):</strong><br>'+
     (make?'Fabricante: '+make+'<br>':'')+
     'Año modelo: '+yr+'<br>'+
     'WMI: '+wmi+' · VIN: '+vin;
+}
+function decodeVIN(vin){
+  if(!vin||vin.length<3)return;
+  var info=document.getElementById('vin-decode-info');if(!info)return;
+  info.style.display='block';
+  if(vin.length!==17){info.innerHTML='<strong><i class="ti ti-info-circle"></i> VIN incompleto</strong> — '+vin.length+'/17 caracteres.';return;}
+  info.innerHTML='<i class="ti ti-loader"></i> Consultando NHTSA…';
+  fetch('https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/'+encodeURIComponent(vin)+'?format=json')
+    .then(function(r){return r.json();})
+    .then(function(j){
+      var d=(j&&j.Results&&j.Results[0])||{};
+      var yr=d.ModelYear||'';
+      var mk=d.Make?(d.Make.charAt(0).toUpperCase()+d.Make.slice(1).toLowerCase()):'';
+      var md=d.Model||'';
+      if(!yr&&!mk){decodeVINLocal(vin);return;}
+      // autofill año/marca/modelo (solo campos vacíos — no pisa lo que el usuario escribió)
+      if(typeof RO==='object'&&RO.vehiculo){
+        var fy=document.getElementById('v-y'),fm=document.getElementById('v-ma'),fo=document.getElementById('v-mo');
+        if(yr&&fy&&!fy.value){fy.value=yr;RO.vehiculo.year=yr;}
+        if(mk&&fm&&!fm.value){fm.value=mk;RO.vehiculo.make=mk;}
+        if(md&&fo&&!fo.value){fo.value=md;RO.vehiculo.model=md;}
+      }
+      var extra=[];
+      if(d.Trim)extra.push(d.Trim);
+      if(d.EngineCylinders)extra.push(d.EngineCylinders+' cil');
+      if(d.DisplacementL)extra.push(parseFloat(d.DisplacementL).toFixed(1)+'L');
+      if(d.FuelTypePrimary)extra.push(d.FuelTypePrimary);
+      if(d.DriveType)extra.push(d.DriveType);
+      info.innerHTML='<strong><i class="ti ti-check"></i> VIN decodificado (NHTSA):</strong><br>'+
+        (yr+' '+mk+' '+md).trim()+(extra.length?'<br>'+extra.join(' · '):'')+
+        '<br><span style="opacity:.7">Año, marca y modelo rellenados automáticamente.</span>';
+    })
+    .catch(function(){decodeVINLocal(vin);});
 }
 
 // ============ AI PART DESCRIPTION (auto on name input) ============
@@ -1359,7 +1416,7 @@ function toggleMO(){var p=document.getElementById('menu-op');if(p)p.style.displa
 function clearMO(){MO=[];updMCC();renderMOItems();}
 function saveMO(){if(!MO.length){alert('Agrega servicios primero.');return;}var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var id=nextRONum();DB.ordenes.push({id:id,fecha:new Date().toISOString(),cliente:'Orden rápida del menú',tel:'',vehiculo:{},servicios:MO.map(function(o){return{id:o.id,n:o.n,p:o.p,qty:o.qty,ep:o.p};}),total:Math.round(sub*1.115*100)/100,pago:'ATH Móvil',estado:'pagado',insp:{},denegados:[]});saveDB();clearMO();alert('Guardado como '+id);go('ordenes');}
 
-function finTab(id){document.querySelectorAll('#finanzas .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#fin-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#fin-tabs .tab');var ids=['f-pl','f-sup','f-inv','f-gas'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});if(id==='f-pl')renderPL();if(id==='f-sup')renderSup();if(id==='f-inv')renderInv();if(id==='f-gas')renderGas();}
+function finTab(id){document.querySelectorAll('#finanzas .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#fin-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#fin-tabs .tab');var ids=['f-pl','f-kpi','f-sup','f-inv','f-gas'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});if(id==='f-pl')renderPL();if(id==='f-kpi')renderKPIs();if(id==='f-sup')renderSup();if(id==='f-inv')renderInv();if(id==='f-gas')renderGas();}
 function renderPL(){
   var now=new Date();var m=now.getMonth();var a=now.getFullYear();
   var rate=DB.settings.laborRate||103;
@@ -1915,6 +1972,13 @@ function openRODetail(roId){
   }
   if(o.estado==='pendiente'){
     html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+(o.total||0).toFixed(2)+'</button>';
+    if(o.tel)html+='<button class="btn full" onclick="waCobro(\''+o.id+'\')" style="margin-bottom:8px;background:#F76D00;color:#fff;border-color:#F76D00"><i class="ti ti-brand-whatsapp"></i> Cobrar por WhatsApp (ATH Móvil)</button>';
+  }
+  if(Object.keys(o.insp||{}).length){
+    html+='<div style="display:flex;gap:8px;margin-bottom:8px">'+
+      (o.tel?'<button class="btn full" onclick="waDVI(\''+o.id+'\')" style="background:#25D366;color:#fff;border-color:#25D366;flex:1"><i class="ti ti-clipboard-check"></i> DVI WhatsApp</button>':'')+
+      '<button class="btn full" onclick="dviPDF(\''+o.id+'\')" style="background:var(--navy);color:#fff;border-color:var(--navy);flex:1"><i class="ti ti-file-type-pdf"></i> DVI PDF</button>'+
+    '</div>';
   }
   if(o.tel){
     html+='<button class="btn full" onclick="waRecibo(\''+o.id+'\')" style="margin-bottom:8px;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>';
@@ -1928,7 +1992,9 @@ function openRODetail(roId){
 
 function markPaid(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
-  if(!confirm('¿Marcar la orden '+o.id+' como PAGADA ($'+(o.total||0).toFixed(2)+' vía '+(o.pago||'—')+')?'))return;
+  var m=prompt('Orden '+o.id+' — $'+(o.total||0).toFixed(2)+'\n¿Método de pago recibido? (ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
+  if(m===null)return;
+  o.pago=(m||o.pago||'ATH Móvil').trim();
   o.estado='pagado';o.pagadoFecha=new Date().toISOString();
   saveDB();openRODetail(roId);
 }
@@ -2003,6 +2069,8 @@ function initAjustes(){
   document.getElementById('set-phone').value=DB.settings.shopPhone||'';
   document.getElementById('set-addr').value=DB.settings.shopAddress||'';
   document.getElementById('set-aikey').value=DB.settings.aiKey||'';
+  var sa=document.getElementById('set-ath');if(sa)sa.value=DB.settings.athMovil||'';
+  var sv=document.getElementById('set-review');if(sv)sv.value=DB.settings.reviewLink||'';
   updAiKeyStatus();
   var bk=DB.settings.backup||{};
   document.getElementById('set-bk-repo').value=bk.repo||'';
@@ -2015,6 +2083,8 @@ function saveSettings(){
   DB.settings.shopPhone=document.getElementById('set-phone').value;
   DB.settings.shopAddress=document.getElementById('set-addr').value;
   DB.settings.aiKey=document.getElementById('set-aikey').value.trim();
+  var sa=document.getElementById('set-ath');if(sa)DB.settings.athMovil=sa.value.trim();
+  var sv=document.getElementById('set-review');if(sv)DB.settings.reviewLink=sv.value.trim();
   updAiKeyStatus();
   DB.settings.backup=DB.settings.backup||{};
   DB.settings.backup.repo=document.getElementById('set-bk-repo').value.trim();
@@ -2189,6 +2259,319 @@ function calcInvMargin(){
   if(ml){var m=p>0?((p-c)/p*100):0;ml.textContent=m.toFixed(0)+'% margen';}
 }
 // INIT
+// ============ v1.4: CITAS / AGENDA ============
+var _citaPrefill=null;
+function localDateStr(d){d=d||new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+function renderCitas(){
+  var el=document.getElementById('citas-body');if(!el)return;
+  var hoy=localDateStr();
+  var list=DB.citas.slice().sort(function(a,b){return ((a.fecha||'')+(a.hora||''))<((b.fecha||'')+(b.hora||''))?-1:1;});
+  var hoyL=list.filter(function(c){return c.fecha===hoy&&c.estado==='agendada';});
+  var prox=list.filter(function(c){return c.fecha>hoy&&c.estado==='agendada';});
+  var past=list.filter(function(c){return c.fecha<hoy||c.estado!=='agendada';}).reverse().slice(0,20);
+  var ct=document.getElementById('citas-ct');if(ct)ct.textContent=hoyL.length+' hoy · '+prox.length+' próx.';
+  el.innerHTML='<div style="padding:14px 16px">'+
+    '<div class="card"><div class="ch"><i class="ti ti-calendar-plus"></i> Nueva cita</div><div class="cb">'+
+    '<div class="fr"><div class="fg"><div class="fl">Cliente</div><input id="ct-n" placeholder="Juan García"></div><div class="fg"><div class="fl">Teléfono</div><input id="ct-t" type="tel" placeholder="787-000-0000"></div></div>'+
+    '<div class="fr"><div class="fg"><div class="fl">Fecha</div><input id="ct-f" type="date" value="'+hoy+'"></div><div class="fg"><div class="fl">Hora</div><input id="ct-h" type="time" value="09:00"></div></div>'+
+    '<div class="fr"><div class="fg"><div class="fl">Vehículo</div><input id="ct-v" placeholder="2018 Toyota Corolla"></div><div class="fg"><div class="fl">Servicio</div><input id="ct-s" placeholder="Cambio de aceite"></div></div>'+
+    '<div class="fr fr1"><div class="fg"><div class="fl">Dirección (donde está el vehículo)</div><input id="ct-d" placeholder="Urb. ..., Bayamón"></div></div>'+
+    '<button class="btn p full" onclick="saveCita()" style="margin-top:6px"><i class="ti ti-plus"></i> Agendar cita</button>'+
+    '</div></div>'+
+    citasSec('Hoy',hoyL,true)+citasSec('Próximas',prox,true)+citasSec('Pasadas / completadas',past,false)+
+    '</div>';
+}
+function citasSec(t,arr,act){return '<div class="st" style="margin-top:8px">'+t+' ('+arr.length+')</div>'+(arr.length?arr.map(function(c){return citaCard(c,act);}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:2px 0 8px">Sin citas.</div>');}
+function citaCard(c,act){
+  var when='';
+  try{when=new Date(c.fecha+'T'+(c.hora||'09:00')).toLocaleDateString('es-PR',{weekday:'short',day:'numeric',month:'short'})+' · '+(c.hora||'');}catch(e){when=c.fecha+' '+(c.hora||'');}
+  return '<div class="card" style="margin-bottom:8px"><div class="cb">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'+
+    '<div style="font-size:13px;font-weight:700">'+(c.cliente||'—')+(c.vehiculo?' — '+c.vehiculo:'')+'</div>'+
+    '<div style="font-size:11px;color:var(--gray-400);margin-top:2px">'+when+(c.servicio?' · '+c.servicio:'')+'</div>'+
+    (c.direccion?'<div style="font-size:11px;color:var(--gray-400)"><i class="ti ti-map-pin"></i> '+c.direccion+'</div>':'')+
+    '</div><span class="badge '+(c.estado==='completada'?'bg':c.estado==='noshow'?'br':'bb')+'">'+(c.estado==='completada'?'HECHA':c.estado==='noshow'?'NO SHOW':'AGENDADA')+'</span></div>'+
+    (act?'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'+
+      (c.tel?'<button class="btn sm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="waCita(\''+c.id+'\')"><i class="ti ti-brand-whatsapp"></i> Confirmar</button>':'')+
+      '<button class="btn sm p" onclick="citaToRO(\''+c.id+'\')"><i class="ti ti-clipboard-plus"></i> Iniciar RO</button>'+
+      '<button class="btn sm g" onclick="citaEstado(\''+c.id+'\',\'completada\')" title="Completada"><i class="ti ti-check"></i></button>'+
+      '<button class="btn sm" onclick="citaEstado(\''+c.id+'\',\'noshow\')" title="No llegó"><i class="ti ti-user-x"></i></button>'+
+      '<button class="btn sm" style="color:var(--red)" onclick="delCita(\''+c.id+'\')"><i class="ti ti-trash"></i></button>'+
+    '</div>':'')+
+    '</div></div>';
+}
+function saveCita(){
+  var n=(document.getElementById('ct-n')||{value:''}).value.trim();
+  var f=(document.getElementById('ct-f')||{value:''}).value;
+  if(!n||!f){alert('Cliente y fecha son requeridos.');return;}
+  DB.citas.push({id:'CITA-'+Date.now(),cliente:n,tel:(document.getElementById('ct-t')||{value:''}).value.trim(),
+    fecha:f,hora:(document.getElementById('ct-h')||{value:''}).value||'09:00',
+    vehiculo:(document.getElementById('ct-v')||{value:''}).value.trim(),
+    servicio:(document.getElementById('ct-s')||{value:''}).value.trim(),
+    direccion:(document.getElementById('ct-d')||{value:''}).value.trim(),
+    estado:'agendada',creado:new Date().toISOString()});
+  saveDB();renderCitas();
+}
+function citaEstado(id,st){var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;c.estado=st;saveDB();renderCitas();}
+function delCita(id){if(!confirm('¿Eliminar esta cita?'))return;DB.citas=DB.citas.filter(function(x){return x.id!==id;});saveDB();renderCitas();}
+function waCita(id){
+  var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;
+  var f='';try{f=new Date(c.fecha+'T'+(c.hora||'09:00')).toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long'});}catch(e){f=c.fecha;}
+  var msg='Saludos '+c.cliente+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
+    'Confirmando su cita: *'+f+' a las '+(c.hora||'')+'*'+(c.servicio?'\nServicio: '+c.servicio:'')+(c.vehiculo?'\nVehículo: '+c.vehiculo:'')+(c.direccion?'\nLugar: '+c.direccion:'')+
+    '\n\n¿La mantenemos? Si necesita cambiarla, avíseme por aquí. ¡Gracias!';
+  waSend(c.tel,msg);
+}
+function citaToRO(id){var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;_citaPrefill=c;go('ro');}
+function applyCitaPrefill(){
+  var c=_citaPrefill;_citaPrefill=null;if(!c)return;
+  RO.cliente=c.cliente||'';RO.tel=c.tel||'';
+  if(c.servicio)RO.queja='Cita: '+c.servicio;
+  var vp=(c.vehiculo||'').trim().split(/\s+/);
+  if(vp.length&&vp[0]){
+    if(/^\d{4}$/.test(vp[0])){RO.vehiculo.year=vp[0];RO.vehiculo.make=vp[1]||'';RO.vehiculo.model=vp.slice(2).join(' ');}
+    else{RO.vehiculo.make=vp[0];RO.vehiculo.model=vp.slice(1).join(' ');}
+  }
+  c.estado='completada';c.roId=RO.id;saveDB();
+}
+function renderHomeCitas(){
+  var el=document.getElementById('home-citas');if(!el)return;
+  var hoy=localDateStr();
+  var hoyL=DB.citas.filter(function(c){return c.fecha===hoy&&c.estado==='agendada';}).sort(function(a,b){return (a.hora||'')<(b.hora||'')?-1:1;});
+  var lbl=document.getElementById('home-citas-lbl');if(lbl)lbl.textContent=hoyL.length?hoyL.length+' cita'+(hoyL.length>1?'s':'')+' hoy':'Agenda del día';
+  el.innerHTML=hoyL.length?hoyL.map(function(c){
+    return '<div onclick="go(\'citas\')" style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid var(--blue);cursor:pointer">'+
+      '<div style="font-size:13px;font-weight:800;color:var(--blue);min-width:44px">'+(c.hora||'—')+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">'+c.cliente+(c.vehiculo?' — '+c.vehiculo:'')+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.servicio||'')+(c.direccion?' · '+c.direccion:'')+'</div></div>'+
+      (c.tel?'<button onclick="event.stopPropagation();waCita(\''+c.id+'\')" style="background:#25D366;border:none;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer"><i class="ti ti-brand-whatsapp"></i></button>':'')+
+    '</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin citas para hoy. <span style="color:var(--blue);font-weight:700;cursor:pointer" onclick="go(\'citas\')">+ Agendar</span></div>';
+}
+
+// ============ v1.4: SEGUIMIENTOS (follow-up / reseña / win-back) ============
+function getSeguimientos(){
+  var now=Date.now(),D=86400000,out=[];
+  DB.ordenes.forEach(function(o){
+    if(o.estado==='abierta'||!o.tel||!waNum(o.tel))return;
+    var age=now-new Date(o.fecha).getTime();
+    if(!o.segFu&&age>=3*D&&age<=30*D)out.push({type:'fu',o:o});
+    else if(o.segFu&&!o.segRev&&(DB.settings.reviewLink||'').trim()&&age<=60*D)out.push({type:'rev',o:o});
+  });
+  DB.clientes.forEach(function(c){
+    if(!c.tel||!waNum(c.tel))return;
+    var last=0;DB.ordenes.forEach(function(o){if(o.cliente===c.nombre){var t=new Date(o.fecha).getTime();if(t>last)last=t;}});
+    if(!last)return;
+    if(now-last>=180*D&&(!c.winbackAt||now-new Date(c.winbackAt).getTime()>90*D))out.push({type:'wb',c:c});
+  });
+  return out;
+}
+function segRow(t,fn,color){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+color+'"><div style="font-size:12px;font-weight:600;flex:1">'+t+'</div><button onclick="'+fn+'" style="background:#25D366;border:none;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-brand-whatsapp"></i> Enviar</button></div>';}
+function renderHomeSegs(){
+  var el=document.getElementById('home-segs');if(!el)return;
+  var segs=getSeguimientos().slice(0,6);
+  el.innerHTML=segs.length?segs.map(function(s){
+    if(s.type==='fu')return segRow('💬 '+s.o.cliente+' — ¿todo bien después del servicio? ('+s.o.id+')','waFollowUp(\''+s.o.id+'\')','var(--blue)');
+    if(s.type==='rev')return segRow('⭐ '+s.o.cliente+' — pedir reseña de Google','waReview(\''+s.o.id+'\')','var(--amber)');
+    return segRow('👋 '+s.c.nombre+' — 6+ meses sin visita','waWinback(\''+s.c.id+'\')','var(--red)');
+  }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Al día — sin seguimientos pendientes.</div>';
+}
+function waFollowUp(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
+  waSend(o.tel,'Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n¿Cómo ha corrido '+veh+' después del servicio? Si nota algo raro, avíseme y lo cotejo sin compromiso. ¡Gracias por la confianza! 🔧');
+  o.segFu=new Date().toISOString();saveDB();renderHomeSegs();
+}
+function waReview(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var link=(DB.settings.reviewLink||'').trim();
+  waSend(o.tel,'¡Gracias por confiar en '+(DB.settings.shopName||'Pit Stop')+', '+(o.cliente||'')+'! 🙌\n\nSi quedó contento con el servicio, ¿me regala una reseña? Ayuda muchísimo a un negocio local:\n'+link);
+  o.segRev=new Date().toISOString();saveDB();renderHomeSegs();
+}
+function waWinback(cliId){
+  var c=DB.clientes.find(function(x){return x.id===cliId;});if(!c)return;
+  waSend(c.tel,'Saludos '+c.nombre+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nHace tiempo no cotejamos su vehículo. ¿Le coordino un mantenimiento esta semana? Vamos hasta donde usted esté. 🔧');
+  c.winbackAt=new Date().toISOString();saveDB();renderHomeSegs();
+}
+
+// ============ v1.4: KPIs (Finanzas) ============
+function renderKPIs(){
+  var el=document.getElementById('f-kpi');if(!el)return;
+  var D=86400000,d90=Date.now()-90*D;
+  var ords=DB.ordenes.filter(function(o){return o.estado!=='abierta';});
+  var o90=ords.filter(function(o){return new Date(o.fecha).getTime()>=d90;});
+  var rev90=o90.reduce(function(s,o){return s+(o.total||0);},0);
+  var aro=o90.length?rev90/o90.length:0;
+  var app=0,den=0;
+  o90.forEach(function(o){
+    (o.servicios||[]).forEach(function(sv){app+=((sv.ep||sv.precio||0)*(sv.qty||1));});
+    (o.denegados||[]).forEach(function(d){if(!d.auto||d.confirmed)den+=(d.precio||0);});
+  });
+  var ar=(app+den)>0?app/(app+den)*100:100;
+  var pend=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+(o.total||0);},0);
+  // ingresos por semana — 8 ventanas de 7 días terminando hoy
+  var weeks=[],i;
+  for(i=7;i>=0;i--){
+    var end=new Date();end.setHours(23,59,59,999);end.setDate(end.getDate()-i*7);
+    var startT=end.getTime()-7*D+1;
+    var tot=0;
+    ords.forEach(function(o){var t=new Date(o.fecha).getTime();if(t>=startT&&t<=end.getTime())tot+=(o.total||0);});
+    weeks.push({lbl:('0'+(end.getMonth()+1)).slice(-2)+'/'+('0'+end.getDate()).slice(-2),v:tot});
+  }
+  var wmax=1;weeks.forEach(function(w){if(w.v>wmax)wmax=w.v;});
+  // top servicios 90d
+  var freq={};
+  o90.forEach(function(o){(o.servicios||[]).forEach(function(sv){var n=sv.n||sv.nombre||'—';if(!freq[n])freq[n]={n:n,c:0,rev:0};freq[n].c++;freq[n].rev+=((sv.ep||sv.precio||0)*(sv.qty||1));});});
+  var top=Object.keys(freq).map(function(k){return freq[k];}).sort(function(a,b){return b.rev-a.rev;}).slice(0,5);
+  var tmax=1;top.forEach(function(t){if(t.rev>tmax)tmax=t.rev;});
+  // retención
+  var byCli={};ords.forEach(function(o){if(o.cliente)byCli[o.cliente]=(byCli[o.cliente]||0)+1;});
+  var cliN=Object.keys(byCli).length,rep=0;Object.keys(byCli).forEach(function(k){if(byCli[k]>1)rep++;});
+  el.innerHTML='<div style="padding:14px 16px">'+
+    '<div style="text-align:center;font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:10px">Últimos 90 días</div>'+
+    '<div class="sg sg4" style="margin-bottom:14px">'+
+      '<div class="sc"><div class="sl">Ticket prom.</div><div class="sv g">$'+aro.toFixed(0)+'</div></div>'+
+      '<div class="sc"><div class="sl">Aprobación</div><div class="sv '+(ar>=70?'g':'a')+'">'+ar.toFixed(0)+'%</div></div>'+
+      '<div class="sc"><div class="sl">Órdenes</div><div class="sv n">'+o90.length+'</div></div>'+
+      '<div class="sc"><div class="sl">x Cobrar</div><div class="sv r">$'+pend.toFixed(0)+'</div></div>'+
+    '</div>'+
+    '<div class="card"><div class="ch"><i class="ti ti-chart-bar"></i> Ingresos por semana (8 semanas)</div><div class="cb">'+
+      '<div style="display:flex;align-items:flex-end;gap:6px;height:130px;padding-top:4px">'+
+        weeks.map(function(w){var h=Math.max(3,Math.round(w.v/wmax*100));
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:0;height:100%">'+
+            '<div style="font-size:9px;color:var(--gray-500);font-weight:700;white-space:nowrap">'+(w.v>0?('$'+(w.v>=1000?(w.v/1000).toFixed(1)+'k':w.v.toFixed(0))):'')+'</div>'+
+            '<div title="$'+w.v.toFixed(2)+'" style="width:100%;max-width:26px;height:'+h+'%;background:var(--green);border-radius:4px 4px 0 0;min-height:3px"></div>'+
+            '<div style="font-size:9px;color:var(--gray-400)">'+w.lbl+'</div></div>';
+        }).join('')+
+      '</div></div></div>'+
+    '<div class="card"><div class="ch"><i class="ti ti-tools"></i> Top servicios (90 días)</div><div class="cb">'+
+      (top.length?top.map(function(t){var w=Math.max(4,Math.round(t.rev/tmax*100));
+        return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.n+'</span><span style="color:var(--gray-500);flex-shrink:0">'+t.c+'× · $'+t.rev.toFixed(0)+'</span></div>'+
+          '<div style="background:var(--gray-100);border-radius:4px;height:8px;margin-top:3px"><div style="width:'+w+'%;height:100%;background:var(--green);border-radius:4px"></div></div></div>';
+      }).join(''):'<div style="font-size:12px;color:var(--gray-400)">Sin datos todavía — guarda algunas órdenes.</div>')+
+    '</div></div>'+
+    '<div class="card"><div class="ch"><i class="ti ti-repeat"></i> Retención de clientes</div><div class="cb"><div style="display:flex;gap:8px">'+
+      '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">Clientes</div><div style="font-size:15px;font-weight:700">'+cliN+'</div></div>'+
+      '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">Repiten</div><div style="font-size:15px;font-weight:700;color:var(--green)">'+rep+'</div></div>'+
+      '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">Retención</div><div style="font-size:15px;font-weight:700;color:var(--green)">'+(cliN?Math.round(rep/cliN*100):0)+'%</div></div>'+
+    '</div></div></div>'+
+    '</div>';
+}
+
+// ============ v1.4: DVI — inspección para el cliente ============
+function inspSummary(o){
+  var g=[],a=[],r=[];
+  IZ.forEach(function(z){z.items.forEach(function(it){
+    var v=(o.insp||{})[it.id];if(!v)return;
+    var note=(o.inspNotes||{})[it.id];var line=it.l+(note?' — '+note:'');
+    if(v==='verde')g.push(line);else if(v==='amarillo')a.push(line);else if(v==='rojo')r.push(line);
+  });});
+  return {g:g,a:a,r:r};
+}
+function waDVI(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var s=inspSummary(o);
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
+  var msg='📋 *Inspección de '+veh+'* — '+(DB.settings.shopName||'Pit Stop')+'\n\n'+
+    '✅ En buen estado: '+s.g.length+' punto'+(s.g.length!==1?'s':'')+'\n';
+  if(s.a.length)msg+='\n⚠️ *Atención pronto:*\n'+s.a.map(function(x){return '• '+x;}).join('\n')+'\n';
+  if(s.r.length)msg+='\n🔴 *CRÍTICO — requiere servicio:*\n'+s.r.map(function(x){return '• '+x;}).join('\n')+'\n';
+  var denP=(o.denegados||[]).filter(function(d){return (!d.auto||d.confirmed)&&(d.precio||0)>0;});
+  if(denP.length)msg+='\n💵 Presupuesto de lo pendiente:\n'+denP.map(function(d){return '• '+d.nombre+': $'+(d.precio||0).toFixed(2);}).join('\n')+'\n';
+  msg+='\nResponda este mensaje y coordinamos. 🔧';
+  waSend(o.tel,msg);
+}
+function sharePDFDoc(doc,fname,title){
+  try{
+    var blob=doc.output('blob');
+    var file=new File([blob],fname,{type:'application/pdf'});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({title:title,files:[file]}).catch(function(){});return;
+    }
+  }catch(e){}
+  doc.save(fname);
+}
+function dviPDF(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  if(typeof window.jspdf==='undefined'){alert('PDF cargando... intenta de nuevo.');return;}
+  var doc=new window.jspdf.jsPDF();var y=0;
+  var s=inspSummary(o);
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'—';
+  doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
+  doc.text('INSPECCIÓN DEL VEHÍCULO — '+(DB.settings.shopName||'Pit Stop'),14,10);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');
+  doc.text(DB.settings.shopAddress||'Bayamón, Puerto Rico',14,17);
+  doc.text(o.id+' · '+new Date(o.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
+  y=30;doc.setTextColor(0,0,0);
+  doc.setFontSize(9);doc.setFont(undefined,'normal');
+  doc.text('Cliente: '+(o.cliente||'—'),14,y);doc.text('Vehículo: '+veh,110,y);y+=5;
+  doc.text('Tablilla: '+((o.vehiculo&&o.vehiculo.tag)||'—'),14,y);
+  if(o.vehiculo&&o.vehiculo.vin)doc.text('VIN: '+o.vehiculo.vin,110,y);
+  y+=8;
+  function section(title,items,rgb){
+    if(!items.length)return;
+    doc.setFont(undefined,'bold');doc.setFontSize(10);
+    doc.setTextColor(rgb[0],rgb[1],rgb[2]);doc.text(title,14,y);y+=2;
+    doc.setDrawColor(rgb[0],rgb[1],rgb[2]);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');doc.setFontSize(9);doc.setTextColor(0,0,0);
+    items.forEach(function(it){
+      var lines=doc.splitTextToSize('• '+it,178);
+      if(y+lines.length*4>282){doc.addPage();y=16;}
+      doc.text(lines,16,y);y+=lines.length*4+1;
+    });
+    y+=4;
+  }
+  section('CRÍTICO — REQUIERE SERVICIO ('+s.r.length+')',s.r,[211,47,47]);
+  section('ATENCIÓN PRONTO ('+s.a.length+')',s.a,[186,117,23]);
+  if(s.g.length){
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(59,109,17);
+    doc.text('EN BUEN ESTADO ('+s.g.length+')',14,y);y+=2;
+    doc.setDrawColor(59,109,17);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(60,60,60);
+    var gl=doc.splitTextToSize(s.g.join(' · '),178);
+    if(y+gl.length*3.6>282){doc.addPage();y=16;}
+    doc.text(gl,14,y);y+=gl.length*3.6+6;
+  }
+  // presupuesto pendiente
+  var denP=(o.denegados||[]).filter(function(d){return (!d.auto||d.confirmed)&&(d.precio||0)>0;});
+  if(denP.length){
+    if(y>250){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(0,0,0);
+    doc.text('PRESUPUESTO DE LO PENDIENTE',14,y);y+=2;doc.setDrawColor(120,120,120);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');doc.setFontSize(9);
+    denP.forEach(function(d){doc.text('• '+d.nombre,16,y);doc.text('$'+(d.precio||0).toFixed(2),196,y,{align:'right'});y+=5;});
+    y+=4;
+  }
+  // fotos (hasta 6)
+  var fotos=(o.fotos||[]).slice(0,6);
+  if(fotos.length){
+    if(y>200){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(0,0,0);
+    doc.text('EVIDENCIA FOTOGRÁFICA',14,y);y+=4;
+    var x=14,w=57,h=43,col=0;
+    fotos.forEach(function(f){
+      try{doc.addImage(fotoSrc(f),'JPEG',x,y,w,h);}catch(e){}
+      col++;x+=w+4;
+      if(col===3){col=0;x=14;y+=h+4;}
+    });
+    if(col>0)y+=h+4;
+  }
+  doc.setFontSize(7);doc.setTextColor(130,130,130);
+  doc.text('Inspección visual de cortesía. Este reporte no constituye garantía. '+(DB.settings.shopName||'Pit Stop')+' — '+new Date().toLocaleDateString('es-PR'),14,288);
+  sharePDFDoc(doc,'DVI_'+o.id+'.pdf','Inspección '+o.id);
+}
+
+// ============ v1.4: COBRO POR WHATSAPP (ATH Móvil) ============
+function waCobro(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var ath=(DB.settings.athMovil||'').trim();
+  var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
+    'Balance pendiente de la orden '+o.id+': *$'+(o.total||0).toFixed(2)+'*\n\n'+
+    (ath?'Puede pagar por ATH Móvil: '+ath+'\n':'')+
+    'También aceptamos efectivo'+(ath?'':' y ATH Móvil')+'. ¡Gracias!';
+  waSend(o.tel,msg);
+}
+
 loadDB();
 // Registra el service worker — la app abre offline (señal mala en la calle)
 if('serviceWorker' in navigator){

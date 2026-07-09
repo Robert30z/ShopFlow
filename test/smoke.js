@@ -253,6 +253,89 @@ function check(ok, name, detail) {
   await page.waitForTimeout(400);
   check(errors.length === ePre2, 'Backup no-ops safely without config');
 
+  // ===== v1.4: Citas / Agenda =====
+  await page.evaluate(`go('citas')`);
+  await page.waitForTimeout(400);
+  await page.fill('#ct-n', 'Cita Smoke');
+  await page.fill('#ct-t', '787-555-0100');
+  await page.fill('#ct-v', '2019 Honda Civic');
+  await page.fill('#ct-s', 'Frenos');
+  await page.evaluate(`saveCita()`);
+  await page.waitForTimeout(300);
+  const cita = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { n: d.citas.length, cliente: (d.citas[0] || {}).cliente, rendered: document.getElementById('citas-body').innerHTML.includes('Cita Smoke') }; });
+  check(cita.n === 1 && cita.cliente === 'Cita Smoke' && cita.rendered, 'Cita created + rendered', JSON.stringify({ n: cita.n }));
+  await page.evaluate(`go('home')`);
+  await page.waitForTimeout(300);
+  const homeCita = await page.evaluate(() => document.getElementById('home-citas').innerHTML.includes('Cita Smoke'));
+  check(homeCita, 'Cita shows on home (Citas de hoy)');
+  // cita → RO prefill (year/make/model parsed from "2019 Honda Civic")
+  await page.evaluate(`citaToRO(DB.citas[0].id)`);
+  await page.waitForTimeout(500);
+  const pre = await page.evaluate(() => ({ c: RO.cliente, y: RO.vehiculo.year, ma: RO.vehiculo.make, mo: RO.vehiculo.model, estado: DB.citas[0].estado }));
+  check(pre.c === 'Cita Smoke' && pre.y === '2019' && pre.ma === 'Honda' && pre.mo === 'Civic' && pre.estado === 'completada', 'Cita → RO prefill + marked completada', JSON.stringify(pre));
+
+  // ===== v1.4: Seguimientos + DVI + Cobro (seeded data, window.open stubbed) =====
+  const seg = await page.evaluate(`(function(){
+    var D=86400000;
+    DB.settings.reviewLink='https://g.page/r/test';DB.settings.athMovil='787-555-0199';
+    DB.ordenes.push({id:'RO-SM1',fecha:new Date(Date.now()-5*D).toISOString(),cliente:'Seg Smoke',tel:'787-555-0122',
+      vehiculo:{year:'2017',make:'Toyota',model:'Yaris'},servicios:[{id:'s1',n:'Aceite',ep:45,qty:1}],
+      denegados:[{nombre:'Frenos',precio:180,nota:'al 15%'}],insp:{oil:'verde',belt:'rojo'},inspNotes:{belt:'agrietada'},
+      total:50,pago:'ATH Móvil',estado:'pendiente',fotos:[]});
+    saveDB();
+    var opened=[];window.open=function(u){opened.push(u);return null;};
+    var types0=getSeguimientos().map(function(s){return s.type;});
+    waFollowUp('RO-SM1');
+    var afterFu=!!DB.ordenes.find(function(o){return o.id==='RO-SM1';}).segFu;
+    var revQueued=getSeguimientos().some(function(s){return s.type==='rev';});
+    waDVI('RO-SM1');
+    var dvi=decodeURIComponent(opened[opened.length-1]);
+    waCobro('RO-SM1');
+    var cobro=decodeURIComponent(opened[opened.length-1]);
+    openRODetail('RO-SM1');
+    var det=document.getElementById('ro-detail-body').innerHTML;
+    return {types0:types0,afterFu:afterFu,revQueued:revQueued,
+      dviOk:dvi.indexOf('CRÍTICO')>-1&&dvi.indexOf('agrietada')>-1,
+      cobroOk:cobro.indexOf('$50.00')>-1&&cobro.indexOf('787-555-0199')>-1,
+      dviBtns:det.indexOf('DVI WhatsApp')>-1&&det.indexOf('DVI PDF')>-1,
+      cobroBtn:det.indexOf('Cobrar por WhatsApp')>-1,
+      dviPdfFn:typeof dviPDF==='function',kpiFn:typeof renderKPIs==='function'};
+  })()`);
+  check(seg.types0.includes('fu'), 'Seguimientos queue detects 3-day follow-up', JSON.stringify(seg.types0));
+  check(seg.afterFu && seg.revQueued, 'Follow-up marks sent → review request queues next');
+  check(seg.dviOk, 'DVI WhatsApp message includes critical findings + notes');
+  check(seg.cobroOk, 'Cobro message includes total + ATH Móvil number');
+  check(seg.dviBtns && seg.cobroBtn, 'RO detail shows DVI + Cobrar buttons');
+  check(seg.dviPdfFn, 'dviPDF function present');
+
+  // ===== v1.4: KPIs tab =====
+  await page.evaluate(`go('finanzas');finTab('f-kpi')`);
+  await page.waitForTimeout(400);
+  const kpi = await page.evaluate(() => { const k = document.getElementById('f-kpi').innerHTML; return { tiles: k.includes('Ticket prom.') && k.includes('Aprobación') && k.includes('Retención'), bars: (k.match(/border-radius:4px 4px 0 0/g) || []).length }; });
+  check(kpi.tiles && kpi.bars === 8, 'KPI panel renders (tiles + 8 weekly bars)', 'bars=' + kpi.bars);
+
+  // ===== v1.4: Ajustes ATH + review link fields =====
+  await page.evaluate(`go('ajustes')`);
+  await page.waitForTimeout(300);
+  const aj = await page.evaluate(() => ({ ath: (document.getElementById('set-ath') || {}).value, rev: (document.getElementById('set-review') || {}).value }));
+  check(aj.ath === '787-555-0199' && aj.rev === 'https://g.page/r/test', 'Ajustes: ATH Móvil + review link persist', JSON.stringify(aj));
+
+  // ===== v1.4: NHTSA VIN decode (stubbed fetch → autofill) =====
+  const vin = await page.evaluate(`(async function(){
+    go('ro');await new Promise(function(r){setTimeout(r,400);});
+    var realFetch=window.fetch;
+    window.fetch=function(){return Promise.resolve({json:function(){return Promise.resolve({Results:[{ModelYear:'2003',Make:'HONDA',Model:'Accord'}]});}});};
+    decodeVIN('1HGCM82633A004352');
+    await new Promise(function(r){setTimeout(r,400);});
+    window.fetch=realFetch;
+    return {y:document.getElementById('v-y').value,ma:document.getElementById('v-ma').value,mo:document.getElementById('v-mo').value,
+      info:document.getElementById('vin-decode-info').textContent.indexOf('NHTSA')>-1};
+  })()`);
+  check(vin.y === '2003' && vin.ma === 'Honda' && vin.mo === 'Accord' && vin.info, 'VIN decode (NHTSA) autofills año/marca/modelo', JSON.stringify(vin));
+
+  // cleanup v1.4 seeds so the delete-RO check below still sees exactly one RO
+  await page.evaluate(`(function(){DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-SM1';});DB.citas=[];saveDB();})()`);
+
   // Delete RO removes garage entry (no orphans)
   await page.evaluate(`go('historial')`);
   await page.waitForTimeout(400);
