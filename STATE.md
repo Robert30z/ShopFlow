@@ -22,11 +22,22 @@ Turns ShopFlow from an internal-only tool into a customer-facing one — honors 
 - **Note:** the boot only reads the hash at load, so a customer must open the link cold (correct for
   the use case). Roberto must set his shop phone in Ajustes for approvals to route back to him.
 
+## New 2026-07-10 (2nd pass): Route order + partial-payment balances — BOTH SHIPPED
+- **Route order:** `rutaHoy()` opens Google Maps with today's `agendada` citas that have a `direccion`,
+  chained as a driving route (last = destination, rest = waypoints, origin = tu ubicación). "Ruta de hoy
+  (N paradas)" button in the citas screen (shown when today's citas have addresses). Each cita's address
+  is now a tappable Google Maps search link. Uses the existing `direccion` field — no schema change.
+- **Balances / partial payments:** new `o.abonado` (guard-free, `o.abonado||0` everywhere).
+  `registrarAbono(roId)` records a partial payment; auto-marks PAGADO when abonado >= total. RO detail
+  (pendiente) shows an Abonado/Balance box + "Registrar abono" button; "Marcar PAGADO" now shows the
+  remaining balance. `markPaid` sets abonado=total. Receipt PDF prints "Abonado / BALANCE PENDIENTE"
+  when partially paid (`abonado` added to the reExportPDF RO mapping).
+- Verified E2E via Playwright (route URL built correctly; $80 abono on $200 → balance $120 pendiente →
+  +$120 → pagado). Full smoke suite PASSES (page errors: none). **All 5 Pit Stop items now done.**
+
 ## Still open on Pit Stop (asked but not yet built — next session):
-- **Route order for the day's citas** (order today's appointments by location + Google Maps links).
-- **Itemized invoice/receipt PDF** (parts+labor+IVU, balance/outstanding).
-- Also live now: public booking page (Desktop/PitStop-Web, artifact e4af4ab5) + fleet outreach
-  playbook (Desktop/PitStop-Fleet-Outreach.md).
+- (all 5 done) — Also live: public booking page (Desktop/PitStop-Web, artifact e4af4ab5) + fleet
+  outreach playbook (Desktop/PitStop-Fleet-Outreach.md).
 
 ## Last updated: 2026-07-09
 

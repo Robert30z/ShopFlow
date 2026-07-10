@@ -1187,7 +1187,14 @@ function exportPDF(){
   doc.setTextColor(255,255,255);
   doc.text('TOTAL: $'+totalFinal.toFixed(2),196,y+2,{align:'right'});
   doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');doc.setFontSize(9);y+=10;
-  doc.text('Método: '+(RO.pago||'—')+'  ·  Estado: '+(RO.estado==='pagado'?'✓ PAGADO':'⏳ PENDIENTE'),14,y);y+=8;
+  doc.text('Método: '+(RO.pago||'—')+'  ·  Estado: '+(RO.estado==='pagado'?'✓ PAGADO':'⏳ PENDIENTE'),14,y);y+=6;
+  var _abo=RO.abonado||0;
+  if(RO.estado!=='pagado'&&_abo>0){
+    var _bal=Math.max(0,totalFinal-_abo);
+    doc.setFont(undefined,'bold');doc.text('Abonado: $'+_abo.toFixed(2)+'   ·   BALANCE PENDIENTE: $'+_bal.toFixed(2),14,y);
+    doc.setFont(undefined,'normal');y+=6;
+  }
+  y+=2;
 
   // Next service reminder
   if(RO.nextDate){
@@ -1971,7 +1978,10 @@ function openRODetail(roId){
     html+='<button class="btn full" onclick="printWorkOrder(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-printer"></i> Imprimir orden de trabajo</button>';
   }
   if(o.estado==='pendiente'){
-    html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+(o.total||0).toFixed(2)+'</button>';
+    var _ab=o.abonado||0, _bal=Math.max(0,(o.total||0)-_ab);
+    if(_ab>0)html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:8px 11px;margin-bottom:8px;font-size:13px;display:flex;justify-content:space-between"><span>Abonado: <b>$'+_ab.toFixed(2)+'</b></span><span style="color:var(--red)">Balance: <b>$'+_bal.toFixed(2)+'</b></span></div>';
+    html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+_bal.toFixed(2)+'</button>';
+    html+='<button class="btn full" onclick="registrarAbono(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-plus"></i> Registrar abono (pago parcial)</button>';
     if(o.tel)html+='<button class="btn full" onclick="waCobro(\''+o.id+'\')" style="margin-bottom:8px;background:#F76D00;color:#fff;border-color:#F76D00"><i class="ti ti-brand-whatsapp"></i> Cobrar por WhatsApp (ATH Móvil)</button>';
   }
   if(Object.keys(o.insp||{}).length){
@@ -1991,12 +2001,22 @@ function openRODetail(roId){
   go('ro-detail');
 }
 
+function registrarAbono(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var bal=Math.max(0,(o.total||0)-(o.abonado||0));
+  var v=prompt('Balance pendiente: $'+bal.toFixed(2)+'\n¿Cuánto abonó el cliente ahora? ($)');
+  if(v===null)return;
+  var amt=parseFloat(v);if(isNaN(amt)||amt<=0){alert('Monto inválido.');return;}
+  o.abonado=Math.round(((o.abonado||0)+amt)*100)/100;
+  if(o.abonado>=(o.total||0)-0.01){o.estado='pagado';o.pagadoFecha=new Date().toISOString();alert('Balance saldado — orden PAGADA ✓');}
+  saveDB();openRODetail(roId);
+}
 function markPaid(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var m=prompt('Orden '+o.id+' — $'+(o.total||0).toFixed(2)+'\n¿Método de pago recibido? (ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
   if(m===null)return;
   o.pago=(m||o.pago||'ATH Móvil').trim();
-  o.estado='pagado';o.pagadoFecha=new Date().toISOString();
+  o.estado='pagado';o.abonado=o.total||0;o.pagadoFecha=new Date().toISOString();
   saveDB();openRODetail(roId);
 }
 
@@ -2048,7 +2068,7 @@ function reExportPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});
   if(!o){alert('Orden no encontrada.');return;}
   var savedRO=RO;
-  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[],terms:o.terms||null,auth1:o.auth1||null};
+  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,abonado:o.abonado||0,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[],terms:o.terms||null,auth1:o.auth1||null};
   exportPDF();
   RO=savedRO;
 }
@@ -2263,11 +2283,23 @@ function calcInvMargin(){
 // ============ v1.4: CITAS / AGENDA ============
 var _citaPrefill=null;
 function localDateStr(d){d=d||new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+function rutaHoy(){
+  // opens Google Maps with today's appointments chained as a driving route (origin = tu ubicación)
+  var hoy=localDateStr();
+  var stops=DB.citas.filter(function(c){return c.fecha===hoy&&c.estado==='agendada'&&c.direccion;})
+    .sort(function(a,b){return (a.hora||'')<(b.hora||'')?-1:1;});
+  if(!stops.length){alert('No hay citas de hoy con dirección.\nAgrega la dirección a las citas para armar la ruta.');return;}
+  var addrs=stops.map(function(c){return encodeURIComponent(c.direccion+', PR');});
+  var url='https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+addrs[addrs.length-1];
+  if(addrs.length>1)url+='&waypoints='+addrs.slice(0,-1).join('%7C');
+  window.open(url,'_blank');
+}
 function renderCitas(){
   var el=document.getElementById('citas-body');if(!el)return;
   var hoy=localDateStr();
   var list=DB.citas.slice().sort(function(a,b){return ((a.fecha||'')+(a.hora||''))<((b.fecha||'')+(b.hora||''))?-1:1;});
   var hoyL=list.filter(function(c){return c.fecha===hoy&&c.estado==='agendada';});
+  var hoyRuta=hoyL.filter(function(c){return c.direccion;});
   var prox=list.filter(function(c){return c.fecha>hoy&&c.estado==='agendada';});
   var past=list.filter(function(c){return c.fecha<hoy||c.estado!=='agendada';}).reverse().slice(0,20);
   var ct=document.getElementById('citas-ct');if(ct)ct.textContent=hoyL.length+' hoy · '+prox.length+' próx.';
@@ -2279,6 +2311,7 @@ function renderCitas(){
     '<div class="fr fr1"><div class="fg"><div class="fl">Dirección (donde está el vehículo)</div><input id="ct-d" placeholder="Urb. ..., Bayamón"></div></div>'+
     '<button class="btn p full" onclick="saveCita()" style="margin-top:6px"><i class="ti ti-plus"></i> Agendar cita</button>'+
     '</div></div>'+
+    (hoyRuta.length?'<button class="btn full" style="margin:10px 0 2px;background:#1a73e8;color:#fff;border-color:#1a73e8" onclick="rutaHoy()"><i class="ti ti-route"></i> Ruta de hoy ('+hoyRuta.length+' parada'+(hoyRuta.length>1?'s':'')+')</button>':'')+
     citasSec('Hoy',hoyL,true)+citasSec('Próximas',prox,true)+citasSec('Pasadas / completadas',past,false)+
     '</div>';
 }
@@ -2290,7 +2323,7 @@ function citaCard(c,act){
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'+
     '<div style="font-size:13px;font-weight:700">'+(c.cliente||'—')+(c.vehiculo?' — '+c.vehiculo:'')+'</div>'+
     '<div style="font-size:11px;color:var(--gray-400);margin-top:2px">'+when+(c.servicio?' · '+c.servicio:'')+'</div>'+
-    (c.direccion?'<div style="font-size:11px;color:var(--gray-400)"><i class="ti ti-map-pin"></i> '+c.direccion+'</div>':'')+
+    (c.direccion?'<div style="font-size:11px;margin-top:1px"><a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(c.direccion+', PR')+'" target="_blank" style="color:#1a73e8;text-decoration:none"><i class="ti ti-map-pin"></i> '+c.direccion+'</a></div>':'')+
     '</div><span class="badge '+(c.estado==='completada'?'bg':c.estado==='noshow'?'br':'bb')+'">'+(c.estado==='completada'?'HECHA':c.estado==='noshow'?'NO SHOW':'AGENDADA')+'</span></div>'+
     (act?'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'+
       (c.tel?'<button class="btn sm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="waCita(\''+c.id+'\')"><i class="ti ti-brand-whatsapp"></i> Confirmar</button>':'')+
