@@ -2,6 +2,32 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-10
+
+## New 2026-07-10: Customer status link + online approval (self-contained, no backend)
+Turns ShopFlow from an internal-only tool into a customer-facing one — honors the single-file rule.
+- **`shareStatus(roId)`**: builds a compact RO snapshot (shop name + phone, RO#, first name, vehicle,
+  itemized servicios, denegados as "recomendado", total, and a progress step derived from the garage
+  state working/ready/entregado or the RO estado). Base64url-encodes it into `#s=<snap>` on the app's
+  own URL (`_b64e`/`_b64d`, unicode-safe). Shares via WhatsApp to the customer's `tel` (or native
+  share / prompt fallback). NO photos in the snapshot (keeps the URL small — a few KB).
+- **`renderCustomerStatus()`**: on boot, if `location.hash` starts with `#s=`, the app renders a
+  read-only customer page instead of booting the app (boot is wrapped in `else`). Shows a 4-step
+  progress tracker (Recibido→En proceso→Listo→Entregado), itemized services, optional recommendations,
+  total, and an **"Aprobar presupuesto"** button → `wa.me/<shopPhone>` with an approval message
+  (order # + total). Needs `settings.shopPhone` set in Ajustes for the approve button to appear.
+- Button **"Compartir estado con cliente"** added to RO detail (before the PDF button).
+- E2E verified via Playwright (seeded RO → share URL → customer view renders, approve links back to
+  shop). Full smoke suite still PASSES (page errors: none). No schema change (snapshot is derived).
+- **Note:** the boot only reads the hash at load, so a customer must open the link cold (correct for
+  the use case). Roberto must set his shop phone in Ajustes for approvals to route back to him.
+
+## Still open on Pit Stop (asked but not yet built — next session):
+- **Route order for the day's citas** (order today's appointments by location + Google Maps links).
+- **Itemized invoice/receipt PDF** (parts+labor+IVU, balance/outstanding).
+- Also live now: public booking page (Desktop/PitStop-Web, artifact e4af4ab5) + fleet outreach
+  playbook (Desktop/PitStop-Fleet-Outreach.md).
+
 ## Last updated: 2026-07-09
 
 ## New 2026-07-09: v1.4 — the "client-ready" feature pack (gap analysis vs Shopmonkey/Tekmetric/AutoLeap)

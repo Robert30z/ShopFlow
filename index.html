@@ -1983,6 +1983,7 @@ function openRODetail(roId){
   if(o.tel){
     html+='<button class="btn full" onclick="waRecibo(\''+o.id+'\')" style="margin-bottom:8px;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>';
   }
+  html+='<button class="btn full" onclick="shareStatus(\''+o.id+'\')" style="margin-bottom:8px;background:#0E1116;color:#fff;border-color:#0E1116"><i class="ti ti-link"></i> Compartir estado con cliente</button>';
   html+='<button class="btn p full" onclick="reExportPDF(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-file-type-pdf"></i> Generar / Ver PDF</button>';
   html+='<button class="btn full" onclick="if(confirm(\'¿Eliminar esta orden permanentemente?\'))deleteRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Eliminar orden</button>';
   html+='</div>';
@@ -2572,7 +2573,54 @@ function waCobro(roId){
   waSend(o.tel,msg);
 }
 
+// ===== Customer status link — read-only snapshot the customer opens (no backend) =====
+function _b64e(s){return btoa(unescape(encodeURIComponent(s)));}
+function _b64d(s){return decodeURIComponent(escape(atob(s)));}
+function shareStatus(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var g=(DB.garage||[]).find(function(x){return x.roId===roId;});
+  var step=g?({working:2,ready:3,entregado:4}[g.estado]||2):(o.estado==='pagado'?4:o.estado==='pendiente'?3:2);
+  var s=DB.settings||{};
+  var veh=[o.vehiculo&&o.vehiculo.year,o.vehiculo&&o.vehiculo.make,o.vehiculo&&o.vehiculo.model].filter(Boolean).join(' ');
+  var snap={n:s.shopName||'Pit Stop',ph:waNum(s.shopPhone)||'',id:o.id,
+    c:((o.cliente||'').split(' ')[0])||'Cliente',v:veh||'Tu vehículo',
+    sv:(o.servicios||[]).map(function(x){return {n:x.n,p:(x.ep!=null?x.ep:x.p)||0,q:x.qty||1};}),
+    dn:(o.denegados||[]).map(function(d){return {n:d.n||d.desc||'Recomendado',p:d.p||d.precio||0};}),
+    tot:o.total||0,st:step};
+  var url=location.origin+location.pathname+'#s='+_b64e(JSON.stringify(snap));
+  var msg='Hola '+snap.c+' 👋 Sigue el estado de tu '+snap.v+' aquí:\n'+url;
+  var num=waNum(o.tel);
+  if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');}
+  else if(navigator.share){navigator.share({title:'Estado de tu reparación',text:msg,url:url}).catch(function(){});}
+  else{prompt('Copia este link y envíaselo al cliente:',url);}
+}
+function renderCustomerStatus(){
+  var E=function(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  var M=function(n){return '$'+(Number(n)||0).toFixed(2);};
+  var d;try{d=JSON.parse(_b64d(location.hash.slice(3)));}catch(e){document.body.innerHTML='<p style="padding:40px;text-align:center;font-family:sans-serif">Link inválido o vencido.</p>';return;}
+  var steps=['Recibido','En proceso','Listo','Entregado'],st=d.st||2,prog='';
+  for(var i=0;i<steps.length;i++){var n=i+1,on=n<=st;
+    prog+='<div style="flex:1;text-align:center"><div style="width:26px;height:26px;border-radius:50%;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;background:'+(on?'#1FA463':'#e0e0e0')+';color:'+(on?'#fff':'#999')+'">'+(n<st?'✓':n)+'</div><div style="font-size:10px;font-weight:700;color:'+(on?'#1FA463':'#999')+'">'+steps[i]+'</div></div>';
+    if(i<steps.length-1)prog+='<div style="height:2px;flex:0 0 12px;background:#ddd;margin-top:13px"></div>';}
+  var svc=(d.sv||[]).map(function(x){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px"><span>'+E(x.n)+(x.q>1?' ×'+x.q:'')+'</span><b>'+M(x.p*(x.q||1))+'</b></div>';}).join('')||'<div style="color:#888;font-size:13px;padding:8px 0">—</div>';
+  var rec=(d.dn||[]).length?'<div style="margin-top:18px"><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#B82A20;margin-bottom:6px">Recomendado (opcional)</div>'+d.dn.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f2e0dd;font-size:13px;color:#555"><span>'+E(x.n)+'</span><span>'+M(x.p)+'</span></div>';}).join('')+'</div>':'';
+  var approve=d.ph?'<a href="https://wa.me/'+d.ph+'?text='+encodeURIComponent('Apruebo el presupuesto de la orden '+d.id+' ('+M(d.tot)+'). — '+d.c)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border-radius:12px;text-decoration:none;margin-top:10px">✓ Aprobar presupuesto</a><a href="https://wa.me/'+d.ph+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:12px;text-decoration:none;font-size:14px">💬 Escribir al taller</a>':'';
+  document.body.style.background='#F6F4F0';
+  document.body.innerHTML='<div style="max-width:520px;margin:0 auto;padding:0 16px 40px;font-family:-apple-system,Helvetica,Arial,sans-serif;color:#12161C">'
+    +'<div style="text-align:center;padding:26px 0 18px"><div style="font-family:Arial Black,sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px"><span style="color:#E23B2E">●</span> '+E(d.n)+'</div><div style="color:#888;font-size:12px;margin-top:2px">Estado de tu reparación</div></div>'
+    +'<div style="background:#fff;border:1px solid #E4E0D8;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.06)">'
+    +'<div style="font-size:12px;color:#888">Orden '+E(d.id)+'</div>'
+    +'<div style="font-family:Arial Black,sans-serif;font-size:20px;margin:2px 0 4px">'+E(d.v)+'</div>'
+    +'<div style="font-size:13px;color:#555;margin-bottom:18px">Hola '+E(d.c)+' — aquí está el estado y el presupuesto de tu servicio.</div>'
+    +'<div style="display:flex;align-items:flex-start;margin:8px 0 20px">'+prog+'</div>'
+    +'<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#5C6470;margin-bottom:2px">Servicios</div>'+svc+rec
+    +'<div style="display:flex;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:2px solid #12161C;font-size:18px;font-weight:800"><span>Total</span><span>'+M(d.tot)+'</span></div>'
+    +'</div>'+approve
+    +'<div style="text-align:center;color:#aaa;font-size:11px;margin-top:22px">Presupuesto antes de trabajar · Garantía 30 días · '+E(d.n)+'</div></div>';
+}
+
 loadDB();
+if(location.hash.slice(0,3)==='#s='){ renderCustomerStatus(); } else {
 // Registra el service worker — la app abre offline (señal mala en la calle)
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
@@ -2595,6 +2643,7 @@ function hideSplash(){
 setTimeout(hideSplash,1200);
 document.addEventListener('touchstart',hideSplash,{once:true});
 document.addEventListener('click',hideSplash,{once:true});
+}
 </script>
 
 <!-- PDF SHARE SHEET -->
