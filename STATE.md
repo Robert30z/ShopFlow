@@ -22,6 +22,17 @@ Turns ShopFlow from an internal-only tool into a customer-facing one — honors 
 - **Note:** the boot only reads the hash at load, so a customer must open the link cold (correct for
   the use case). Roberto must set his shop phone in Ajustes for approvals to route back to him.
 
+## New 2026-07-10 (3rd pass): FULL INSPECTION (Roberto promoting it — must be bug-free) + real bug fixed
+Deep E2E inspection via Playwright. **REAL BUG FOUND + FIXED:** the Tabler icons CDN URL was wrong
+(`.../3.19.0/tabler-icons.min.css` → 404), so EVERY `<i class="ti">` icon rendered blank the whole time.
+Correct path = `.../3.19.0/dist/tabler-icons.min.css` (verified font+glyphs now load). Bumped SW
+CACHE_V v1→v2 so installed iPads re-fetch. Commit 7a72e6e.
+**Verified GREEN:** all 11 screens render (no errors); git clean + live==repo; smoke suite PASSES
+(page errors none); **signatures: real canvas ink captured → sig1 freezes auth1(services+total)+terms →
+both persist to localStorage → PDF embeds them (valid 807KB PDF, 4 image XObjects).** saveRO persists.
+The scary "112 console errors" during testing were a SELF-INFLICTED bad monkey-patch of jsPDF in the
+test harness, NOT an app bug (gone after reload). **App is client-ready/clean.**
+
 ## New 2026-07-10 (2nd pass): Route order + partial-payment balances — BOTH SHIPPED
 - **Route order:** `rutaHoy()` opens Google Maps with today's `agendada` citas that have a `direccion`,
   chained as a driving route (last = destination, rest = waypoints, origin = tu ubicación). "Ruta de hoy
