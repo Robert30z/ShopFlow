@@ -2,6 +2,25 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-12
+
+## New 2026-07-12: Catálogo de servicios editable (admin) — for selling ShopFlow to other talleres
+Roberto is selling ShopFlow to other shops; each shop offers services not in the built-in menu
+(alineamiento, torneo de discos, etc.). Added a per-shop catalog editor:
+- **Schema:** `DB.svcsCustom` [{id:'cs-<ts>',cat,n,p,c:0}] + `DB.catsCustom` [{id:'cc-<ts>',l}]
+  (guarded in loadDB + seeded in the DB literal — backward compatible).
+- **Single source of truth:** `allCats()` = MC + custom cats; `getSvcs(cat)` = MS[cat] + custom svcs.
+  ALL catalog readers now use these (renderROSvcMenu, renderMenuCats, renderMenuSvcs) — grep
+  confirmed no direct MS/MC readers remain. Custom services get the Piezas (serviceParts) button
+  for free since menú cards key off s.id.
+- **Admin UI:** Ajustes → "Catálogo de servicios" card (name, price, category select incl.
+  "➕ Nueva categoría…" via prompt). List shows custom svcs w/ ✏️ edit (prompt) + ✖ delete
+  (confirm; deleting the last service of a custom category removes the empty category).
+- **Smoke suite +3 checks** (custom svc persists+merges; custom cat renders in admin; custom svc
+  selectable in RO wizard step 2). Full suite PASSES locally, page errors: none.
+- Also this session: full pre-sales inspection — live==repo (git blob hash match), all 3 CDNs 200,
+  smoke suite PASSED against the LIVE GitHub Pages site too.
+
 ## Last updated: 2026-07-10
 
 ## New 2026-07-10: Customer status link + online approval (self-contained, no backend)

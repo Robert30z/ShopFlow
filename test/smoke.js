@@ -320,6 +320,19 @@ function check(ok, name, detail) {
   const aj = await page.evaluate(() => ({ ath: (document.getElementById('set-ath') || {}).value, rev: (document.getElementById('set-review') || {}).value }));
   check(aj.ath === '787-555-0199' && aj.rev === 'https://g.page/r/test', 'Ajustes: ATH Móvil + review link persist', JSON.stringify(aj));
 
+  // ===== Catálogo del taller: servicios y categorías propias =====
+  await page.fill('#cs-n', 'Alineamiento 4 ruedas');
+  await page.fill('#cs-p', '89');
+  await page.selectOption('#cs-c', 'suspension');
+  await page.evaluate(`addCustomSvc()`);
+  await page.waitForTimeout(200);
+  const cs = await page.evaluate(`(function(){var s=DB.svcsCustom[DB.svcsCustom.length-1];return {n:s.n,p:s.p,persisted:JSON.parse(localStorage.getItem('sf_v1')).svcsCustom.length>0,inCat:getSvcs('suspension').some(function(x){return x.id===s.id;})};})()`);
+  check(cs.n === 'Alineamiento 4 ruedas' && cs.p === 89 && cs.persisted && cs.inCat, 'Custom service saved + merged into catalog', JSON.stringify(cs));
+  const cc = await page.evaluate(`(function(){DB.catsCustom.push({id:'cc-test',l:'Escape'});DB.svcsCustom.push({id:'cs-test2',cat:'cc-test',n:'Soldadura de escape',p:60,c:0});saveDB();renderCatalogAdmin();return {cat:allCats().some(function(c){return c.id==='cc-test';}),svc:getSvcs('cc-test').length,listed:document.getElementById('cs-list').innerHTML.includes('Soldadura de escape'),inSelect:document.getElementById('cs-c').innerHTML.includes('Escape')};})()`);
+  check(cc.cat && cc.svc === 1 && cc.listed && cc.inSelect, 'Custom category + service render in admin', JSON.stringify(cc));
+  const roPick = await page.evaluate(`(async function(){go('ro');await new Promise(function(r){setTimeout(r,400);});await gotoStep(2);await new Promise(function(r){setTimeout(r,300);});activeCat='cc-test';renderROSvcMenu();var html=(document.getElementById('ro-sl')||{innerHTML:''}).innerHTML;var cats=(document.getElementById('ro-sc')||{innerHTML:''}).innerHTML;return {svcShown:html.includes('Soldadura de escape'),catShown:cats.includes('Escape')};})()`);
+  check(roPick.svcShown && roPick.catShown, 'Custom service selectable in RO wizard', JSON.stringify(roPick));
+
   // ===== v1.4: NHTSA VIN decode (stubbed fetch → autofill) =====
   const vin = await page.evaluate(`(async function(){
     go('ro');await new Promise(function(r){setTimeout(r,400);});

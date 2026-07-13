@@ -344,6 +344,13 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="fr1"><div class="fg"><div class="fl">Link de reseña de Google</div><input id="set-review" placeholder="https://g.page/r/..." autocapitalize="off" oninput="saveSettings()"></div></div>
         <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Se usan en los botones de cobro por WhatsApp y en los seguimientos (pedir reseña).</div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-tools"></i> Catálogo de servicios</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Añade los servicios propios de tu taller (ej: Alineamiento, Torneo de discos). Aparecen en el Menú y en las órdenes igual que los de fábrica, y se guardan permanente.</span></div>
+        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Nombre del servicio</div><input id="cs-n" placeholder="Ej: Alineamiento 4 ruedas"></div></div>
+        <div class="fr"><div class="fg"><div class="fl">Precio ($)</div><input id="cs-p" type="number" step="0.01" placeholder="0.00"></div><div class="fg"><div class="fl">Categoría</div><select id="cs-c"></select></div></div>
+        <button class="btn a full" onclick="addCustomSvc()" style="margin-top:8px"><i class="ti ti-plus"></i> Agregar al catálogo</button>
+        <div id="cs-list" style="margin-top:10px"></div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-sparkles"></i> Inteligencia Artificial</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Las funciones AI (diagnóstico, piezas, labor) usan tu propia API key de Anthropic. Créala en console.anthropic.com. Se guarda solo en este dispositivo.</span></div>
         <div class="fr1"><div class="fg"><div class="fl">API key de Anthropic</div><input id="set-aikey" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveSettings()"></div></div>
@@ -374,7 +381,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
+var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
 var TERMS_VERSION=3,TERMS_DATE='2026-07-03';
@@ -404,6 +411,10 @@ var MS={
   general:[{id:'g1',n:'General Labor / Custom Job',p:0,c:0},{id:'g2',n:'Cabin Air Filter Replacement',p:30,c:0},{id:'g3',n:'Engine Air Filter Replacement',p:25,c:0},{id:'g4',n:'Wiper Blade Replacement',p:25,c:0}]
 };
 var MC=[{id:'aceites',l:'Oil & Filter'},{id:'frenos',l:'Brakes'},{id:'suspension',l:'Suspension'},{id:'ac',l:'A/C'},{id:'electrico',l:'Electrical'},{id:'motor',l:'Engine'},{id:'transmision',l:'Transmission'},{id:'diagnostico',l:'Diagnostic'},{id:'neumaticos',l:'Tires'},{id:'general',l:'General'}];
+// Catálogo del taller: categorías y servicios propios (DB.catsCustom / DB.svcsCustom) se mezclan
+// con los de fábrica. TODO lector del catálogo debe usar allCats()/getSvcs(), nunca MC/MS directo.
+function allCats(){return MC.concat(DB.catsCustom||[]);}
+function getSvcs(cat){return (MS[cat]||[]).concat((DB.svcsCustom||[]).filter(function(s){return s.cat===cat;}));}
 
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'servicios',l:'Servicios'},{id:'estimado',l:'Estimado'},{id:'firma1',l:'Autorización'},{id:'inspeccion',l:'Inspección'},{id:'denegados',l:'Denegados'},{id:'firma2',l:'Firma Final'},{id:'cierre',l:'Cierre'}];
 
@@ -418,7 +429,7 @@ function saveDB(){
     return false;
   }
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
 
@@ -952,9 +963,9 @@ function updInspB(){
 }
 
 function renderROSvcMenu(){
-  var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=MC.map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
+  var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
   var q=(document.getElementById('ro-sq')||{value:''}).value.toLowerCase();
-  var svcs=(MS[activeCat]||[]).filter(function(s){return !q||s.n.toLowerCase().includes(q);});
+  var svcs=getSvcs(activeCat).filter(function(s){return !q||s.n.toLowerCase().includes(q);});
   var el=document.getElementById('ro-sl');if(el)el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('');
 }
 function addSvcRO(id,n,p){RO.servicios.push({id:id,uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:n,p:p,qty:1,ep:p,parts:[],laborHours:0});renderROSO();}
@@ -1414,8 +1425,8 @@ function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).va
 
 function renderClientes(){var q=(document.getElementById('cli-q')||{value:''}).value.toLowerCase();var list=DB.clientes.filter(function(c){return !q||c.nombre.toLowerCase().includes(q);});var el=document.getElementById('clientes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin clientes. Se crean automáticamente al guardar una RO.</div>';return;}el.innerHTML=list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var total=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).reduce(function(s,o){return s+(o.total||0);},0);var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).length;return '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100)"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1"><div style="font-size:13px;font-weight:700">'+c.nombre+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div></div></div>';}).join('');}
 
-function renderMenuCats(){var el=document.getElementById('menu-cats');if(!el)return;el.innerHTML=MC.map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderMenuSvcs()">'+cc.l+'</div>';}).join('');}
-function renderMenuSvcs(){renderMenuCats();var q=(document.getElementById('menu-q')||{value:''}).value.toLowerCase();var svcs=(MS[activeCat]||[]).filter(function(s){return !q||s.n.toLowerCase().includes(q);});var el=document.getElementById('menu-body');if(!el)return;el.innerHTML=svcs.map(function(s){var m=s.c>0?((s.p-s.c)/s.p*100):100;var parts=DB.serviceParts[s.id]||[];var partsCount=parts.length;var partsCost=parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-lg);padding:11px 13px;background:var(--white);margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="flex:1"><div style="font-size:13px;font-weight:700">'+s.n+'</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Precio: <strong style="color:var(--red)">$'+s.p+'</strong>'+(s.c>0?' · Costo base: $'+s.c+' · '+m.toFixed(0)+'%':'')+'</div>'+(partsCount>0?'<div style="font-size:11px;color:var(--green);margin-top:3px;font-weight:600"><i class="ti ti-package"></i> '+partsCount+' pieza'+(partsCount>1?'s':'')+' registrada'+(partsCount>1?'s':'')+' · $'+partsCost.toFixed(2)+' en costos</div>':'')+'</div></div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn sm" onclick="openPartsModal(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\')" style="flex:1;justify-content:center"><i class="ti ti-receipt"></i> Piezas'+(partsCount>0?' ('+partsCount+')':'')+'</button><button class="btn sm p" onclick="addMO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> Agregar</button></div></div>';}).join('')||'<div style="text-align:center;padding:20px;color:var(--gray-400)">Sin resultados.</div>';}
+function renderMenuCats(){var el=document.getElementById('menu-cats');if(!el)return;el.innerHTML=allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderMenuSvcs()">'+cc.l+'</div>';}).join('');}
+function renderMenuSvcs(){renderMenuCats();var q=(document.getElementById('menu-q')||{value:''}).value.toLowerCase();var svcs=getSvcs(activeCat).filter(function(s){return !q||s.n.toLowerCase().includes(q);});var el=document.getElementById('menu-body');if(!el)return;el.innerHTML=svcs.map(function(s){var m=s.c>0?((s.p-s.c)/s.p*100):100;var parts=DB.serviceParts[s.id]||[];var partsCount=parts.length;var partsCost=parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-lg);padding:11px 13px;background:var(--white);margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="flex:1"><div style="font-size:13px;font-weight:700">'+s.n+'</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Precio: <strong style="color:var(--red)">$'+s.p+'</strong>'+(s.c>0?' · Costo base: $'+s.c+' · '+m.toFixed(0)+'%':'')+'</div>'+(partsCount>0?'<div style="font-size:11px;color:var(--green);margin-top:3px;font-weight:600"><i class="ti ti-package"></i> '+partsCount+' pieza'+(partsCount>1?'s':'')+' registrada'+(partsCount>1?'s':'')+' · $'+partsCost.toFixed(2)+' en costos</div>':'')+'</div></div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn sm" onclick="openPartsModal(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\')" style="flex:1;justify-content:center"><i class="ti ti-receipt"></i> Piezas'+(partsCount>0?' ('+partsCount+')':'')+'</button><button class="btn sm p" onclick="addMO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> Agregar</button></div></div>';}).join('')||'<div style="text-align:center;padding:20px;color:var(--gray-400)">Sin resultados.</div>';}
 function addMO(id,n,p){var ex=MO.find(function(o){return o.id===id;});if(ex){ex.qty++;ex.p=p;}else MO.push({id:id,n:n,p:p,qty:1});updMCC();renderMOItems();document.getElementById('menu-op').style.display='block';}
 function updMCC(){var c=MO.reduce(function(s,o){return s+o.qty;},0);var el=document.getElementById('mcc');if(el)el.textContent=c;}
 function renderMOItems(){var el=document.getElementById('menu-oi');if(!el)return;el.innerHTML=MO.map(function(o,i){return '<div class="oi"><span class="oi-n">'+o.n+(o.qty>1?' ×'+o.qty:'')+'</span><span style="font-weight:700;color:var(--red);margin-right:8px">$'+(o.p*o.qty).toFixed(2)+'</span><button onclick="MO.splice('+i+',1);updMCC();renderMOItems();" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var el2=document.getElementById('menu-tot');if(el2)el2.textContent='$'+(sub*1.115).toFixed(2);}
@@ -2097,6 +2108,43 @@ function initAjustes(){
   document.getElementById('set-bk-repo').value=bk.repo||'';
   document.getElementById('set-bk-token').value=bk.token||'';
   updBackupStatus();
+  renderCatalogAdmin();
+}
+// ============ CATÁLOGO DE SERVICIOS DEL TALLER ============
+function renderCatalogAdmin(){
+  var sel=document.getElementById('cs-c');if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML=allCats().map(function(c){return '<option value="'+c.id+'">'+c.l+'</option>';}).join('')+'<option value="__new">➕ Nueva categoría…</option>';
+  if(cur&&Array.prototype.some.call(sel.options,function(o){return o.value===cur;}))sel.value=cur;
+  var el=document.getElementById('cs-list');if(!el)return;
+  el.innerHTML=(DB.svcsCustom||[]).map(function(s){var cat=allCats().find(function(c){return c.id===s.cat;});return '<div class="oi"><span class="oi-n">'+s.n+' <span style="color:var(--gray-400);font-size:10px">('+(cat?cat.l:s.cat)+')</span></span><span style="font-weight:700;color:var(--red);margin-right:6px">$'+(+s.p).toFixed(2)+'</span><button onclick="editCustomSvc(\''+s.id+'\')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-pencil"></i></button><button onclick="delCustomSvc(\''+s.id+'\')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios propios todavía.</div>';
+}
+function addCustomSvc(){
+  var n=document.getElementById('cs-n').value.trim();
+  var p=parseFloat(document.getElementById('cs-p').value);
+  var cat=document.getElementById('cs-c').value;
+  if(!n){alert('Escribe el nombre del servicio.');return;}
+  if(isNaN(p)||p<0){alert('Pon un precio válido (puede ser 0 para precio libre).');return;}
+  if(cat==='__new'){var l=prompt('Nombre de la nueva categoría:');if(!l||!l.trim())return;var cid='cc-'+Date.now();DB.catsCustom.push({id:cid,l:l.trim()});cat=cid;}
+  DB.svcsCustom.push({id:'cs-'+Date.now(),cat:cat,n:n,p:Math.round(p*100)/100,c:0});
+  saveDB();
+  document.getElementById('cs-n').value='';document.getElementById('cs-p').value='';
+  renderCatalogAdmin();
+}
+function editCustomSvc(id){
+  var s=(DB.svcsCustom||[]).find(function(x){return x.id===id;});if(!s)return;
+  var n=prompt('Nombre del servicio:',s.n);if(n===null)return;
+  var p=prompt('Precio ($):',s.p);if(p===null)return;
+  if(n.trim())s.n=n.trim();
+  var pv=parseFloat(p);if(!isNaN(pv)&&pv>=0)s.p=Math.round(pv*100)/100;
+  saveDB();renderCatalogAdmin();
+}
+function delCustomSvc(id){
+  var s=(DB.svcsCustom||[]).find(function(x){return x.id===id;});if(!s)return;
+  if(!confirm('¿Eliminar "'+s.n+'" del catálogo? Las órdenes ya guardadas no cambian.'))return;
+  DB.svcsCustom=DB.svcsCustom.filter(function(x){return x.id!==id;});
+  if(!DB.svcsCustom.some(function(x){return x.cat===s.cat;}))DB.catsCustom=(DB.catsCustom||[]).filter(function(c){return c.id!==s.cat;});
+  saveDB();renderCatalogAdmin();
 }
 function saveSettings(){
   DB.settings.laborRate=parseFloat(document.getElementById('set-labor').value)||103;
