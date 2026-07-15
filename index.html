@@ -372,6 +372,10 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(event)">
         <div style="font-size:11px;color:var(--gray-400);margin-top:8px;line-height:1.5">Exporta tus datos regularmente. Si reseteas el iPad o borras Safari, esto te permite recuperar todo.</div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-masks-theater"></i> Modo demo (para vender)</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Llena la app con datos de ejemplo realistas (órdenes, citas, KPIs, fotos, firmas) para enseñársela a un cliente. Tus datos reales quedan guardados en este dispositivo y vuelven intactos al salir. Mientras el demo está activo, el respaldo en la nube queda pausado.</span></div>
+        <button id="demo-btn" class="btn full" onclick="demoToggle()"><i class="ti ti-masks-theater"></i> Activar modo demo</button>
+      </div></div>
       <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:12px">ShopFlow v1.0 · by Pit Stop</div>
     </div>
   </div>
@@ -460,6 +464,7 @@ function aiFetch(msg,maxTokens){
 var _cbTimer=null,_cbBusy=false;
 function backupCfg(){var b=(DB.settings&&DB.settings.backup)||{};return (b.token&&b.repo)?b:null;}
 function scheduleCloudBackup(){
+  if(DB._demo)return; // en demo NUNCA se sube nada — protege el respaldo real
   if(!backupCfg())return;
   clearTimeout(_cbTimer);
   _cbTimer=setTimeout(function(){cloudBackup(false);},45000);
@@ -471,6 +476,7 @@ function cloudBackupPayload(){
   return JSON.stringify(copy);
 }
 function cloudBackup(manual){
+  if(DB._demo){if(manual)alert('Modo demo activo — el respaldo en la nube está pausado para no sobrescribir tus datos reales. Sal del demo primero.');return;}
   var cfg=backupCfg();
   if(!cfg){if(manual)alert('Configura primero el repo y el token en esta pantalla.');return;}
   if(_cbBusy)return;
@@ -498,6 +504,7 @@ function cloudBackup(manual){
     .catch(function(){_cbBusy=false;updBackupStatus('sin conexión');if(manual)alert('Sin conexión. El respaldo se reintenta con el próximo cambio.');});
 }
 function restoreFromCloud(){
+  if(DB._demo){alert('Modo demo activo — sal del demo primero (tus datos reales vuelven solos).');return;}
   var cfg=backupCfg();
   if(!cfg){alert('Configura primero el repo y el token.');return;}
   if(!confirm('¿Restaurar desde la nube?\n\nEsto REEMPLAZA los datos de este dispositivo con el último respaldo de GitHub. No se puede deshacer.'))return;
@@ -2108,6 +2115,8 @@ function initAjustes(){
   document.getElementById('set-bk-repo').value=bk.repo||'';
   document.getElementById('set-bk-token').value=bk.token||'';
   updBackupStatus();
+  var db=document.getElementById('demo-btn');
+  if(db)db.innerHTML=DB._demo?'<i class="ti ti-door-exit"></i> Salir del demo (vuelven tus datos reales)':'<i class="ti ti-masks-theater"></i> Activar modo demo';
   renderCatalogAdmin();
 }
 // ============ CATÁLOGO DE SERVICIOS DEL TALLER ============
@@ -2168,6 +2177,7 @@ function updAiKeyStatus(){
   else{st.innerHTML='<i class="ti ti-check"></i> Configurada ('+k.slice(0,10)+'…). Las funciones AI están activas.';st.style.color='var(--green)';}
 }
 function exportBackup(){
+  if(DB._demo&&!confirm('Estás en MODO DEMO — este archivo contendría datos de EJEMPLO, no los reales. ¿Exportar de todos modos?'))return;
   var data=JSON.stringify(DB,null,2);
   var blob=new Blob([data],{type:'application/json'});
   var url=URL.createObjectURL(blob);
@@ -2700,6 +2710,180 @@ function renderCustomerStatus(){
     +'<div style="text-align:center;color:#aaa;font-size:11px;margin-top:22px">Presupuesto antes de trabajar · Garantía 30 días · '+E(d.n)+'</div></div>';
 }
 
+// ============ MODO DEMO (para vender ShopFlow) ============
+// Llena la app con datos de ejemplo realistas para enseñarla a un prospecto.
+// Los datos reales se guardan en localStorage 'sf_v1_real' y vuelven al salir.
+// Mientras DB._demo es true el respaldo en la nube queda pausado (ver
+// scheduleCloudBackup/cloudBackup) — el demo jamás pisa el respaldo real.
+var DEMO_KEY='sf_v1_real';
+function demoToggle(){if(DB._demo)exitDemo();else enterDemo();}
+function enterDemo(){
+  if(DB._demo)return;
+  if(!confirm('MODO DEMO\n\nLlena la app con datos de ejemplo (órdenes, citas, KPIs, fotos, firmas) para enseñarla a un cliente.\n\nTus datos reales quedan guardados en este dispositivo y vuelven intactos al salir. ¿Activar?'))return;
+  try{localStorage.setItem(DEMO_KEY,localStorage.getItem('sf_v1')||'');}catch(e){alert('No hay espacio para guardar tus datos reales — demo cancelado.');return;}
+  try{localStorage.setItem('sf_v1',JSON.stringify(buildDemoDB()));}catch(e){localStorage.removeItem(DEMO_KEY);alert('Almacenamiento lleno — no se pudo activar el demo.');return;}
+  location.reload();
+}
+function exitDemo(){
+  if(!DB._demo)return;
+  var real=localStorage.getItem(DEMO_KEY);
+  if(real===null){alert('No encuentro el respaldo local de tus datos reales (sf_v1_real). Por seguridad no borro nada.');return;}
+  if(!confirm('¿Salir del modo demo?\n\nSe borran los datos de ejemplo y vuelven tus datos reales.'))return;
+  if(real){localStorage.setItem('sf_v1',real);}else{localStorage.removeItem('sf_v1');}
+  localStorage.removeItem(DEMO_KEY);
+  location.reload();
+}
+function demoBanner(){
+  if(!DB._demo||document.getElementById('demo-pill'))return;
+  var p=document.createElement('div');p.id='demo-pill';
+  p.innerHTML='🎭 MODO DEMO · datos de ejemplo — <b>toca para salir</b>';
+  p.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:600;background:#B82A20;color:#fff;font-size:11px;font-weight:700;padding:7px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis';
+  p.onclick=exitDemo;
+  document.body.appendChild(p);
+}
+function _demoSig(seed){
+  var c=document.createElement('canvas');c.width=300;c.height=110;var x=c.getContext('2d');
+  x.strokeStyle='#1a237e';x.lineWidth=2.2;x.lineCap='round';x.beginPath();
+  var px=30,py=70;x.moveTo(px,py);
+  for(var i=1;i<=22;i++){px=30+i*11;py=70-Math.sin(i*(0.9+seed*0.17))*(18+((i*seed)%3)*7);x.quadraticCurveTo(px-6,py+((i%2)?12:-12),px,py);}
+  x.stroke();x.beginPath();x.moveTo(40,88);x.lineTo(250,84);x.stroke();
+  return c.toDataURL('image/png');
+}
+function _demoFoto(txt,hue){
+  var c=document.createElement('canvas');c.width=480;c.height=320;var x=c.getContext('2d');
+  var g=x.createLinearGradient(0,0,480,320);g.addColorStop(0,'hsl('+hue+',45%,38%)');g.addColorStop(1,'hsl('+((hue+40)%360)+',40%,20%)');
+  x.fillStyle=g;x.fillRect(0,0,480,320);
+  x.fillStyle='rgba(255,255,255,.13)';x.fillRect(0,230,480,90);
+  x.font='90px serif';x.textAlign='center';x.fillText('🚗',240,160);
+  x.fillStyle='#fff';x.font='bold 26px sans-serif';x.fillText(txt,240,222);
+  x.font='14px sans-serif';x.fillStyle='rgba(255,255,255,.75)';x.fillText('FOTO DE EJEMPLO — MODO DEMO',240,256);
+  return c.toDataURL('image/jpeg',0.55);
+}
+function buildDemoDB(){
+  var D=86400000;
+  function ago(d,h,m){var t=new Date(Date.now()-d*D);t.setHours(h==null?10:h,m==null?15:m,0,0);return t.toISOString();}
+  function dia(d){return ago(d).split('T')[0];}
+  var st=JSON.parse(JSON.stringify(DB.settings||{}));
+  delete st.backup; // el demo no hereda la config de respaldo — doble seguro
+  st.shopName=st.shopName||'Pit Stop';
+  if(typeof st.laborRate!=='number')st.laborRate=103;
+  if(!st.shopPhone)st.shopPhone='787-454-6513';
+  if(!st.athMovil)st.athMovil='787-454-6513';
+  if(!st.reviewLink)st.reviewLink='https://g.page/r/pit-stop-demo';
+  var rate=st.laborRate;
+  var sigA=_demoSig(1),sigB=_demoSig(2);
+  var CLI=[
+    ['José Rivera','787-555-0134','2016','Toyota','Corolla','HTR-482','Gris'],
+    ['María Santiago','787-555-0182','2018','Honda','Civic','JKD-915','Azul'],
+    ['Carlos Ortiz','787-555-0231','2015','Nissan','Sentra','GBM-204','Negro'],
+    ['Ana Torres','787-555-0345','2019','Toyota','Tacoma','LPZ-770','Blanco'],
+    ['Luis Meléndez','787-555-0412','2017','Hyundai','Elantra','KTV-318','Rojo'],
+    ['Carmen Rodríguez','787-555-0468','2014','Honda','Accord','FRD-651','Plata'],
+    ['Pedro Vázquez','787-555-0527','2020','Kia','Forte','MNQ-108','Blanco'],
+    ['Wanda Figueroa','787-555-0593','2013','Ford','F-150','DWC-935','Negro'],
+    ['Miguel Díaz','787-555-0644','2018','Jeep','Wrangler','LLB-247','Verde'],
+    ['Iris Morales','787-555-0701','2016','Mazda','3','HXA-529','Azul'],
+    ['Rafael Colón','787-555-0766','2012','Toyota','Camry','EPJ-402','Gris'],
+    ['Héctor Burgos','787-555-0810','2019','Honda','CR-V','MSD-883','Blanco'],
+    ['Sonia Pagán','787-555-0874','2015','Chevrolet','Malibu','GQF-336','Rojo'],
+    ['Edwin Rosario','787-555-0929','2017','Nissan','Rogue','JYT-590','Negro']
+  ];
+  var SVC={a1:['Mantenimiento Básico de Aceite y Filtro',45],a2:['Mantenimiento Completo de Aceite y Filtro',75],f1:['Front Brake Service',120],f3:['Complete Brake Service (Front & Rear)',200],e1:['Battery Replacement',60],e5:['OBD-II Diagnostic',65],m3:['Coolant Flush',85],m5:['Tune-Up',120],ac1:['A/C Service & Recharge',120],s2:['CV Axle Replacement',140],t1:['Transmission Fluid Service',120],n3:['Tire Rotation',35],g2:['Cabin Air Filter Replacement',30]};
+  var _uid=0;
+  function svc(id,extra){var s=SVC[id];var o={id:id,uid:'svc-demo-'+(++_uid),n:s[0],p:s[1],ep:s[1],qty:1,parts:[],laborHours:0};if(extra)Object.keys(extra).forEach(function(k){o[k]=extra[k];});return o;}
+  function part(name,cost,sell,qty){return{name:name,partNum:'',supplier:'AutoZone',cost:cost,sellPrice:sell,qty:qty||1,receipt:''};}
+  function totalOf(svcs){var s=0;svcs.forEach(function(i){s+=(i.ep||0)*(i.qty||1)+(i.laborHours||0)*rate+(i.parts||[]).reduce(function(a,b){return a+b.sellPrice*b.qty;},0);});return Math.round(s*1.115*100)/100;}
+  var ordenes=[],garage=[],clientes=[],num=30;
+  function mk(cliIdx,daysAgo,svcs,opts){
+    opts=opts||{};num++;
+    var c=CLI[cliIdx];
+    var o={id:'RO-'+num,fecha:ago(daysAgo,9+(num%7)),cliente:c[0],tel:c[1],email:'',
+      vehiculo:{year:c[2],make:c[3],model:c[4],tag:c[5],color:c[6],odoIn:String(30000+num*1811),odoOut:'',vin:''},
+      queja:opts.queja||'',fotos:[],sig1:true,sig2:true,sigDen:false,sigData:{},sigTimes:{},
+      terms:{v:(typeof TERMS_VERSION!=='undefined'?TERMS_VERSION:3),fecha:ago(daysAgo,9),text:(typeof DISC!=='undefined'?DISC:'')},
+      auth1:null,insp:opts.insp||{},servicios:svcs,denegados:[],descuento:0,
+      pago:opts.pago||'ATH Móvil',estado:opts.estado||'pagado',nextDate:dia(daysAgo-150),
+      techNotes:opts.notes||'',total:0};
+    o.total=totalOf(svcs);
+    o.auth1={fecha:ago(daysAgo,9),total:o.total,rate:rate,items:svcs.map(function(s){return{n:s.n,ep:s.ep||0,qty:s.qty||1,laborHours:s.laborHours||0,partsTotal:(s.parts||[]).reduce(function(ps,p){return ps+p.sellPrice*p.qty;},0)};})};
+    if(o.estado==='pagado')o.pagadoFecha=ago(daysAgo,16);
+    ordenes.push(o);
+    return o;
+  }
+  var COMBOS={
+    oil:function(){return[svc('a2')];},
+    oilf:function(){return[svc('a1'),svc('g2')];},
+    brk:function(){return[svc('f1',{laborHours:1,parts:[part('Pastillas delanteras cerámicas',38,72,1)]})];},
+    brkF:function(){return[svc('f3',{laborHours:1.5,parts:[part('Pastillas (juego completo)',74,139,1),part('Rotores delanteros',96,168,1)]})];},
+    bat:function(){return[svc('e1',{parts:[part('Batería 24F 650CCA',118,189,1)]})];},
+    diag:function(){return[svc('e5')];},
+    tune:function(){return[svc('m5',{laborHours:1,parts:[part('Bujías iridium NGK',9.5,18,4)]})];},
+    ac:function(){return[svc('ac1',{parts:[part('Refrigerante R-134a',14,32,2)]})];},
+    cool:function(){return[svc('m3')];},
+    cv:function(){return[svc('s2',{laborHours:1.5,parts:[part('Eje CV remanufacturado',88,155,1)]})];},
+    trans:function(){return[svc('t1',{parts:[part('Aceite ATF',12,24,4)]})];},
+    combo:function(){return[svc('a2'),svc('n3'),svc('g2')];}
+  };
+  [[0,58,'oil'],[1,55,'brkF'],[2,52,'bat'],[3,50,'combo'],[4,47,'tune'],[5,44,'oil'],
+   [6,41,'ac'],[7,39,'cv'],[8,36,'brk'],[9,33,'oilf'],[10,31,'trans'],[11,28,'cool'],
+   [0,25,'brk'],[12,23,'oil'],[5,21,'tune'],[1,18,'oil'],[4,16,'ac'],[2,13,'combo'],
+   [5,11,'brkF'],[7,9,'oil'],[3,6,'diag'],[9,4,'bat'],[6,1,'oilf'],[8,0,'brk']]
+    .forEach(function(r){mk(r[0],r[1],COMBOS[r[2]]());});
+  var oHoy=ordenes[ordenes.length-1],oAyer=ordenes[ordenes.length-2];
+  // Denegados (para el KPI de aprobación) — mezcla manual + auto-confirmado
+  ordenes[5].denegados=[{nombre:'Amortiguadores traseros',precio:260,urgencia:'pronto',nota:'Recomendado en 1-2 meses'}];
+  ordenes[12].denegados=[{autoId:'rr',nombre:'Revisar: Rear rotors',precio:0,urgencia:'urgente',nota:'Crítico en inspección multipuntos',auto:true,confirmed:true},{nombre:'Rotores traseros + labor',precio:214,urgencia:'urgente'}];
+  ordenes[18].denegados=[{nombre:'Correa serpentina',precio:98,urgencia:'monitorear'}];
+  // Órdenes especiales: cobros pendientes, seguimientos, winback
+  var oPend=mk(10,2,COMBOS.brkF(),{estado:'pendiente',queja:'Vibración al frenar en autopista'});oPend.abonado=150;
+  var oPend2=mk(9,4,COMBOS.ac(),{estado:'pendiente',queja:'A/C no enfría en tapón'});
+  var oRev=mk(11,8,COMBOS.tune(),{});oRev.segFu=ago(5,11); // ya se le dio follow-up → toca pedir reseña
+  mk(13,200,COMBOS.oil(),{}); // cliente sin visita hace 6+ meses → winback
+  // Orden ABIERTA de hoy (demo del draft + inspección + fotos + firma de autorización)
+  var oOpen=mk(3,0,[svc('f1',{laborHours:1,parts:[part('Pastillas delanteras cerámicas',38,72,1)]}),svc('a1')],{estado:'abierta',queja:'Chillido al frenar y vibración en el volante',notes:'Cliente pide llamada antes de añadir piezas.',insp:{bat:'verde',alt:'verde',oil:'amarillo',cool:'verde',brkf:'amarillo',belt:'verde',pf:'rojo',rf:'amarillo',pr:'verde',tfl:'verde',tfr:'verde',trl:'amarillo',trr:'verde',lhd:'verde',wip:'amarillo'}});
+  oOpen.sig2=false;oOpen.sigData={sig1:sigA};oOpen.sigTimes={sig1:oOpen.fecha};
+  oOpen.denegados=[{autoId:'pf',nombre:'Revisar: Front pads',precio:0,urgencia:'urgente',nota:'Crítico en inspección multipuntos',auto:true}];
+  oOpen.inspNotes={oil:'Aceite oscuro — cambio recomendado',pf:'Pastillas al 15%',wip:'Gomas resecas'};
+  oOpen.fotos=[{d:_demoFoto('Toyota Tacoma',140),t:oOpen.fecha},{d:_demoFoto('Freno delantero',20),t:oOpen.fecha}];
+  // Firmas de tinta en las órdenes recientes + fotos en las 2 últimas cerradas
+  ordenes.slice(-10).forEach(function(o){if(o.estado==='abierta')return;o.sigData={sig1:sigA,sig2:sigB};o.sigTimes={sig1:o.fecha,sig2:o.pagadoFecha||o.fecha};});
+  oHoy.fotos=[{d:_demoFoto(oHoy.vehiculo.make+' '+oHoy.vehiculo.model,210),t:oHoy.fecha}];
+  oAyer.fotos=[{d:_demoFoto(oAyer.vehiculo.make+' '+oAyer.vehiculo.model,320),t:oAyer.fecha}];
+  // Garage: uno trabajando, uno listo, uno entregado
+  var gnum=0;
+  function gar(o,estado,ready){garage.push({id:'GAR-demo-'+(++gnum),roId:o.id,cliente:o.cliente,vehiculo:(o.vehiculo.year+' '+o.vehiculo.make+' '+o.vehiculo.model).trim(),tablilla:o.vehiculo.tag,color:o.vehiculo.color,estado:estado,trabajo:o.servicios.map(function(s){return s.n;}).join(', '),entradaTime:o.fecha,readyTime:ready||null,maxHours:24,log:['Ingresado — '+new Date(o.fecha).toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});}
+  gar(oOpen,'working');
+  gar(oHoy,'ready',ago(0,13));
+  gar(oAyer,'entregado',ago(1,15));
+  // Clientes (con recordatorios de mantenimiento para el Home)
+  CLI.forEach(function(c,i){clientes.push({id:'CLI-demo-'+i,nombre:c[0],tel:c[1],email:'',vehiculos:[{tag:c[5],desc:(c[2]+' '+c[3]+' '+c[4])}],creado:ago(220-i*12)});});
+  clientes[0].nextReminder=dia(-4);
+  clientes[9].nextReminder=dia(1);
+  var citas=[
+    {id:'CITA-demo-1',cliente:'José Rivera',tel:'787-555-0134',fecha:dia(0),hora:'09:00',vehiculo:'2016 Toyota Corolla',servicio:'Cambio de aceite y filtro',direccion:'Calle Betances #12, Bayamón',estado:'agendada',creado:ago(2)},
+    {id:'CITA-demo-2',cliente:'Ana Torres',tel:'787-555-0345',fecha:dia(0),hora:'14:30',vehiculo:'2019 Toyota Tacoma',servicio:'Frenos delanteros',direccion:'Ave. Comerío km 3.2, Bayamón',estado:'agendada',creado:ago(1)},
+    {id:'CITA-demo-3',cliente:'Pedro Vázquez',tel:'787-555-0527',fecha:dia(-1),hora:'10:00',vehiculo:'2020 Kia Forte',servicio:'Diagnóstico check engine',direccion:'',estado:'agendada',creado:ago(1)},
+    {id:'CITA-demo-4',cliente:'Iris Morales',tel:'787-555-0701',fecha:dia(1),hora:'11:00',vehiculo:'2016 Mazda 3',servicio:'Rotación de gomas',direccion:'',estado:'completada',creado:ago(3)}
+  ];
+  var inventario=[
+    {id:'INV-demo-1',nombre:'Aceite sintético 5W-30 (qt)',cat:'Aceites',costo:6.5,precio:12,qty:28,min:12,loc:'Tablilla A1'},
+    {id:'INV-demo-2',nombre:'Filtro de aceite Toyota',cat:'Filtros',costo:4.2,precio:11,qty:9,min:4,loc:'Gaveta B2'},
+    {id:'INV-demo-3',nombre:'Filtro de aire Honda Civic',cat:'Filtros',costo:8.9,precio:19,qty:5,min:3,loc:'Gaveta B3'},
+    {id:'INV-demo-4',nombre:'Pastillas cerámicas (juego del.)',cat:'Frenos',costo:38,precio:72,qty:6,min:2,loc:'Tablilla C1'},
+    {id:'INV-demo-5',nombre:'Batería 24F 650CCA',cat:'Eléctrico',costo:118,precio:189,qty:1,min:2,loc:'Piso D'},
+    {id:'INV-demo-6',nombre:'Coolant universal (gal)',cat:'Fluidos',costo:9.8,precio:21,qty:11,min:4,loc:'Tablilla A3'},
+    {id:'INV-demo-7',nombre:'Bujías iridium NGK',cat:'Eléctrico',costo:9.5,precio:18,qty:16,min:8,loc:'Gaveta B1'},
+    {id:'INV-demo-8',nombre:'Wiper blades 22"',cat:'Exterior',costo:6.2,precio:15,qty:7,min:3,loc:'Tablilla C2'}
+  ];
+  var gastos=[
+    {id:'G-demo-1',desc:'Piezas — pedido AutoZone',cat:'Piezas',monto:412.80,fecha:dia(10)},
+    {id:'G-demo-2',desc:'Gasolina van',cat:'Transporte',monto:85,fecha:dia(6)},
+    {id:'G-demo-3',desc:'Herramienta: scanner OBD-II',cat:'Herramientas',monto:139.99,fecha:dia(3)},
+    {id:'G-demo-4',desc:'Seguro comercial (mensualidad)',cat:'Seguros',monto:120,fecha:dia(1)}
+  ];
+  return {ordenes:ordenes,clientes:clientes,garage:garage,gastos:gastos,suplidores:[],ordenesS:[],inventario:inventario,serviceParts:{},citas:citas,svcsCustom:[{id:'cs-demo-1',cat:'general',n:'Alineamiento 4 ruedas',p:89,c:0}],catsCustom:[],roCounter:num,settings:st,_demo:true,_demoAt:new Date().toISOString()};
+}
+
 loadDB();
 if(location.hash.slice(0,3)==='#s='){ renderCustomerStatus(); } else {
 // Registra el service worker — la app abre offline (señal mala en la calle)
@@ -2712,6 +2896,7 @@ if('serviceWorker' in navigator){
 var now=new Date();
 document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate();
 renderHome();
+demoBanner();
 
 // Hide splash after 1.2s — works on iOS Safari
 function hideSplash(){

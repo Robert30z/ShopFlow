@@ -359,6 +359,28 @@ function check(ok, name, detail) {
   const after = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, g: d.garage.length, orphans: d.garage.filter(g => !d.ordenes.find(o => o.id === g.roId)).length }; });
   check(after.o === 1 && after.orphans === 0, 'deleteRO cleans garage entry (no orphans)', JSON.stringify(after));
 
+  // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
+  const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });
+  await page.evaluate(`setTimeout(function(){enterDemo();},50)`); // reload va fuera del evaluate (destruye el contexto)
+  await page.waitForTimeout(2500);
+  const demo = await page.evaluate(() => ({
+    flag: !!DB._demo,
+    ordenes: DB.ordenes.length,
+    pill: !!document.getElementById('demo-pill'),
+    realSaved: localStorage.getItem('sf_v1_real') !== null,
+    fotos: DB.ordenes.some(o => (o.fotos || []).length > 0),
+    sigs: DB.ordenes.some(o => o.sigData && o.sigData.sig1),
+    abierta: DB.ordenes.some(o => o.estado === 'abierta'),
+    citas: DB.citas.length
+  }));
+  check(demo.flag && demo.ordenes >= 25 && demo.pill && demo.realSaved && demo.fotos && demo.sigs && demo.abierta && demo.citas >= 3, 'Demo mode seeds full dataset + banner + real-data snapshot', JSON.stringify({ o: demo.ordenes, citas: demo.citas, pill: demo.pill, saved: demo.realSaved }));
+  const demoBk = await page.evaluate(`(function(){DB.settings.backup={repo:'x/y',token:'t-fake'};var before=_cbTimer;scheduleCloudBackup();var scheduled=_cbTimer!==before&&_cbTimer!=null;cloudBackup(false);return {scheduled:scheduled,busy:_cbBusy};})()`);
+  check(!demoBk.scheduled && !demoBk.busy, 'Cloud backup fully paused while in demo', JSON.stringify(demoBk));
+  await page.evaluate(`setTimeout(function(){exitDemo();},50)`);
+  await page.waitForTimeout(2500);
+  const postDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n), flag: !!d._demo, snapGone: localStorage.getItem('sf_v1_real') === null, pill: !!document.getElementById('demo-pill') }; });
+  check(postDemo.o === preDemo.o && JSON.stringify(postDemo.svcs) === JSON.stringify(preDemo.svcs) && !postDemo.flag && postDemo.snapGone && !postDemo.pill, 'Exit demo restores real data exactly + clears snapshot', JSON.stringify({ before: preDemo.o, after: postDemo.o, snapGone: postDemo.snapGone }));
+
   console.log('\nPage errors: ' + (errors.join(' | ') || '(none)'));
   console.log(`\n=== ${failures === 0 ? 'SMOKE TEST PASSED' : failures + ' FAILURE(S)'} ===`);
   await browser.close();
