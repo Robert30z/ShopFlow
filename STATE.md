@@ -2,7 +2,24 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-12
+## Last updated: 2026-07-15
+
+## New 2026-07-15: MODO DEMO para vender (e745778) + kit de ventas fuera del repo
+Sales-support batch. In-app: **Modo demo** — Ajustes card toggles realistic sample data
+(29 órdenes over 8 weeks w/ canvas-generated fotos/firmas, citas hoy, garage in all 3 states,
+inventario w/ low-stock, gastos, seguimientos incl. winback, 1 orden abierta w/ inspección) so
+the app looks alive in a pitch. Real data snapshots to localStorage `sf_v1_real` and restores
+exactly on exit; floating red pill "MODO DEMO — toca para salir"; cloud backup HARD-PAUSED while
+`DB._demo` (scheduleCloudBackup/cloudBackup/restoreFromCloud all guarded, exportBackup warns) so
+demo data can never clobber the real GitHub backup. Smoke +3 checks (seed/pause/restore) = 69
+green, verified local AND live. NOTE: `enterDemo()`/`exitDemo()` call location.reload — in tests
+trigger via setTimeout outside the evaluate.
+Outside the repo (Desktop\ShopFlow-Ventas\): **reporte-kpi\** (node reporte.js <backup.json>
+[YYYY-MM] → branded Spanish monthly KPI PDF via ShopFlow/test playwright; gen_sample.js makes a
+fake taller to show prospects — this IS the "Reporte KPI $15/mes" product) and **deploy-clientes\**
+(nuevo-cliente.ps1 = org repos + push app + printed manual steps; actualizar-clientes.ps1 = fleet
+update; CHECKLIST.md = full ES onboarding). Deploy scripts parse-checked; need the GitHub org +
+Cloudflare account (one-time manual) before first real run.
 
 ## New 2026-07-12: Catálogo de servicios editable (admin) — for selling ShopFlow to other talleres
 Roberto is selling ShopFlow to other shops; each shop offers services not in the built-in menu
