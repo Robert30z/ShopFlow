@@ -429,6 +429,51 @@ function check(ok, name, detail) {
   })()`);
   check(segNew.den && segNew.cita && segNew.citaFirst, 'Seguimientos queue: denied-work 30d + cita-mañana (cita first)', JSON.stringify(segNew));
 
+  // ===== Promociones (combos a precio fijo) =====
+  const promo = await page.evaluate(`(async function(){
+    DB.promos.push({id:'pr-smoke',n:'Aceite y filtro te regalamos un lavado de motor',det:'Cambio de aceite y filtro + lavado de motor',p:120,hasta:'',on:true});
+    DB.promos.push({id:'pr-dead',n:'Promo vencida',det:'',p:50,hasta:'2020-01-01',on:true});
+    DB.promos.push({id:'pr-off',n:'Promo pausada',det:'',p:50,hasta:'',on:false});
+    saveDB();
+    go('ro');await new Promise(function(r){setTimeout(r,400);});
+    RO.servicios=[];activeCat='__promos';renderROSvcMenu();
+    var list=document.getElementById('ro-sl').innerHTML;
+    var chip=document.getElementById('ro-sc').innerHTML.includes('Promos');
+    addPromoRO('pr-smoke');
+    var s=RO.servicios[0];
+    return {chip:chip,shows:list.includes('lavado de motor'),hidesDead:!list.includes('vencida')&&!list.includes('pausada'),added:s&&s.ep===120&&s.promo===true&&s.n.includes('incluye')};
+  })()`);
+  check(promo.chip && promo.shows && promo.hidesDead && promo.added, 'Promo: 🎁 chip + only vigentes shown + adds combo line at fixed price', JSON.stringify(promo));
+
+  // ===== Descuento en $ o % con motivo =====
+  const desc = await page.evaluate(`(function(){
+    RO.servicios=[{id:'d1',uid:'ud1',n:'Test',p:100,ep:100,qty:1,parts:[],laborHours:0}];
+    RO.cortesia=false;RO.descuento=20;RO.descTipo='$';RO.descMotivo='cliente frecuente';
+    var totD=calcEst();
+    var okD=Math.abs(totD-(80*1.115))<0.01&&RO.descValor===20;
+    RO.descTipo='%';var totP=calcEst();
+    var okP=Math.abs(totP-(80*1.115))<0.01;
+    return {okD:okD,okP:okP,valor:RO.descValor};
+  })()`);
+  check(desc.okD && desc.okP, 'Descuento: $ fijo y % calculan bien y guardan descValor', JSON.stringify(desc));
+
+  // ===== Cortesía interna (el taller asume el costo) =====
+  const cort = await page.evaluate(`(function(){
+    RO.servicios=[{id:'c1',uid:'uc1',n:'Cambio de aceite',p:45,ep:45,qty:1,parts:[],laborHours:0}];
+    RO.descuento=0;RO.cortesia=true;RO.cortesiaMotivo='disculpa por demora';
+    var tot=calcEst();
+    var o={servicios:RO.servicios,cortesia:true,cortesiaMotivo:'disculpa por demora',descuento:0};
+    recalcROTotal(o);
+    DB.ordenes.push({id:'RO-CORT',fecha:new Date().toISOString(),cliente:'Cortesia Smoke',tel:'',vehiculo:{},servicios:o.servicios,estado:'pagado',pago:'Cortesía',cortesia:true,cortesiaMotivo:'disculpa por demora',cortesiaValor:o.cortesiaValor,descValor:0,total:0,insp:{}});
+    var ym=new Date().getFullYear()+'-'+('0'+(new Date().getMonth()+1)).slice(-2);
+    var csv=buildContableCSV(ym);
+    go('finanzas');renderKPIs();
+    var kpi=document.getElementById('f-kpi').innerHTML;
+    DB.ordenes=DB.ordenes.filter(function(x){return x.id!=='RO-CORT';});saveDB();RO.cortesia=false;RO.cortesiaMotivo='';
+    return {tot0:tot===0,valor:o.cortesiaValor===45&&o.total===0,csv:csv.includes('Cortesia')&&csv.includes('disculpa por demora'),kpi:kpi.includes('Regalado')&&kpi.includes('Cortesías')};
+  })()`);
+  check(cort.tot0 && cort.valor && cort.csv && cort.kpi, 'Cortesía: total $0 + cortesiaValor registrado + CSV con motivo + KPI Regalado', JSON.stringify(cort));
+
   // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
   const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });
   await page.evaluate(`setTimeout(function(){enterDemo();},50)`); // reload va fuera del evaluate (destruye el contexto)
