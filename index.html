@@ -341,8 +341,9 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       </div></div>
       <div class="card"><div class="ch"><i class="ti ti-cash"></i> Cobros y reseñas</div><div class="cb">
         <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">ATH Móvil (número o link de pago)</div><input id="set-ath" placeholder="787-000-0000 o athmovil.com/..." autocapitalize="off" oninput="saveSettings()"></div></div>
+        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Link de pago con tarjeta — Visa/MC/Amex (Stripe, PayPal o Square)</div><input id="set-cardlink" placeholder="https://buy.stripe.com/... o paypal.me/..." autocapitalize="off" oninput="saveSettings()"></div></div>
         <div class="fr1"><div class="fg"><div class="fl">Link de reseña de Google</div><input id="set-review" placeholder="https://g.page/r/..." autocapitalize="off" oninput="saveSettings()"></div></div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Se usan en los botones de cobro por WhatsApp y en los seguimientos (pedir reseña).</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Se usan en los botones de cobro por WhatsApp y en los seguimientos (pedir reseña). El link de tarjeta se crea gratis en stripe.com (Payment Links), paypal.me o Square — el cliente lo abre y paga con su tarjeta.</div>
       </div></div>
       <div class="card"><div class="ch"><i class="ti ti-tools"></i> Catálogo de servicios</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Añade los servicios propios de tu taller (ej: Alineamiento, Torneo de discos). Aparecen en el Menú y en las órdenes igual que los de fábrica, y se guardan permanente.</span></div>
@@ -595,7 +596,7 @@ function initRO(){
     setTimeout(fillROInputs,140);
     return;
   }
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',cortesia:false,cortesiaMotivo:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',cortesia:false,cortesiaMotivo:'',empresa:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
   if(_citaPrefill)applyCitaPrefill();
   curStep=0;
@@ -613,10 +614,39 @@ function continueRO(roId){
   go('ro');
 }
 function fillROInputs(){
-  var m={'c-n':RO.cliente,'c-t':RO.tel,'c-e':RO.email,'v-y':RO.vehiculo.year,'v-ma':RO.vehiculo.make,'v-mo':RO.vehiculo.model,'v-t':RO.vehiculo.tag,'v-c':RO.vehiculo.color,'v-o1':RO.vehiculo.odoIn,'v-o2':RO.vehiculo.odoOut,'v-vin':RO.vehiculo.vin,'v-q':RO.queja,'tech-n':RO.techNotes};
+  var m={'c-n':RO.cliente,'c-t':RO.tel,'c-e':RO.email,'c-emp':RO.empresa,'v-y':RO.vehiculo.year,'v-ma':RO.vehiculo.make,'v-mo':RO.vehiculo.model,'v-t':RO.vehiculo.tag,'v-c':RO.vehiculo.color,'v-o1':RO.vehiculo.odoIn,'v-o2':RO.vehiculo.odoOut,'v-vin':RO.vehiculo.vin,'v-q':RO.queja,'tech-n':RO.techNotes};
   Object.keys(m).forEach(function(id){var e=document.getElementById(id);if(e&&m[id])e.value=m[id];});
   Object.keys(RO.insp||{}).forEach(function(iid){setInsp('',iid,RO.insp[iid]);var n=document.getElementById('in-'+iid);if(n&&RO.inspNotes&&RO.inspNotes[iid])n.value=RO.inspNotes[iid];});
   renderROSO();restoreSigs();
+}
+// ---- perfil del cliente en el wizard: autocomplete + carros guardados ----
+function fillCliDatalists(){
+  var dl=document.getElementById('cli-dl');
+  if(dl)dl.innerHTML=DB.clientes.map(function(c){return '<option value="'+c.nombre.replace(/"/g,'&quot;')+'">';}).join('');
+  var emps={};DB.clientes.forEach(function(c){if(c.empresa)emps[c.empresa]=1;});DB.ordenes.forEach(function(o){if(o.empresa)emps[o.empresa]=1;});
+  var de=document.getElementById('emp-dl');
+  if(de)de.innerHTML=Object.keys(emps).map(function(e){return '<option value="'+e.replace(/"/g,'&quot;')+'">';}).join('');
+}
+function pickCli(name){
+  var chips=document.getElementById('cli-veh-chips');
+  var c=DB.clientes.find(function(x){return x.nombre.toLowerCase()===(name||'').toLowerCase();});
+  if(!c){if(chips)chips.innerHTML='';return;}
+  if(c.tel&&!RO.tel){RO.tel=c.tel;var t=document.getElementById('c-t');if(t)t.value=c.tel;}
+  if(c.email&&!RO.email){RO.email=c.email;var e=document.getElementById('c-e');if(e)e.value=c.email;}
+  if(c.empresa&&!RO.empresa){RO.empresa=c.empresa;var em=document.getElementById('c-emp');if(em)em.value=c.empresa;}
+  if(chips)chips.innerHTML=(c.vehiculos||[]).length?'<div class="fl" style="margin-bottom:4px">🚗 Carros de '+c.nombre.split(' ')[0]+' — toca uno para usarlo</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+c.vehiculos.map(function(v,i){return '<button class="btn sm" onclick="useCliVeh(\''+c.id+'\','+i+')" style="font-size:11px">'+(v.desc||'—')+(v.tag?' · '+v.tag:'')+'</button>';}).join('')+'</div>':'';
+}
+function useCliVeh(cid,i){
+  var c=DB.clientes.find(function(x){return x.id===cid;});if(!c)return;
+  var v=(c.vehiculos||[])[i];if(!v)return;
+  var p=(v.desc||'').split(' ');
+  RO.vehiculo.year=/^\d{4}$/.test(p[0])?p[0]:'';
+  RO.vehiculo.make=RO.vehiculo.year?(p[1]||''):(p[0]||'');
+  RO.vehiculo.model=p.slice(RO.vehiculo.year?2:1).join(' ');
+  RO.vehiculo.tag=v.tag||'';
+  if(v.vin)RO.vehiculo.vin=v.vin;
+  var m={'v-y':RO.vehiculo.year,'v-ma':RO.vehiculo.make,'v-mo':RO.vehiculo.model,'v-t':RO.vehiculo.tag,'v-vin':RO.vehiculo.vin||''};
+  Object.keys(m).forEach(function(id){var el=document.getElementById(id);if(el)el.value=m[id];});
 }
 
 function buildSteps(){
@@ -627,14 +657,14 @@ function buildPanes(){
   var w=document.getElementById('ro-panes-wrap');
   w.innerHTML=STEPS.map(function(s,i){return '<div class="pan'+(i===0?' active':'')+'" id="pan-'+i+'">'+buildPane(s.id)+'</div>';}).join('');
   setTimeout(function(){
-    initSigs();restoreSigs();renderROSvcMenu();
+    initSigs();restoreSigs();renderROSvcMenu();fillCliDatalists();if(RO.cliente)pickCli(RO.cliente);
     var se=document.getElementById('est-estado');if(se)se.value=(RO.estado==='abierta'||RO.estado==='pendiente')?'pendiente':'pagado';
     var sp2=document.getElementById('est-pago');if(sp2&&RO.pago)sp2.value=RO.pago;
   },50);
 }
 
 function buildPane(id){
-  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" placeholder="Juan García" oninput="RO.cliente=this.value"></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase();if(this.value.length===17)decodeVIN(this.value)"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
+  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" list="cli-dl" placeholder="Juan García" oninput="RO.cliente=this.value;pickCli(this.value)"><datalist id="cli-dl"></datalist></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Empresa / flota (opcional — agrupa órdenes y genera estado de cuenta)</div><input id="c-emp" list="emp-dl" placeholder="Ej: Pest Control Rivera" oninput="RO.empresa=this.value"><datalist id="emp-dl"></datalist></div></div><div id="cli-veh-chips" style="margin-top:4px"></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase();if(this.value.length===17)decodeVIN(this.value)"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
 
   if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Tira todas las fotos que necesites.</span></div><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Tomar / Seleccionar Fotos<input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
 
@@ -648,7 +678,7 @@ function buildPane(id){
 
   if(id==='denegados')return '<div class="tb2"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Ítems en ROJO de la inspección aparecen aquí automáticamente.</span></div><div id="den-auto"></div><div class="card"><div class="ch">Agregar denegado</div><div class="cb"><div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div><div class="fr"><div class="fg"><div class="fl">Precio estimado</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente</option></select></div></div><div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas al 10%, riesgo de seguridad..."></textarea></div></div><button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button></div></div><div id="den-list"></div><div id="den-sig-w" style="display:none"><div class="card"><div class="ch">Firma — reconocimiento denegados</div><div class="cb"><div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">El cliente reconoce haber sido informado y decide no autorizar estos servicios.</div><canvas id="sig-den" class="sig-pad" width="600" height="90"></canvas><div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div></div>';
 
-  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="RO.cortesia=this.checked;calcEst();document.getElementById(\'est-cort-m-row\').style.display=this.checked?\'block\':\'none\'"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
+  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="RO.cortesia=this.checked;calcEst();document.getElementById(\'est-cort-m-row\').style.display=this.checked?\'block\':\'none\'"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
   if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div><div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
@@ -1172,7 +1202,24 @@ function saveRO(){
   if(!saveDB())return;
   alert('Orden '+RO.id+' guardada. $'+RO.total.toFixed(2));go('home');
 }
-function autoSaveCli(){if(!RO.cliente)return;var ex=DB.clientes.find(function(c){return c.nombre.toLowerCase()===RO.cliente.toLowerCase();});var veh={tag:RO.vehiculo.tag,desc:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim()};if(!ex){DB.clientes.push({id:'CLI-'+Date.now(),nombre:RO.cliente,tel:RO.tel,email:RO.email,vehiculos:veh.tag?[veh]:[],nextReminder:RO.nextDate,creado:new Date().toISOString()});}else{if(veh.tag&&!ex.vehiculos.find(function(v){return v.tag===veh.tag;}))ex.vehiculos.push(veh);if(RO.nextDate)ex.nextReminder=RO.nextDate;}}
+function autoSaveCli(){
+  if(!RO.cliente)return;
+  var ex=DB.clientes.find(function(c){return c.nombre.toLowerCase()===RO.cliente.toLowerCase();});
+  var veh={tag:RO.vehiculo.tag||'',desc:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),vin:RO.vehiculo.vin||''};
+  var hasVeh=!!(veh.tag||veh.desc);
+  if(!ex){
+    DB.clientes.push({id:'CLI-'+Date.now(),nombre:RO.cliente,tel:RO.tel,email:RO.email,empresa:RO.empresa||'',vehiculos:hasVeh?[veh]:[],nextReminder:RO.nextDate,creado:new Date().toISOString()});
+  }else{
+    // mismo carro = misma tablilla; sin tablilla, misma descripción (año marca modelo)
+    var dup=(ex.vehiculos||[]).find(function(v){return (veh.tag&&v.tag===veh.tag)||(!veh.tag&&!v.tag&&v.desc===veh.desc);});
+    if(hasVeh&&!dup)(ex.vehiculos=ex.vehiculos||[]).push(veh);
+    else if(dup&&veh.vin&&!dup.vin)dup.vin=veh.vin;
+    if(RO.tel&&!ex.tel)ex.tel=RO.tel;
+    if(RO.email&&!ex.email)ex.email=RO.email;
+    if(RO.empresa)ex.empresa=RO.empresa;
+    if(RO.nextDate)ex.nextReminder=RO.nextDate;
+  }
+}
 
 function exportPDF(){
   if(typeof window.jspdf==='undefined'){alert('PDF cargando...');return;}
@@ -1495,7 +1542,144 @@ function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value
 
 function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){return !q||o.cliente.toLowerCase().includes(q)||(o.id||'').toLowerCase().includes(q)||((o.vehiculo&&o.vehiculo.tag)||'').toLowerCase().includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
 
-function renderClientes(){var q=(document.getElementById('cli-q')||{value:''}).value.toLowerCase();var list=DB.clientes.filter(function(c){return !q||c.nombre.toLowerCase().includes(q);});var el=document.getElementById('clientes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin clientes. Se crean automáticamente al guardar una RO.</div>';return;}el.innerHTML=list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var total=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).reduce(function(s,o){return s+(o.total||0);},0);var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).length;return '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100)"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1"><div style="font-size:13px;font-weight:700">'+c.nombre+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div></div></div>';}).join('');}
+function renderClientes(){var q=(document.getElementById('cli-q')||{value:''}).value.toLowerCase();var list=DB.clientes.filter(function(c){return !q||c.nombre.toLowerCase().includes(q)||(c.empresa||'').toLowerCase().includes(q);});var el=document.getElementById('clientes-body');if(!el)return;
+  var h=flotasHTML(q);
+  if(!list.length&&!h){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin clientes. Se crean automáticamente al guardar una RO.</div>';return;}
+  el.innerHTML=h+list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var total=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).reduce(function(s,o){return s+(o.total||0);},0);var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).length;var nv=(c.vehiculos||[]).length;return '<div onclick="openCliDetail(\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100);cursor:pointer"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+c.nombre+(c.empresa?' <span class="badge bb" style="font-size:9px">'+c.empresa+'</span>':'')+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+(nv?' · '+nv+' carro'+(nv>1?'s':''):'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div><i class="ti ti-chevron-right" style="color:var(--gray-300)"></i></div></div>';}).join('');
+}
+// ============ CUENTAS DE FLOTA / EMPRESA ============
+function flotaEmpresas(){
+  var emps={};
+  DB.clientes.forEach(function(c){if(c.empresa)emps[c.empresa]=1;});
+  DB.ordenes.forEach(function(o){if(o.empresa)emps[o.empresa]=1;});
+  return Object.keys(emps).sort();
+}
+function flotaStats(emp){
+  var ords=DB.ordenes.filter(function(o){return o.empresa===emp&&o.estado!=='abierta';});
+  var cls=DB.clientes.filter(function(c){return c.empresa===emp;});
+  var tags={};
+  cls.forEach(function(c){(c.vehiculos||[]).forEach(function(v){tags[v.tag||v.desc]=1;});});
+  ords.forEach(function(o){if(o.vehiculo&&(o.vehiculo.tag||o.vehiculo.model))tags[o.vehiculo.tag||((o.vehiculo.year||'')+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim()]=1;});
+  var fact=ords.reduce(function(s,o){return s+(o.total||0);},0);
+  var pend=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  return {ords:ords,clientes:cls,vehiculos:Object.keys(tags).length,facturado:fact,pendiente:pend};
+}
+function flotasHTML(q){
+  var emps=flotaEmpresas().filter(function(e){return !q||e.toLowerCase().includes(q);});
+  if(!emps.length)return '';
+  return '<div style="padding:10px 16px 4px;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">🚛 Flotas / Empresas</div>'+emps.map(function(e){
+    var st=flotaStats(e);
+    return '<div style="background:var(--white);border-bottom:1px solid var(--gray-100);padding:10px 16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">🚛 '+e+'</div><div style="font-size:11px;color:var(--gray-400)">'+st.vehiculos+' vehículo'+(st.vehiculos!==1?'s':'')+' · '+st.ords.length+' orden'+(st.ords.length!==1?'es':'')+' · facturado $'+st.facturado.toFixed(0)+(st.pendiente>0?' · <span style="color:var(--red);font-weight:700">debe $'+st.pendiente.toFixed(2)+'</span>':'')+'</div></div><div style="display:flex;gap:6px;flex-shrink:0"><button class="btn sm" onclick="flotaPDF(\''+e.replace(/'/g,'')+'\')" title="Estado de cuenta PDF"><i class="ti ti-file-type-pdf"></i></button><button class="btn sm" onclick="waFlota(\''+e.replace(/'/g,'')+'\')" title="Resumen por WhatsApp" style="background:var(--green-light);border-color:var(--green);color:var(--green)"><i class="ti ti-brand-whatsapp"></i></button></div></div></div>';
+  }).join('')+'<div style="padding:10px 16px 4px;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">Clientes</div>';
+}
+function buildFlotaStmt(emp,ym){
+  var p=ym.split('-'),y=+p[0],m=+p[1];
+  var rows=[];var fact=0,pagado=0,pendMes=0;
+  DB.ordenes.forEach(function(o){
+    if(o.empresa!==emp||o.estado==='abierta')return;
+    var d=new Date(o.fecha);if(d.getFullYear()!==y||d.getMonth()!==m-1)return;
+    var veh=o.vehiculo?(((o.vehiculo.year||'')+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim()+(o.vehiculo.tag?' ('+o.vehiculo.tag+')':'')):'—';
+    var svcs=(o.servicios||[]).map(function(s){return s.n||s.nombre;}).join(', ');
+    var tot=o.total||0;fact+=tot;
+    var abo=o.abonado||0;
+    if(o.estado==='pagado')pagado+=tot;else{pagado+=abo;pendMes+=Math.max(0,tot-abo);}
+    rows.push({fecha:d.toLocaleDateString('es-PR'),id:o.id,cliente:o.cliente,veh:veh,svcs:svcs,total:tot,estado:o.estado,cortesia:!!o.cortesia});
+  });
+  var pendTotal=DB.ordenes.filter(function(o){return o.empresa===emp&&o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  return {rows:rows,facturado:fact,pagado:pagado,pendMes:pendMes,pendTotal:pendTotal};
+}
+function flotaPDF(emp){
+  if(typeof window.jspdf==='undefined'){alert('PDF cargando...');return;}
+  var now=new Date(),def=now.getFullYear()+'-'+('0'+(now.getMonth()+1)).slice(-2);
+  var ym=prompt('¿Mes del estado de cuenta? (YYYY-MM)',def);if(!ym)return;
+  var st=buildFlotaStmt(emp,ym);
+  if(!st.rows.length&&!st.pendTotal){alert('No hay órdenes de '+emp+' en '+ym+' ni balance pendiente.');return;}
+  var doc=new window.jspdf.jsPDF();var y=0;
+  doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
+  doc.text((DB.settings.shopName||'Pit Stop')+' — Estado de Cuenta',14,10);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');
+  doc.text((DB.settings.shopAddress||'Bayamón, Puerto Rico')+(DB.settings.shopPhone?' · '+DB.settings.shopPhone:''),14,17);
+  doc.text(ym,196,13,{align:'right'});
+  y=30;doc.setTextColor(0,0,0);
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('EMPRESA: '+emp,14,y);y+=7;
+  doc.setFontSize(8);doc.setFont(undefined,'bold');
+  doc.text('Fecha',14,y);doc.text('Orden',34,y);doc.text('Vehículo',56,y);doc.text('Servicios',105,y);doc.text('Total',180,y);doc.text('Estado',196,y,{align:'right'});
+  y+=1;doc.setDrawColor(33,150,243);doc.line(14,y,196,y);y+=4;
+  doc.setFont(undefined,'normal');
+  st.rows.forEach(function(r){
+    if(y>270){doc.addPage();y=20;}
+    var vl=doc.splitTextToSize(r.veh,46);var sl=doc.splitTextToSize(r.svcs||'—',70);
+    doc.text(r.fecha,14,y);doc.text(r.id,34,y);doc.text(vl,56,y);doc.text(sl,105,y);
+    doc.text('$'+r.total.toFixed(2),180,y);
+    doc.text(r.cortesia?'CORTESÍA':(r.estado==='pagado'?'PAGADO':'PENDIENTE'),196,y,{align:'right'});
+    y+=Math.max(vl.length,sl.length)*4+2;
+  });
+  y+=2;doc.line(120,y,196,y);y+=5;
+  doc.setFont(undefined,'bold');
+  doc.text('Facturado '+ym+':',120,y);doc.text('$'+st.facturado.toFixed(2),196,y,{align:'right'});y+=5;
+  doc.text('Pagado:',120,y);doc.text('$'+st.pagado.toFixed(2),196,y,{align:'right'});y+=5;
+  doc.setTextColor(226,59,46);
+  doc.text('BALANCE PENDIENTE (total):',120,y);doc.text('$'+st.pendTotal.toFixed(2),196,y,{align:'right'});
+  doc.setTextColor(0,0,0);y+=9;
+  doc.setFont(undefined,'normal');doc.setFontSize(7);
+  doc.text('Precios incluyen IVU 11.5%. Generado con ShopFlow el '+new Date().toLocaleDateString('es-PR')+'.',14,y);
+  doc.save('EstadoCuenta_'+emp.replace(/[^a-z0-9]/gi,'_')+'_'+ym+'.pdf');
+}
+function waFlota(emp){
+  var now=new Date(),def=now.getFullYear()+'-'+('0'+(now.getMonth()+1)).slice(-2);
+  var ym=prompt('¿Mes del resumen? (YYYY-MM)',def);if(!ym)return;
+  var st=buildFlotaStmt(emp,ym);
+  var msg='📋 *Estado de cuenta — '+emp+'* ('+ym+')\n'+
+    (DB.settings.shopName||'Pit Stop')+'\n\n'+
+    st.rows.map(function(r){return '• '+r.fecha+' '+r.veh+' — '+(r.svcs||'servicio')+' — $'+r.total.toFixed(2)+(r.cortesia?' (cortesía 🤝)':(r.estado==='pagado'?' ✓':' ⏳'));}).join('\n')+
+    '\n\nFacturado: $'+st.facturado.toFixed(2)+'\nPagado: $'+st.pagado.toFixed(2)+
+    '\n*Balance pendiente: $'+st.pendTotal.toFixed(2)+'*'+
+    (DB.settings.athMovil?'\n\n💳 ATH Móvil: '+DB.settings.athMovil:'')+
+    (DB.settings.cardLink?'\n💳 Tarjeta: '+DB.settings.cardLink:'');
+  var cli=DB.clientes.find(function(c){return c.empresa===emp&&c.tel;});
+  var url=cli?'https://wa.me/'+waNum(cli.tel)+'?text='+encodeURIComponent(msg):'https://wa.me/?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+}
+// ============ PERFIL DE CLIENTE ============
+function openCliDetail(cid){
+  var c=DB.clientes.find(function(x){return x.id===cid;});if(!c)return;
+  var el=document.getElementById('clientes-body');if(!el)return;
+  var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
+  var total=ords.reduce(function(s,o){return s+(o.total||0);},0);
+  var pend=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();
+  el.innerHTML='<div style="padding:12px 16px">'+
+    '<button class="btn sm" onclick="renderClientes()" style="margin-bottom:10px"><i class="ti ti-arrow-left"></i> Clientes</button>'+
+    '<div class="card"><div class="cb" style="display:flex;gap:12px;align-items:center">'+
+      '<div style="width:48px;height:48px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800">'+c.nombre+'</div>'+
+      (c.empresa?'<div style="font-size:11px;margin-top:2px">🚛 <b>'+c.empresa+'</b></div>':'')+
+      '<div style="font-size:12px;color:var(--gray-400);margin-top:2px">'+(c.tel?'<a href="https://wa.me/'+waNum(c.tel)+'" target="_blank" style="color:var(--green);font-weight:700;text-decoration:none">'+c.tel+'</a>':'sin teléfono')+(c.email?' · '+c.email:'')+'</div></div></div></div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+      '<div style="flex:1;text-align:center;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--r-sm);padding:8px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">ÓRDENES</div><div style="font-size:15px;font-weight:700">'+ords.length+'</div></div>'+
+      '<div style="flex:1;text-align:center;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--r-sm);padding:8px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">TOTAL</div><div style="font-size:15px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div></div>'+
+      '<div style="flex:1;text-align:center;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--r-sm);padding:8px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">DEBE</div><div style="font-size:15px;font-weight:700;color:'+(pend>0?'var(--red)':'var(--gray-400)')+'">$'+pend.toFixed(0)+'</div></div>'+
+    '</div>'+
+    '<div class="card"><div class="ch"><i class="ti ti-car"></i> Carros ('+(c.vehiculos||[]).length+')</div><div class="cb">'+
+      ((c.vehiculos||[]).map(function(v){return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span style="font-weight:700">🚗 '+(v.desc||'—')+'</span><span style="color:var(--gray-400)">'+(v.tag||'')+(v.vin?' · VIN '+v.vin.slice(-6):'')+'</span></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin carros registrados — se añaden solos con cada orden.</div>')+
+    '</div></div>'+
+    '<div class="card"><div class="ch"><i class="ti ti-clipboard-list"></i> Historial</div><div class="cb">'+
+      (ords.map(function(o){return '<div onclick="openRODetail(\''+o.id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;font-size:12px"><div><span style="font-weight:700">'+o.id+'</span> <span style="color:var(--gray-400)">'+new Date(o.fecha).toLocaleDateString('es-PR')+'</span></div><div><span style="font-weight:700;margin-right:6px">$'+(o.total||0).toFixed(2)+'</span><span class="badge '+(o.estado==='pagado'?'bg':o.estado==='abierta'?'bb':'ba')+'">'+o.estado+'</span></div></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin órdenes todavía.</div>')+
+    '</div></div>'+
+    '<button class="btn p full" onclick="newROForCli(\''+cid+'\')"><i class="ti ti-plus"></i> Nueva orden para '+c.nombre.split(' ')[0]+'</button>'+
+  '</div>';
+}
+function newROForCli(cid){
+  var c=DB.clientes.find(function(x){return x.id===cid;});if(!c)return;
+  go('ro');
+  setTimeout(function(){
+    RO.cliente=c.nombre;RO.tel=c.tel||'';RO.email=c.email||'';RO.empresa=c.empresa||'';
+    fillROInputs();
+    var em=document.getElementById('c-emp');if(em)em.value=RO.empresa;
+    pickCli(c.nombre);
+  },260);
+}
 
 function renderMenuCats(){var el=document.getElementById('menu-cats');if(!el)return;el.innerHTML=allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderMenuSvcs()">'+cc.l+'</div>';}).join('');}
 function renderMenuSvcs(){renderMenuCats();var q=(document.getElementById('menu-q')||{value:''}).value.toLowerCase();var svcs=getSvcs(activeCat).filter(function(s){return !q||s.n.toLowerCase().includes(q);});var el=document.getElementById('menu-body');if(!el)return;el.innerHTML=svcs.map(function(s){var m=s.c>0?((s.p-s.c)/s.p*100):100;var parts=DB.serviceParts[s.id]||[];var partsCount=parts.length;var partsCost=parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-lg);padding:11px 13px;background:var(--white);margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="flex:1"><div style="font-size:13px;font-weight:700">'+s.n+'</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Precio: <strong style="color:var(--red)">$'+s.p+'</strong>'+(s.c>0?' · Costo base: $'+s.c+' · '+m.toFixed(0)+'%':'')+'</div>'+(partsCount>0?'<div style="font-size:11px;color:var(--green);margin-top:3px;font-weight:600"><i class="ti ti-package"></i> '+partsCount+' pieza'+(partsCount>1?'s':'')+' registrada'+(partsCount>1?'s':'')+' · $'+partsCost.toFixed(2)+' en costos</div>':'')+'</div></div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn sm" onclick="openPartsModal(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\')" style="flex:1;justify-content:center"><i class="ti ti-receipt"></i> Piezas'+(partsCount>0?' ('+partsCount+')':'')+'</button><button class="btn sm p" onclick="addMO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> Agregar</button></div></div>';}).join('')||'<div style="text-align:center;padding:20px;color:var(--gray-400)">Sin resultados.</div>';}
@@ -2100,7 +2284,7 @@ function openRODetail(roId){
     if(_ab>0)html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:8px 11px;margin-bottom:8px;font-size:13px;display:flex;justify-content:space-between"><span>Abonado: <b>$'+_ab.toFixed(2)+'</b></span><span style="color:var(--red)">Balance: <b>$'+_bal.toFixed(2)+'</b></span></div>';
     html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+_bal.toFixed(2)+'</button>';
     html+='<button class="btn full" onclick="registrarAbono(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-plus"></i> Registrar abono (pago parcial)</button>';
-    if(o.tel)html+='<button class="btn full" onclick="waCobro(\''+o.id+'\')" style="margin-bottom:8px;background:#F76D00;color:#fff;border-color:#F76D00"><i class="ti ti-brand-whatsapp"></i> Cobrar por WhatsApp (ATH Móvil)</button>';
+    if(o.tel)html+='<button class="btn full" onclick="waCobro(\''+o.id+'\')" style="margin-bottom:8px;background:#F76D00;color:#fff;border-color:#F76D00"><i class="ti ti-brand-whatsapp"></i> Cobrar por WhatsApp (ATH / tarjeta)</button>';
   }
   if(Object.keys(o.insp||{}).length){
     html+='<div style="display:flex;gap:8px;margin-bottom:8px">'+
@@ -2209,6 +2393,7 @@ function initAjustes(){
   document.getElementById('set-addr').value=DB.settings.shopAddress||'';
   document.getElementById('set-aikey').value=DB.settings.aiKey||'';
   var sa=document.getElementById('set-ath');if(sa)sa.value=DB.settings.athMovil||'';
+  var sc=document.getElementById('set-cardlink');if(sc)sc.value=DB.settings.cardLink||'';
   var sv=document.getElementById('set-review');if(sv)sv.value=DB.settings.reviewLink||'';
   updAiKeyStatus();
   var bk=DB.settings.backup||{};
@@ -2295,6 +2480,7 @@ function saveSettings(){
   DB.settings.shopAddress=document.getElementById('set-addr').value;
   DB.settings.aiKey=document.getElementById('set-aikey').value.trim();
   var sa=document.getElementById('set-ath');if(sa)DB.settings.athMovil=sa.value.trim();
+  var sc=document.getElementById('set-cardlink');if(sc)DB.settings.cardLink=sc.value.trim();
   var sv=document.getElementById('set-review');if(sv)DB.settings.reviewLink=sv.value.trim();
   updAiKeyStatus();
   DB.settings.backup=DB.settings.backup||{};
@@ -2813,10 +2999,13 @@ function dviPDF(roId){
 function waCobro(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var ath=(DB.settings.athMovil||'').trim();
+  var card=(DB.settings.cardLink||'').trim();
+  var bal=Math.max(0,(o.total||0)-(o.abonado||0));
   var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
-    'Balance pendiente de la orden '+o.id+': *$'+(o.total||0).toFixed(2)+'*\n\n'+
-    (ath?'Puede pagar por ATH Móvil: '+ath+'\n':'')+
-    'También aceptamos efectivo'+(ath?'':' y ATH Móvil')+'. ¡Gracias!';
+    'Balance pendiente de la orden '+o.id+': *$'+bal.toFixed(2)+'*\n\n'+
+    (ath?'💳 ATH Móvil: '+ath+'\n':'')+
+    (card?'💳 Tarjeta (Visa/MC/Amex): '+card+'\n':'')+
+    'También aceptamos efectivo'+(ath||card?'':' y ATH Móvil')+'. ¡Gracias!';
   waSend(o.tel,msg);
 }
 
@@ -3199,6 +3388,9 @@ function buildDemoDB(){
     {id:'G-demo-3',desc:'Herramienta: scanner OBD-II',cat:'Herramientas',monto:139.99,fecha:dia(3)},
     {id:'G-demo-4',desc:'Seguro comercial (mensualidad)',cat:'Seguros',monto:120,fecha:dia(1)}
   ];
+  // flota demo: dos clientes + sus órdenes bajo la misma empresa (vende el estado de cuenta)
+  clientes[1].empresa='Pest Control Del Toro';clientes[4].empresa='Pest Control Del Toro';
+  ordenes.forEach(function(o){if(o.cliente===clientes[1].nombre||o.cliente===clientes[4].nombre)o.empresa='Pest Control Del Toro';});
   return {ordenes:ordenes,clientes:clientes,garage:garage,gastos:gastos,suplidores:[],ordenesS:[],inventario:inventario,serviceParts:{},citas:citas,svcsCustom:[{id:'cs-demo-1',cat:'general',n:'Alineamiento 4 ruedas',p:89,c:0}],catsCustom:[],
     tecnicos:[{id:'TEC-1',nombre:'Luis',com:15,activo:true,creado:ago(90)},{id:'TEC-2',nombre:'Kevin',com:10,activo:true,creado:ago(80)},{id:'TEC-3',nombre:'Ángel',com:0,activo:true,creado:ago(60)}],tecCounter:3,
     jobsCustom:[{id:'job-demo-1',n:'Front Brake Service',ep:120,laborHours:1,parts:[{name:'Pastillas delanteras cerámicas',partNum:'',supplier:'AutoZone',cost:38,sellPrice:72,qty:1,receipt:''}]}],

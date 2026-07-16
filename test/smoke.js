@@ -474,6 +474,60 @@ function check(ok, name, detail) {
   })()`);
   check(cort.tot0 && cort.valor && cort.csv && cort.kpi, 'Cortesía: total $0 + cortesiaValor registrado + CSV con motivo + KPI Regalado', JSON.stringify(cort));
 
+  // ===== Perfil de cliente: autocomplete + multi-carro + empresa =====
+  const perfil = await page.evaluate(`(async function(){
+    DB.clientes.push({id:'CLI-smoke-p',nombre:'Flota Tester',tel:'787-555-0300',email:'',empresa:'Pest Smoke Inc',
+      vehiculos:[{tag:'AAA-111',desc:'2019 Ford Transit',vin:''},{tag:'BBB-222',desc:'2021 Ram ProMaster',vin:''}],creado:new Date().toISOString()});
+    saveDB();
+    go('ro');await new Promise(function(r){setTimeout(r,400);});
+    fillCliDatalists();
+    var dl=document.getElementById('cli-dl').innerHTML.includes('Flota Tester');
+    RO.tel='';RO.empresa='';
+    pickCli('Flota Tester');
+    var chips=document.getElementById('cli-veh-chips').innerHTML;
+    useCliVeh('CLI-smoke-p',1);
+    return {dl:dl,telAuto:RO.tel==='787-555-0300',empAuto:RO.empresa==='Pest Smoke Inc',
+      chips:chips.includes('Transit')&&chips.includes('ProMaster'),
+      veh:RO.vehiculo.year==='2021'&&RO.vehiculo.make==='Ram'&&RO.vehiculo.model==='ProMaster'&&RO.vehiculo.tag==='BBB-222'};
+  })()`);
+  check(perfil.dl && perfil.telAuto && perfil.empAuto && perfil.chips && perfil.veh, 'Perfil cliente: autocomplete + autofill + chips de carros + picker llena vehículo', JSON.stringify(perfil));
+
+  // ===== Cuentas de flota: agrupación + estado de cuenta =====
+  const flota = await page.evaluate(`(function(){
+    var now=new Date().toISOString();
+    DB.ordenes.push({id:'RO-FL1',fecha:now,cliente:'Flota Tester',tel:'787-555-0300',empresa:'Pest Smoke Inc',vehiculo:{year:'2019',make:'Ford',model:'Transit',tag:'AAA-111'},servicios:[{id:'f1',n:'Cambio de aceite',ep:45,qty:1,parts:[],laborHours:0}],estado:'pagado',total:50.18,insp:{},denegados:[]});
+    DB.ordenes.push({id:'RO-FL2',fecha:now,cliente:'Flota Tester',tel:'787-555-0300',empresa:'Pest Smoke Inc',vehiculo:{year:'2021',make:'Ram',model:'ProMaster',tag:'BBB-222'},servicios:[{id:'f2',n:'Frenos',ep:100,qty:1,parts:[],laborHours:0}],estado:'pendiente',abonado:11.50,total:111.50,insp:{},denegados:[]});
+    saveDB();
+    go('clientes');renderClientes();
+    var body=document.getElementById('clientes-body').innerHTML;
+    var ym=new Date().getFullYear()+'-'+('0'+(new Date().getMonth()+1)).slice(-2);
+    var st=buildFlotaStmt('Pest Smoke Inc',ym);
+    openCliDetail('CLI-smoke-p');
+    var det=document.getElementById('clientes-body').innerHTML;
+    // limpiar
+    DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-FL1'&&o.id!=='RO-FL2';});
+    DB.clientes=DB.clientes.filter(function(c){return c.id!=='CLI-smoke-p';});
+    saveDB();
+    return {card:body.includes('Pest Smoke Inc')&&body.includes('Flotas'),
+      rows:st.rows.length===2,fact:Math.abs(st.facturado-161.68)<0.01,
+      pagado:Math.abs(st.pagado-61.68)<0.01,pend:Math.abs(st.pendTotal-100)<0.01,
+      detail:det.includes('Flota Tester')&&det.includes('Transit')&&det.includes('RO-FL2')};
+  })()`);
+  check(flota.card && flota.rows && flota.fact && flota.pagado && flota.pend && flota.detail, 'Flota: card en Clientes + estado de cuenta calcula facturado/pagado/pendiente + perfil abre', JSON.stringify(flota));
+
+  // ===== Cobro con link de tarjeta (Visa/MC via payment link) =====
+  const card = await page.evaluate(`(function(){
+    DB.settings.cardLink='https://buy.stripe.com/test123';
+    DB.ordenes.push({id:'RO-CARD',fecha:new Date().toISOString(),cliente:'Card Tester',tel:'787-555-0400',vehiculo:{},servicios:[],estado:'pendiente',total:100,abonado:25,insp:{},denegados:[]});
+    var captured='';var oldOpen=window.open;window.open=function(u){captured=u;return null;};
+    waCobro('RO-CARD');
+    window.open=oldOpen;
+    var msg=decodeURIComponent(captured);
+    DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-CARD';});DB.settings.cardLink='';saveDB();
+    return {stripe:msg.includes('buy.stripe.com/test123'),balance:msg.includes('$75.00'),visa:msg.includes('Visa/MC')};
+  })()`);
+  check(card.stripe && card.balance && card.visa, 'Cobro WhatsApp incluye link de tarjeta + balance real (total − abono)', JSON.stringify(card));
+
   // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
   const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });
   await page.evaluate(`setTimeout(function(){enterDemo();},50)`); // reload va fuera del evaluate (destruye el contexto)
