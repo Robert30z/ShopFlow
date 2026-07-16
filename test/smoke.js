@@ -359,6 +359,76 @@ function check(ok, name, detail) {
   const after = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, g: d.garage.length, orphans: d.garage.filter(g => !d.ordenes.find(o => o.id === g.roId)).length }; });
   check(after.o === 1 && after.orphans === 0, 'deleteRO cleans garage entry (no orphans)', JSON.stringify(after));
 
+  // ===== Técnicos: usernames automáticos TEC-n + asignación + reloj =====
+  const tec = await page.evaluate(`(function(){
+    document.getElementById('tec-n').value='Luis';document.getElementById('tec-c').value='15';addTecnico();
+    document.getElementById('tec-n').value='Kevin';addTecnico();
+    var d=JSON.parse(localStorage.getItem('sf_v1'));
+    return {ids:DB.tecnicos.map(function(t){return t.id;}),com:DB.tecnicos[0].com,persisted:d.tecnicos.length===2,listed:document.getElementById('tec-list').innerHTML.includes('TEC-2')};
+  })()`);
+  check(tec.ids.join(',') === 'TEC-1,TEC-2' && tec.com === 15 && tec.persisted && tec.listed, 'Técnicos get auto usernames TEC-1/TEC-2 + persist + listed', JSON.stringify(tec));
+  const asg = await page.evaluate(`(function(){
+    var o=DB.ordenes[0];asignarTec(o.id,'TEC-1');
+    var d=JSON.parse(localStorage.getItem('sf_v1'));
+    return {saved:d.ordenes[0].tecnico==='TEC-1',sel:tecOptionsHTML('TEC-1').includes('value="TEC-1" selected')};
+  })()`);
+  check(asg.saved && asg.sel, 'Técnico assigned to job + selector marks it', JSON.stringify(asg));
+  const clk = await page.evaluate(`(function(){
+    var o=DB.ordenes[0];iniciarReloj(o.id);
+    o.reloj.in=new Date(Date.now()-65000).toISOString();
+    detenerReloj(o.id);
+    return {secs:o.relojSecs,tec:o.relojLog[0].tec,stopped:!o.reloj};
+  })()`);
+  check(clk.secs >= 60 && clk.tec === 'TEC-1' && clk.stopped, 'Time clock accumulates seconds under the técnico', JSON.stringify(clk));
+
+  // ===== Trabajos guardados (canned jobs con precio+horas+piezas) =====
+  const job = await page.evaluate(`(async function(){
+    go('ro');await new Promise(function(r){setTimeout(r,400);});
+    RO.servicios.push({id:'x1',uid:'u1',n:'Frenos Smoke Job',p:100,ep:100,qty:1,laborHours:1.5,parts:[{name:'Pastillas',partNum:'',supplier:'',cost:10,sellPrice:25,qty:2,receipt:''}]});
+    saveJobTemplate(RO.servicios.length-1);
+    var d=JSON.parse(localStorage.getItem('sf_v1'));var j=d.jobsCustom[d.jobsCustom.length-1];
+    RO.servicios=[];activeCat='__jobs';renderROSvcMenu();
+    var shown=document.getElementById('ro-sl').innerHTML.includes('Frenos Smoke Job');
+    addJobRO(DB.jobsCustom[DB.jobsCustom.length-1].id);
+    var s=RO.servicios[0];
+    return {saved:!!j&&j.laborHours===1.5&&j.parts.length===1,shown:shown,reused:s&&s.laborHours===1.5&&s.parts.length===1&&s.parts[0].sellPrice===25,total:jobTotal(j)};
+  })()`);
+  check(job.saved && job.shown && job.reused && job.total > 200, 'Trabajo guardado: saves + shows in ⭐ Guardados + re-adds with hours/parts', JSON.stringify(job));
+
+  // ===== Recuperar denegado: cliente aprobó → mover a servicios =====
+  const den = await page.evaluate(`(function(){
+    var o=DB.ordenes[0];o.estado='pagado';o.tel='787-555-0100';
+    var oldTotal=o.total||0;var oldSvcs=(o.servicios||[]).length;
+    o.denegados=o.denegados||[];o.denegados.push({nombre:'Rotores traseros Smoke',precio:200,urgencia:'urgente'});
+    apruebaDen(o.id,o.denegados.length-1);
+    return {moved:o.servicios.length===oldSvcs+1&&o.servicios[o.servicios.length-1].n==='Rotores traseros Smoke',estado:o.estado,abonado:o.abonado===oldTotal,recalc:o.total>oldTotal};
+  })()`);
+  check(den.moved && den.estado === 'pendiente' && den.abonado && den.recalc, 'Denegado aprobado moves to servicios + recalcs total + credits abono', JSON.stringify(den));
+
+  // ===== IVU en P&L + CSV para el contable =====
+  const ivu = await page.evaluate(`(function(){
+    go('finanzas');renderPL();
+    var ym=new Date().getFullYear()+'-'+('0'+(new Date().getMonth()+1)).slice(-2);
+    var csv=buildContableCSV(ym);
+    return {row:document.getElementById('f-pl').innerHTML.includes('IVU cobrado'),tecCard:document.getElementById('f-pl').innerHTML.includes('TEC-1'),csvBtn:document.getElementById('f-pl').innerHTML.includes('exportContableCSV'),csvOrden:csv.includes(DB.ordenes[0].id),csvSecciones:csv.includes('ORDENES')&&csv.includes('GASTOS')&&csv.includes('TOTAL')};
+  })()`);
+  check(ivu.row && ivu.tecCard && ivu.csvBtn && ivu.csvOrden && ivu.csvSecciones, 'P&L shows IVU cobrado + técnicos card; CSV has órdenes/IVU/gastos', JSON.stringify(ivu));
+
+  // ===== Seguimientos: denegado 30d + recordatorio de cita mañana =====
+  const segNew = await page.evaluate(`(function(){
+    var D=86400000;
+    DB.ordenes.push({id:'RO-SEGDEN',fecha:new Date(Date.now()-35*D).toISOString(),cliente:'Seg Den',tel:'787-555-0177',vehiculo:{},servicios:[],denegados:[{nombre:'Amortiguadores',precio:260,urgencia:'pronto'}],estado:'pagado',total:100,insp:{}});
+    var tm=new Date(Date.now()+D);var ymd=tm.getFullYear()+'-'+('0'+(tm.getMonth()+1)).slice(-2)+'-'+('0'+tm.getDate()).slice(-2);
+    DB.citas.push({id:'CITA-SEG',cliente:'Cita Seg',tel:'787-555-0178',fecha:ymd,hora:'10:00',vehiculo:'',servicio:'Frenos',direccion:'',estado:'agendada',creado:new Date().toISOString()});
+    var types=getSeguimientos().map(function(s){return s.type;});
+    // limpiar los seeds para no ensuciar los checks del modo demo
+    DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-SEGDEN';});
+    DB.citas=DB.citas.filter(function(c){return c.id!=='CITA-SEG';});
+    saveDB();
+    return {den:types.indexOf('den')>-1,cita:types.indexOf('cita')>-1,citaFirst:types[0]==='cita'};
+  })()`);
+  check(segNew.den && segNew.cita && segNew.citaFirst, 'Seguimientos queue: denied-work 30d + cita-mañana (cita first)', JSON.stringify(segNew));
+
   // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
   const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });
   await page.evaluate(`setTimeout(function(){enterDemo();},50)`); // reload va fuera del evaluate (destruye el contexto)

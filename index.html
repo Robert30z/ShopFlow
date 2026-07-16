@@ -350,6 +350,13 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="fr"><div class="fg"><div class="fl">Precio ($)</div><input id="cs-p" type="number" step="0.01" placeholder="0.00"></div><div class="fg"><div class="fl">Categoría</div><select id="cs-c"></select></div></div>
         <button class="btn a full" onclick="addCustomSvc()" style="margin-top:8px"><i class="ti ti-plus"></i> Agregar al catálogo</button>
         <div id="cs-list" style="margin-top:10px"></div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--gray-100)"><div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">⭐ Trabajos guardados</div><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Se guardan desde una orden con el botón ⭐ en un servicio ya configurado (precio + horas + piezas) — luego los añades completos con un toque.</div><div id="job-list"></div></div>
+      </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-users"></i> Técnicos del taller</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Añade tu equipo — cada técnico recibe un usuario automático (TEC-1, TEC-2…). Asigna el técnico en cada orden y ve sus órdenes, horas y comisiones en Finanzas → P&amp;L.</span></div>
+        <div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="tec-n" placeholder="Ej: Luis"></div><div class="fg"><div class="fl">% comisión (opcional)</div><input id="tec-c" type="number" step="0.5" min="0" placeholder="0"></div></div>
+        <button class="btn a full" onclick="addTecnico()" style="margin-top:8px"><i class="ti ti-user-plus"></i> Agregar técnico</button>
+        <div id="tec-list" style="margin-top:10px"></div>
       </div></div>
       <div class="card"><div class="ch"><i class="ti ti-sparkles"></i> Inteligencia Artificial</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Las funciones AI (diagnóstico, piezas, labor) usan tu propia API key de Anthropic. Créala en console.anthropic.com. Se guarda solo en este dispositivo.</span></div>
@@ -385,7 +392,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
+var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
 var TERMS_VERSION=3,TERMS_DATE='2026-07-03';
@@ -433,7 +440,7 @@ function saveDB(){
     return false;
   }
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
 
@@ -635,7 +642,7 @@ function buildPane(id){
 
   if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" max="100" value="0" style="width:52px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"> %</span></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
-  if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
+  if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div><div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
 }
 
@@ -970,10 +977,20 @@ function updInspB(){
 }
 
 function renderROSvcMenu(){
-  var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
+  var hasJobs=(DB.jobsCustom||[]).length>0;
+  if(activeCat==='__jobs'&&!hasJobs)activeCat='aceites';
+  var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=(hasJobs?'<div class="cp'+(activeCat==='__jobs'?' active':'')+'" onclick="activeCat=\'__jobs\';renderROSvcMenu()">⭐ Guardados</div>':'')+allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
   var q=(document.getElementById('ro-sq')||{value:''}).value.toLowerCase();
+  var el=document.getElementById('ro-sl');if(!el)return;
+  if(activeCat==='__jobs'){
+    el.innerHTML=(DB.jobsCustom||[]).filter(function(j){return !q||j.n.toLowerCase().includes(q);}).map(function(j){
+      var extra=[];if(j.laborHours)extra.push(j.laborHours+'h labor');if((j.parts||[]).length)extra.push(j.parts.length+' pieza'+(j.parts.length>1?'s':''));
+      return '<div class="svc-row"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">'+j.n+'</div>'+(extra.length?'<div style="font-size:10px;color:var(--gray-400)">'+extra.join(' · ')+'</div>':'')+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+jobTotal(j).toFixed(0)+'</span><button class="btn sm p" onclick="addJobRO(\''+j.id+'\')" style="padding:5px 10px">+</button></div>';
+    }).join('');
+    return;
+  }
   var svcs=getSvcs(activeCat).filter(function(s){return !q||s.n.toLowerCase().includes(q);});
-  var el=document.getElementById('ro-sl');if(el)el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('');
+  el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('');
 }
 function addSvcRO(id,n,p){RO.servicios.push({id:id,uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:n,p:p,qty:1,ep:p,parts:[],laborHours:0});renderROSO();}
 function addManualSvc(){
@@ -993,7 +1010,7 @@ function renderROSO(){
     var laborCost=s.laborHours*rate;
     var lineTotal=(s.ep||0)*(s.qty||1)+partsSell+laborCost;
     return '<div style="background:var(--white);border-radius:var(--r-md);border:1.5px solid var(--gray-200);margin-bottom:8px;padding:10px 12px;box-shadow:0 1px 2px rgba(0,0,0,.04)">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="oi-n" style="font-size:13px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><button onclick="removeROSvc('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="oi-n" style="font-size:13px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><button onclick="saveJobTemplate('+i+')" title="Guardar como trabajo (precio+horas+piezas)" style="background:none;border:none;cursor:pointer;color:var(--amber);font-size:16px"><i class="ti ti-star"></i></button><button onclick="removeROSvc('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
         '<div><div class="fl" style="margin-bottom:2px">Labor / servicio ($)</div><input type="number" value="'+s.ep+'" step="0.01" style="font-size:12px;font-weight:700;color:var(--red)" oninput="RO.servicios['+i+'].ep=parseFloat(this.value)||0;renderROSO()"></div>'+
         '<div><div class="fl" style="margin-bottom:2px">Horas labor <span style="color:var(--blue)">@$'+rate+'</span></div><div style="display:flex;gap:4px"><input type="number" value="'+s.laborHours+'" step="0.05" min="0" inputmode="decimal" placeholder="0.0" style="font-size:12px;font-weight:700" oninput="RO.servicios['+i+'].laborHours=parseFloat(this.value)||0;updROSub()" onblur="renderROSO()"><button class="btn sm blue" onclick="aiLaborEstimate('+i+')" style="padding:5px 8px;flex-shrink:0" title="Estimar con AI"><i class="ti ti-sparkles"></i></button></div></div>'+
@@ -1459,6 +1476,19 @@ function renderPL(){
   });
   var ganBruta=ing-partsCost;
   var neta=ganBruta-gastos;
+  // IVU cobrado este mes (11.5% incluido en cada total) — para la planilla
+  var ivuMes=ords.reduce(function(s,o){return o.estado==='abierta'?s:s+((o.total||0)-(o.total||0)/1.115);},0);
+  // Resumen por técnico del mes
+  var tecCard='';
+  if((DB.tecnicos||[]).length){
+    tecCard='<div class="card" style="margin-top:10px"><div class="ch"><i class="ti ti-users"></i> Técnicos — '+MESES[m]+'</div><div class="cb">'+DB.tecnicos.map(function(t){
+      var tor=ords.filter(function(o){return o.tecnico===t.id&&o.estado!=='abierta';});
+      var ting=tor.reduce(function(s,o){return s+(o.total||0);},0);
+      var tsecs=0;ords.forEach(function(o){(o.relojLog||[]).forEach(function(r){if(r.tec===t.id)tsecs+=(r.secs||0);});});
+      var com=t.com?(ting/1.115)*t.com/100:0;
+      return '<div style="padding:7px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:700"><span style="font-family:monospace;color:var(--blue)">'+t.id+'</span> · '+t.nombre+'</span><span style="font-size:12px;font-weight:700;color:var(--green)">$'+ting.toFixed(0)+'</span></div><div style="font-size:10px;color:var(--gray-400)">'+tor.length+' '+(tor.length===1?'orden':'órdenes')+' · '+(tsecs/3600).toFixed(1)+' h de reloj'+(t.com?' · comisión ('+t.com+'%): <b style="color:var(--navy)">$'+com.toFixed(2)+'</b>':'')+'</div></div>';
+    }).join('')+'<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Comisión calculada sobre el subtotal sin IVU de las órdenes asignadas.</div></div></div>';
+  }
   var el=document.getElementById('f-pl');if(!el)return;
   el.innerHTML='<div style="padding:14px 16px"><div style="text-align:center;font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:10px">'+MESES[m]+' '+a+'</div>'+
     '<div class="sg sg4" style="margin-bottom:14px">'+
@@ -1469,6 +1499,7 @@ function renderPL(){
     '</div>'+
     '<div class="card"><div class="ch">P&L — '+MESES[m]+' '+a+'</div><div class="cb">'+
       '<div class="er"><span>Ingresos brutos</span><span style="font-weight:700;color:var(--green)">$'+ing.toFixed(2)+'</span></div>'+
+      '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, IVU cobrado (11.5%)</span><span style="color:var(--navy)">$'+ivuMes.toFixed(2)+'</span></div>'+
       (laborRev>0?'<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, labor</span><span style="color:var(--navy)">$'+laborRev.toFixed(2)+'</span></div>':'')+
       '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">— Costo de piezas</span><span style="color:var(--red)">— $'+partsCost.toFixed(2)+'</span></div>'+
       '<div class="er" style="font-weight:700"><span>Ganancia bruta</span><span>$'+ganBruta.toFixed(2)+'</span></div>'+
@@ -1481,7 +1512,9 @@ function renderPL(){
       '</div>'+
       (partsSell>0?'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-100)"><div style="font-size:11px;color:var(--gray-400);font-weight:700;margin-bottom:6px">GANANCIA EN PIEZAS</div><div style="display:flex;gap:6px"><div style="flex:1;background:var(--red-light);border-radius:5px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--gray-400);font-weight:700">COSTO</div><div style="color:var(--red);font-weight:700;font-size:13px">$'+partsCost.toFixed(2)+'</div></div><div style="flex:1;background:var(--blue-light);border-radius:5px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--gray-400);font-weight:700">VENTA</div><div style="color:var(--blue);font-weight:700;font-size:13px">$'+partsSell.toFixed(2)+'</div></div><div style="flex:1;background:var(--green-light);border-radius:5px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--gray-400);font-weight:700">GANANCIA</div><div style="color:var(--green);font-weight:700;font-size:13px">$'+(partsSell-partsCost).toFixed(2)+'</div></div></div></div>':'')+
     '</div></div>'+
-    '<button class="btn p full" style="margin-top:10px" onclick="addIngManual()"><i class="ti ti-plus"></i> Registrar ingreso manual</button>'+
+    tecCard+
+    '<button class="btn full" style="margin-top:10px" onclick="exportContableCSV()"><i class="ti ti-file-spreadsheet"></i> Exportar CSV para el contable (órdenes + IVU + gastos)</button>'+
+    '<button class="btn p full" style="margin-top:8px" onclick="addIngManual()"><i class="ti ti-plus"></i> Registrar ingreso manual</button>'+
   '</div>';
 }
 function addIngManual(){var desc=prompt('Descripción:');if(!desc)return;var monto=parseFloat(prompt('Monto ($):'));if(isNaN(monto))return;DB.ordenes.push({id:'ING-'+Date.now().toString().slice(-6),fecha:new Date().toISOString(),cliente:desc,tel:'',vehiculo:{},servicios:[{id:'m',n:desc,p:monto,qty:1,ep:monto}],total:monto,pago:'Cash',estado:'pagado',insp:{},denegados:[]});saveDB();renderPL();}
@@ -1957,6 +1990,19 @@ function openRODetail(roId){
     '<span style="color:var(--gray-400)">Tablilla</span><span>'+((o.vehiculo&&o.vehiculo.tag)||'—')+'</span>'+
     '<span style="color:var(--gray-400)">Odómetro</span><span>'+((o.vehiculo&&o.vehiculo.odoIn)||'—')+' → '+((o.vehiculo&&o.vehiculo.odoOut)||'—')+' mi</span>'+
   '</div>'+(o.queja?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400)">Queja:</span> '+o.queja+'</div>':'')+'</div></div>';
+  // Técnico asignado + reloj de trabajo (tiempo real vs facturado)
+  var horasReales=((o.relojSecs||0)+(o.reloj?Math.max(0,Math.round((Date.now()-new Date(o.reloj.in).getTime())/1000)):0))/3600;
+  var horasFact=(o.servicios||[]).reduce(function(s,sv){return s+(sv.laborHours||0)*(sv.qty||1);},0);
+  html+='<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico y tiempo</div><div class="cb">'+
+    ((DB.tecnicos||[]).length?'<div class="fl" style="margin-bottom:3px">Técnico asignado</div><select onchange="asignarTec(\''+o.id+'\',this.value)">'+tecOptionsHTML(o.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade técnicos en Ajustes ⚙️ para asignar quién hace el trabajo.</div>')+
+    '<div style="margin-top:9px">'+
+      (o.reloj?'<button class="btn sm full" onclick="detenerReloj(\''+o.id+'\')" style="background:var(--red);color:#fff;border-color:var(--red)"><i class="ti ti-player-pause"></i> Detener reloj ('+(tecName(o.reloj.tec)||'sin técnico')+')</button>':'<button class="btn sm full" onclick="iniciarReloj(\''+o.id+'\')"><i class="ti ti-player-play"></i> Iniciar reloj de trabajo</button>')+
+    '</div>'+
+    ((horasReales>0||horasFact>0||o.reloj)?'<div style="display:flex;gap:6px;margin-top:8px">'+
+      '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:5px;padding:6px"><div style="font-size:9px;color:var(--gray-400);font-weight:700">TIEMPO REAL</div><div style="font-weight:700;font-size:13px">'+horasReales.toFixed(2)+' h'+(o.reloj?' ⏱':'')+'</div></div>'+
+      '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:5px;padding:6px"><div style="font-size:9px;color:var(--gray-400);font-weight:700">FACTURADAS</div><div style="font-weight:700;font-size:13px">'+horasFact.toFixed(2)+' h</div></div>'+
+    '</div>':'')+
+  '</div></div>';
   // Inspection
   if(reds.length||ambers.length){
     html+='<div class="card"><div class="ch"><i class="ti ti-clipboard-check"></i> Inspección</div><div class="cb">';
@@ -1981,9 +2027,13 @@ function openRODetail(roId){
   }
   // Denied services
   if(denConf.length){
-    html+='<div class="card"><div class="ch" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Servicios denegados</div><div class="cb">'+
-      denConf.map(function(d){return '<div style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:600">'+d.nombre+'</span><span style="font-size:12px;color:var(--red)">$'+(d.precio||0).toFixed(2)+'</span></div>'+(d.nota?'<div style="font-size:10px;color:var(--gray-400);font-style:italic">'+d.nota+'</div>':'')+'</div>';}).join('')+
-      '<div style="font-size:11px;color:var(--gray-400);margin-top:8px;font-style:italic">El cliente fue informado y decidió no autorizar estos servicios.</div>'+
+    html+='<div class="card"><div class="ch" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Servicios denegados</div><div class="cb">';
+    (o.denegados||[]).forEach(function(d,di){
+      if(d.auto&&!d.confirmed)return;
+      html+='<div style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:600">'+d.nombre+'</span><span style="font-size:12px;color:var(--red)">$'+(d.precio||0).toFixed(2)+'</span></div>'+(d.nota?'<div style="font-size:10px;color:var(--gray-400);font-style:italic">'+d.nota+'</div>':'')+
+        ((d.precio||0)>0?'<button class="btn sm full" onclick="apruebaDen(\''+o.id+'\','+di+')" style="margin-top:5px;background:var(--green-light);color:var(--green);border-color:var(--green-light)"><i class="ti ti-arrow-back-up"></i> Cliente aprobó — mover a servicios</button>':'')+'</div>';
+    });
+    html+='<div style="font-size:11px;color:var(--gray-400);margin-top:8px;font-style:italic">El cliente fue informado y decidió no autorizar estos servicios.</div>'+
     '</div></div>';
   }
   // Next maintenance
@@ -2117,6 +2167,7 @@ function initAjustes(){
   updBackupStatus();
   var db=document.getElementById('demo-btn');
   if(db)db.innerHTML=DB._demo?'<i class="ti ti-door-exit"></i> Salir del demo (vuelven tus datos reales)':'<i class="ti ti-masks-theater"></i> Activar modo demo';
+  renderTecnicos();renderJobsAdmin();
   renderCatalogAdmin();
 }
 // ============ CATÁLOGO DE SERVICIOS DEL TALLER ============
@@ -2455,6 +2506,20 @@ function getSeguimientos(){
     if(!last)return;
     if(now-last>=180*D&&(!c.winbackAt||now-new Date(c.winbackAt).getTime()>90*D))out.push({type:'wb',c:c});
   });
+  // Trabajo denegado hace 30+ días: dinero que quedó sobre la mesa
+  DB.ordenes.forEach(function(o){
+    if(o.estado==='abierta'||!o.tel||!waNum(o.tel)||o.segDen)return;
+    var den=(o.denegados||[]).filter(function(d){return (!d.auto||d.confirmed)&&(d.precio||0)>0;});
+    if(!den.length)return;
+    var age=now-new Date(o.fecha).getTime();
+    if(age>=30*D&&age<=120*D)out.push({type:'den',o:o,den:den});
+  });
+  // Recordatorio de cita: mañana
+  var tm=new Date(now+D),tmYMD=tm.getFullYear()+'-'+('0'+(tm.getMonth()+1)).slice(-2)+'-'+('0'+tm.getDate()).slice(-2);
+  DB.citas.forEach(function(c){
+    if(c.estado!=='agendada'||!c.tel||!waNum(c.tel)||c.remAt)return;
+    if(c.fecha===tmYMD)out.unshift({type:'cita',c:c});
+  });
   return out;
 }
 function segRow(t,fn,color){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+color+'"><div style="font-size:12px;font-weight:600;flex:1">'+t+'</div><button onclick="'+fn+'" style="background:#25D366;border:none;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-brand-whatsapp"></i> Enviar</button></div>';}
@@ -2462,8 +2527,10 @@ function renderHomeSegs(){
   var el=document.getElementById('home-segs');if(!el)return;
   var segs=getSeguimientos().slice(0,6);
   el.innerHTML=segs.length?segs.map(function(s){
+    if(s.type==='cita')return segRow('📅 '+s.c.cliente+' — recordar cita de MAÑANA '+(s.c.hora||''),'waCitaRem(\''+s.c.id+'\')','var(--green)');
     if(s.type==='fu')return segRow('💬 '+s.o.cliente+' — ¿todo bien después del servicio? ('+s.o.id+')','waFollowUp(\''+s.o.id+'\')','var(--blue)');
     if(s.type==='rev')return segRow('⭐ '+s.o.cliente+' — pedir reseña de Google','waReview(\''+s.o.id+'\')','var(--amber)');
+    if(s.type==='den')return segRow('💰 '+s.o.cliente+' — trabajo denegado pendiente ($'+s.den.reduce(function(t,d){return t+(d.precio||0);},0).toFixed(0)+')','waDenied(\''+s.o.id+'\')','var(--navy)');
     return segRow('👋 '+s.c.nombre+' — 6+ meses sin visita','waWinback(\''+s.c.id+'\')','var(--red)');
   }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Al día — sin seguimientos pendientes.</div>';
 }
@@ -2710,6 +2777,160 @@ function renderCustomerStatus(){
     +'<div style="text-align:center;color:#aaa;font-size:11px;margin-top:22px">Presupuesto antes de trabajar · Garantía 30 días · '+E(d.n)+'</div></div>';
 }
 
+// ============ TÉCNICOS (usuarios TEC-1, TEC-2… + reloj + comisiones) ============
+function addTecnico(){
+  var n=(document.getElementById('tec-n')||{value:''}).value.trim();
+  if(!n){alert('Escribe el nombre del técnico.');return;}
+  var c=parseFloat((document.getElementById('tec-c')||{value:''}).value);if(isNaN(c)||c<0)c=0;
+  DB.tecCounter=(DB.tecCounter||0)+1;
+  DB.tecnicos.push({id:'TEC-'+DB.tecCounter,nombre:n,com:c,activo:true,creado:new Date().toISOString()});
+  var tn=document.getElementById('tec-n');if(tn)tn.value='';var tc=document.getElementById('tec-c');if(tc)tc.value='';
+  saveDB();renderTecnicos();
+}
+function editTecnico(id){
+  var t=DB.tecnicos.find(function(x){return x.id===id;});if(!t)return;
+  var n=prompt('Nombre del técnico:',t.nombre);if(n===null)return;
+  if(n.trim())t.nombre=n.trim();
+  var c=prompt('% de comisión (sobre subtotal sin IVU de sus órdenes):',t.com||0);
+  if(c!==null&&!isNaN(parseFloat(c))&&parseFloat(c)>=0)t.com=parseFloat(c);
+  saveDB();renderTecnicos();
+}
+function delTecnico(id){
+  var t=DB.tecnicos.find(function(x){return x.id===id;});if(!t)return;
+  if(!confirm('¿Eliminar a '+t.id+' · '+t.nombre+'?\n\nSus órdenes viejas mantienen el registro.'))return;
+  DB.tecnicos=DB.tecnicos.filter(function(x){return x.id!==id;});
+  saveDB();renderTecnicos();
+}
+function tecName(id){if(!id)return '';var t=(DB.tecnicos||[]).find(function(x){return x.id===id;});return t?(t.id+' · '+t.nombre):id;}
+function tecOptionsHTML(sel){return '<option value="">— Sin asignar —</option>'+(DB.tecnicos||[]).map(function(t){return '<option value="'+t.id+'"'+(sel===t.id?' selected':'')+'>'+t.id+' · '+t.nombre+'</option>';}).join('');}
+function renderTecnicos(){
+  var el=document.getElementById('tec-list');if(!el)return;
+  el.innerHTML=(DB.tecnicos||[]).length?DB.tecnicos.map(function(t){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:6px">'+
+      '<span style="font-family:monospace;font-size:11px;font-weight:800;color:var(--blue);background:var(--blue-light);border-radius:5px;padding:2px 7px">'+t.id+'</span>'+
+      '<span style="flex:1;font-size:13px;font-weight:700">'+t.nombre+(t.com?' <span style="font-weight:400;color:var(--gray-400);font-size:11px">· '+t.com+'% com.</span>':'')+'</span>'+
+      '<button onclick="editTecnico(\''+t.id+'\')" style="background:none;border:none;cursor:pointer;font-size:14px">✏️</button>'+
+      '<button onclick="delTecnico(\''+t.id+'\')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:15px">✖</button>'+
+    '</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray-400)">Sin técnicos todavía — añade tu equipo arriba.</div>';
+}
+function asignarTec(roId,tid){var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;o.tecnico=tid;saveDB();}
+// Reloj de trabajo: tiempo REAL en el carro vs horas facturadas
+function iniciarReloj(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  if(o.reloj){alert('El reloj de esta orden ya está corriendo.');return;}
+  o.reloj={in:new Date().toISOString(),tec:o.tecnico||''};
+  saveDB();openRODetail(roId);
+}
+function detenerReloj(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o||!o.reloj)return;
+  var secs=Math.max(0,Math.round((Date.now()-new Date(o.reloj.in).getTime())/1000));
+  o.relojSecs=(o.relojSecs||0)+secs;
+  o.relojLog=o.relojLog||[];
+  o.relojLog.push({tec:o.reloj.tec,in:o.reloj.in,out:new Date().toISOString(),secs:secs});
+  o.reloj=null;
+  saveDB();openRODetail(roId);
+}
+
+// ============ TRABAJOS GUARDADOS (canned jobs: precio + horas + piezas en un toque) ============
+function jobTotal(j){var rate=DB.settings.laborRate||103;return (j.ep||0)+(j.laborHours||0)*rate+(j.parts||[]).reduce(function(s,p){return s+p.sellPrice*p.qty;},0);}
+function saveJobTemplate(i){
+  var s=RO.servicios[i];if(!s)return;
+  DB.jobsCustom.push(JSON.parse(JSON.stringify({id:'job-'+Date.now(),n:s.n,ep:s.ep||0,laborHours:s.laborHours||0,parts:s.parts||[]})));
+  saveDB();renderROSvcMenu();
+  alert('⭐ Trabajo guardado: "'+s.n+'"\n\nLo encuentras en el paso Servicios bajo "⭐ Guardados" — con precio, horas y piezas incluidas. Se administra en Ajustes → Catálogo.');
+}
+function addJobRO(id){
+  var j=(DB.jobsCustom||[]).find(function(x){return x.id===id;});if(!j)return;
+  var c=JSON.parse(JSON.stringify(j));
+  RO.servicios.push({id:j.id,uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:c.n,p:c.ep,ep:c.ep,qty:1,parts:c.parts||[],laborHours:c.laborHours||0});
+  renderROSO();
+}
+function delJob(id){
+  if(!confirm('¿Eliminar este trabajo guardado? (No afecta órdenes existentes.)'))return;
+  DB.jobsCustom=DB.jobsCustom.filter(function(x){return x.id!==id;});
+  saveDB();renderJobsAdmin();
+}
+function renderJobsAdmin(){
+  var el=document.getElementById('job-list');if(!el)return;
+  el.innerHTML=(DB.jobsCustom||[]).length?DB.jobsCustom.map(function(j){
+    var extra=[];if(j.laborHours)extra.push(j.laborHours+'h labor');if((j.parts||[]).length)extra.push(j.parts.length+' pieza'+(j.parts.length>1?'s':''));
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:6px">'+
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+j.n+'</div>'+(extra.length?'<div style="font-size:10px;color:var(--gray-400)">'+extra.join(' · ')+'</div>':'')+'</div>'+
+      '<span style="font-size:12px;font-weight:700;color:var(--red)">$'+jobTotal(j).toFixed(0)+'</span>'+
+      '<button onclick="delJob(\''+j.id+'\')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:15px">✖</button>'+
+    '</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray-400)">Ninguno todavía.</div>';
+}
+
+// ============ RECUPERAR TRABAJO DENEGADO (cliente aprobó después) ============
+function recalcROTotal(o){
+  var rate=DB.settings.laborRate||103,sub=0;
+  (o.servicios||[]).forEach(function(i){sub+=(i.ep||0)*(i.qty||1)+(i.laborHours||0)*rate+(i.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);});
+  var ad=sub*(1-(o.descuento||0)/100);
+  o.total=Math.round(ad*1.115*100)/100;
+}
+function apruebaDen(roId,di){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var d=(o.denegados||[])[di];if(!d)return;
+  if(!confirm('¿El cliente aprobó "'+d.nombre+'" ($'+(d.precio||0).toFixed(2)+')?\n\nSe mueve a servicios y el total se recalcula.'))return;
+  if(o.estado==='pagado'){o.abonado=o.total||0;o.estado='pendiente';} // ya pagó el total viejo — queda como abono del nuevo
+  o.denegados.splice(di,1);
+  o.servicios=o.servicios||[];
+  o.servicios.push({id:'den-'+Date.now(),uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:d.nombre,p:d.precio||0,ep:d.precio||0,qty:1,parts:[],laborHours:0});
+  recalcROTotal(o);
+  saveDB();openRODetail(roId);
+}
+
+// ============ CONTABLE: IVU + export CSV ============
+function buildContableCSV(ym){
+  var p=ym.split('-'),y=+p[0],m=+p[1];
+  var esc=function(v){v=String(v==null?'':v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  var rows=['ORDENES '+ym,'Fecha,Orden,Cliente,Estado,Pago,Tecnico,Subtotal,IVU,Total'];
+  var tS=0,tI=0,tT=0;
+  DB.ordenes.forEach(function(o){
+    if(o.estado==='abierta')return;
+    var d=new Date(o.fecha);if(d.getFullYear()!==y||d.getMonth()!==m-1)return;
+    var tot=o.total||0,sub=tot/1.115,ivu=tot-sub;tS+=sub;tI+=ivu;tT+=tot;
+    rows.push([d.toLocaleDateString('es-PR'),o.id,esc(o.cliente),o.estado,esc(o.pago||''),esc(tecName(o.tecnico)),sub.toFixed(2),ivu.toFixed(2),tot.toFixed(2)].join(','));
+  });
+  rows.push(',,,,,TOTAL,'+tS.toFixed(2)+','+tI.toFixed(2)+','+tT.toFixed(2));
+  rows.push('');rows.push('GASTOS '+ym);rows.push('Fecha,Descripcion,Categoria,Monto');
+  var tG=0;
+  (DB.gastos||[]).forEach(function(g){
+    var d=new Date(g.fecha+'T12:00:00');if(d.getFullYear()!==y||d.getMonth()!==m-1)return;
+    tG+=(g.monto||0);rows.push([g.fecha,esc(g.desc),esc(g.cat||''),(g.monto||0).toFixed(2)].join(','));
+  });
+  rows.push(',,TOTAL,'+tG.toFixed(2));
+  return '﻿'+rows.join('\n'); // BOM para que Excel abra acentos bien
+}
+function exportContableCSV(){
+  var now=new Date(),def=now.getFullYear()+'-'+('0'+(now.getMonth()+1)).slice(-2);
+  var ym=prompt('¿Mes a exportar para el contable? (YYYY-MM)',def);if(!ym)return;
+  if(!/^\d{4}-\d{2}$/.test(ym)){alert('Formato inválido — usa YYYY-MM, ej: '+def);return;}
+  var blob=new Blob([buildContableCSV(ym)],{type:'text/csv;charset=utf-8'});
+  var url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='ShopFlow_contable_'+ym+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+}
+
+// ============ SEGUIMIENTOS NUEVOS: denegados 30d + recordatorio de cita ============
+function waDenied(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var den=(o.denegados||[]).filter(function(d){return (!d.auto||d.confirmed)&&(d.precio||0)>0;});
+  if(!den.length)return;
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
+  var lineas=den.map(function(d){return '• '+d.nombre+' — $'+(d.precio||0).toFixed(2);}).join('\n');
+  waSend(o.tel,'Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nCuando atendimos '+veh+' quedaron pendientes estos trabajos que le recomendé:\n'+lineas+'\n\n¿Le coordino una cita esta semana para resolverlos? Vamos hasta donde usted esté. 🔧');
+  o.segDen=new Date().toISOString();saveDB();renderHomeSegs();
+}
+function waCitaRem(citaId){
+  var c=DB.citas.find(function(x){return x.id===citaId;});if(!c)return;
+  waSend(c.tel,'Saludos '+c.cliente+' 👋 le recuerda '+(DB.settings.shopName||'Pit Stop')+':\n\n📅 Su cita es MAÑANA a las '+(c.hora||'')+(c.servicio?' — '+c.servicio:'')+(c.vehiculo?' ('+c.vehiculo+')':'')+'.\n\n¿Confirmamos? Si necesita moverla, avíseme sin problema. 🔧');
+  c.remAt=new Date().toISOString();saveDB();renderHomeSegs();
+}
+
 // ============ MODO DEMO (para vender ShopFlow) ============
 // Llena la app con datos de ejemplo realistas para enseñarla a un prospecto.
 // Los datos reales se guardan en localStorage 'sf_v1_real' y vuelven al salir.
@@ -2803,7 +3024,7 @@ function buildDemoDB(){
       terms:{v:(typeof TERMS_VERSION!=='undefined'?TERMS_VERSION:3),fecha:ago(daysAgo,9),text:(typeof DISC!=='undefined'?DISC:'')},
       auth1:null,insp:opts.insp||{},servicios:svcs,denegados:[],descuento:0,
       pago:opts.pago||'ATH Móvil',estado:opts.estado||'pagado',nextDate:dia(daysAgo-150),
-      techNotes:opts.notes||'',total:0};
+      techNotes:opts.notes||'',tecnico:'TEC-'+(1+(num%3)),total:0};
     o.total=totalOf(svcs);
     o.auth1={fecha:ago(daysAgo,9),total:o.total,rate:rate,items:svcs.map(function(s){return{n:s.n,ep:s.ep||0,qty:s.qty||1,laborHours:s.laborHours||0,partsTotal:(s.parts||[]).reduce(function(ps,p){return ps+p.sellPrice*p.qty;},0)};})};
     if(o.estado==='pagado')o.pagadoFecha=ago(daysAgo,16);
@@ -2849,6 +3070,9 @@ function buildDemoDB(){
   ordenes.slice(-10).forEach(function(o){if(o.estado==='abierta')return;o.sigData={sig1:sigA,sig2:sigB};o.sigTimes={sig1:o.fecha,sig2:o.pagadoFecha||o.fecha};});
   oHoy.fotos=[{d:_demoFoto(oHoy.vehiculo.make+' '+oHoy.vehiculo.model,210),t:oHoy.fecha}];
   oAyer.fotos=[{d:_demoFoto(oAyer.vehiculo.make+' '+oAyer.vehiculo.model,320),t:oAyer.fecha}];
+  // Reloj de trabajo en las órdenes recientes (para el resumen de técnicos)
+  oHoy.relojSecs=6120;oHoy.relojLog=[{tec:oHoy.tecnico,in:ago(0,9),out:ago(0,10),secs:6120}];
+  oAyer.relojSecs=9900;oAyer.relojLog=[{tec:oAyer.tecnico,in:ago(1,9),out:ago(1,12),secs:9900}];
   // Garage: uno trabajando, uno listo, uno entregado
   var gnum=0;
   function gar(o,estado,ready){garage.push({id:'GAR-demo-'+(++gnum),roId:o.id,cliente:o.cliente,vehiculo:(o.vehiculo.year+' '+o.vehiculo.make+' '+o.vehiculo.model).trim(),tablilla:o.vehiculo.tag,color:o.vehiculo.color,estado:estado,trabajo:o.servicios.map(function(s){return s.n;}).join(', '),entradaTime:o.fecha,readyTime:ready||null,maxHours:24,log:['Ingresado — '+new Date(o.fecha).toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});}
@@ -2881,7 +3105,10 @@ function buildDemoDB(){
     {id:'G-demo-3',desc:'Herramienta: scanner OBD-II',cat:'Herramientas',monto:139.99,fecha:dia(3)},
     {id:'G-demo-4',desc:'Seguro comercial (mensualidad)',cat:'Seguros',monto:120,fecha:dia(1)}
   ];
-  return {ordenes:ordenes,clientes:clientes,garage:garage,gastos:gastos,suplidores:[],ordenesS:[],inventario:inventario,serviceParts:{},citas:citas,svcsCustom:[{id:'cs-demo-1',cat:'general',n:'Alineamiento 4 ruedas',p:89,c:0}],catsCustom:[],roCounter:num,settings:st,_demo:true,_demoAt:new Date().toISOString()};
+  return {ordenes:ordenes,clientes:clientes,garage:garage,gastos:gastos,suplidores:[],ordenesS:[],inventario:inventario,serviceParts:{},citas:citas,svcsCustom:[{id:'cs-demo-1',cat:'general',n:'Alineamiento 4 ruedas',p:89,c:0}],catsCustom:[],
+    tecnicos:[{id:'TEC-1',nombre:'Luis',com:15,activo:true,creado:ago(90)},{id:'TEC-2',nombre:'Kevin',com:10,activo:true,creado:ago(80)},{id:'TEC-3',nombre:'Ángel',com:0,activo:true,creado:ago(60)}],tecCounter:3,
+    jobsCustom:[{id:'job-demo-1',n:'Front Brake Service',ep:120,laborHours:1,parts:[{name:'Pastillas delanteras cerámicas',partNum:'',supplier:'AutoZone',cost:38,sellPrice:72,qty:1,receipt:''}]}],
+    roCounter:num,settings:st,_demo:true,_demoAt:new Date().toISOString()};
 }
 
 loadDB();
