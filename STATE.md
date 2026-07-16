@@ -2,7 +2,33 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-15
+## Last updated: 2026-07-15 (second batch)
+
+## New 2026-07-15 (batch 2): Técnicos + trabajos guardados + IVU/CSV + recuperar denegados (fd35cc8)
+Gap-analysis batch vs Tekmetric/Shopmonkey/AutoLeap/ARI. Roberto: "add everything, especially
+technicians — usernames like numbers, roster menu, select técnico per job".
+- **Técnicos:** `DB.tecnicos` [{id:'TEC-n',nombre,com,activo,creado}] + `DB.tecCounter` (usernames
+  auto-assigned TEC-1, TEC-2…). Ajustes → "Técnicos del taller" card (add/edit ✏️/delete ✖).
+  Select in wizard cierre pane (RO.tecnico) + RO detail "Técnico y tiempo" card (asignarTec).
+  Reloj: iniciarReloj/detenerReloj → o.reloj (running) / o.relojSecs + o.relojLog [{tec,in,out,secs}];
+  detail shows TIEMPO REAL vs FACTURADAS. P&L: per-tech month card (órdenes, ingresos, h reloj,
+  comisión = subtotal-sin-IVU × com%).
+- **Trabajos guardados:** `DB.jobsCustom` [{id,n,ep,laborHours,parts}]. ⭐ button on a configured
+  service card in renderROSO saves template; "⭐ Guardados" chip in renderROSvcMenu (activeCat
+  '__jobs') re-adds complete (jobTotal = ep + hrs×rate + parts sell); admin list in Ajustes→Catálogo.
+- **Recuperar denegados:** "Cliente aprobó — mover a servicios" btn per denegado in detail
+  (real index into o.denegados, skips auto&&!confirmed). apruebaDen: splice→push servicio→
+  recalcROTotal (sub×(1-desc)×1.115); if estado was pagado → abonado=old total, estado pendiente.
+  **Bug caught by smoke: abonado must be SET to old total, not +=** (double-counted with prior abonos).
+- **Contable:** P&L row "IVU cobrado (11.5%)" (Σ total−total/1.115, skips abiertas) +
+  buildContableCSV(ym)/exportContableCSV (BOM literal + comment, ORDENES w/ subtotal/IVU/total/técnico
+  + GASTOS + TOTALs).
+- **Seguimientos:** type 'den' (denegados precio>0 !auto||confirmed, 30-120d, !o.segDen → waDenied)
+  + type 'cita' (mañana, !c.remAt, unshifted first → waCitaRem).
+- Demo mode now seeds 3 técnicos (Luis 15%/Kevin 10%/Ángel) w/ o.tecnico + relojLog + 1 saved job.
+- Smoke: 76 checks green local AND live.
+Sales kit same day: **Flyer-ShopFlow.pdf** in Desktop\ShopFlow-Ventas (ES, QR→WhatsApp, prices,
+fundadores; Roberto vetoed the word "gringo" — keep it out of all materials).
 
 ## New 2026-07-15: MODO DEMO para vender (e745778) + kit de ventas fuera del repo
 Sales-support batch. In-app: **Modo demo** — Ajustes card toggles realistic sample data
