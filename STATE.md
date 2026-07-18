@@ -2,7 +2,26 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-15 (second batch)
+## Last updated: 2026-07-18
+
+## New 2026-07-18: Asesores de servicio + Finanzas → Equipo (Roberto's direct request)
+Roberto: "window to see how technicians are doing (tech A 130hr this week)" + "tab for how much
+each service advisor sold — parts/labor/total, hours per job".
+- **Asesores:** `DB.asesores` [{id:'ASE-n',nombre,activo,creado}] + `DB.aseCounter` (mirrors técnicos).
+  Ajustes → "Asesores de servicio" card (add/edit/del); select in wizard cierre (RO.asesor, only when
+  roster non-empty) + RO detail (asignarAse). aseName/aseOptionsHTML helpers.
+- **Finanzas → Equipo tab (f-eq):** renderEquipo() with period chips (Esta semana lunes-domingo /
+  Semana pasada / Este mes / Mes pasado, global EQ_PERIOD + eqRange()). `buildEquipoStats()` =
+  testable core. Técnicos card: horas facturadas bar per tech (max-relative), órdenes, ventas $,
+  horas de reloj (relojLog filtered by period via rl.out), eficiencia % = fact/real (>100% green).
+  Asesores card: vendido $, PIEZAS $ (sellPrice×qty), LABOR $ (laborHours×rate), HRS/ORDEN,
+  h labor vendidas, cierre % = (vendido/1.115)/(aprobado+denegados precio) — Tekmetric benchmark 50%+.
+  "Cierre de hoy" card: carros/vendido/cobrado (pagadoFecha hoy)/por cobrar (ALL pendientes balance).
+- **CSV contable:** +Asesor column (after Tecnico; TOTAL row shifted one comma).
+- Demo seeds 2 asesores (Marta/Roberto) + o.asesor alternating on all orders.
+- finTab ids array now includes 'f-eq' — keep order synced with #fin-tabs DOM.
+- Smoke: 84 checks green (2 new: Asesores roster; Equipo stats math incl. close 75% case + CSV).
+  Gotcha: earlier time-clock check leaves +65s on TEC-1 → hReal/eficiencia assertions use ranges.
 
 ## New 2026-07-15 (batch 2): Técnicos + trabajos guardados + IVU/CSV + recuperar denegados (fd35cc8)
 Gap-analysis batch vs Tekmetric/Shopmonkey/AutoLeap/ARI. Roberto: "add everything, especially

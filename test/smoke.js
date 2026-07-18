@@ -528,6 +528,39 @@ function check(ok, name, detail) {
   })()`);
   check(card.stripe && card.balance && card.visa, 'Cobro WhatsApp incluye link de tarjeta + balance real (total − abono)', JSON.stringify(card));
 
+  // ===== Asesores de servicio (roster ASE-n) =====
+  const ase = await page.evaluate(`(function(){
+    document.getElementById('ase-n').value='Marta';addAsesor();
+    document.getElementById('ase-n').value='Pedro';addAsesor();
+    var d=JSON.parse(localStorage.getItem('sf_v1'));
+    return {ids:DB.asesores.map(function(a){return a.id;}),persisted:d.asesores.length===2,listed:document.getElementById('ase-list').innerHTML.includes('ASE-2')};
+  })()`);
+  check(ase.ids.join(',') === 'ASE-1,ASE-2' && ase.persisted && ase.listed, 'Asesores get auto usernames ASE-1/ASE-2 + persist + listed', JSON.stringify(ase));
+
+  // ===== Finanzas → Equipo: horas técnico, ventas asesor, cierre de hoy, CSV =====
+  const eq = await page.evaluate(`(function(){
+    var now=new Date().toISOString();var oldRate=DB.settings.laborRate;DB.settings.laborRate=100;
+    DB.ordenes.push({id:'RO-EQ1',fecha:now,cliente:'Eq Tester',tel:'787-555-0500',vehiculo:{},estado:'pagado',pagadoFecha:now,total:334.50,tecnico:'TEC-1',asesor:'ASE-1',relojLog:[{tec:'TEC-1',in:now,out:now,secs:3600}],insp:{},
+      servicios:[{id:'e1',n:'Frenos',ep:0,qty:1,laborHours:2,parts:[{name:'Pastillas',cost:30,sellPrice:60,qty:1}]},{id:'e2',n:'Aceite',ep:0,qty:1,laborHours:1,parts:[]}],
+      denegados:[{nombre:'Bujias',precio:100}]});
+    saveDB();
+    EQ_PERIOD='sem';
+    var st=buildEquipoStats();
+    var t=st.tecs.find(function(x){return x.id==='TEC-1';});
+    var a=st.ases.find(function(x){return x.id==='ASE-1';});
+    finTab('f-eq');
+    var html=document.getElementById('f-eq').innerHTML;
+    var csv=buildContableCSV(new Date().getFullYear()+'-'+('0'+(new Date().getMonth()+1)).slice(-2));
+    DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-EQ1';});DB.settings.laborRate=oldRate;saveDB();
+    return {tHoras:!!t&&Math.abs(t.hFact-3)<0.01,tReal:!!t&&t.hReal>=1&&t.hReal<1.1,tEfic:!!t&&t.efic>270&&t.efic<=300,
+      aPiezas:!!a&&Math.abs(a.piezas-60)<0.01,aLabor:!!a&&Math.abs(a.labor-300)<0.01,aHpo:!!a&&Math.abs(a.hPorOrden-3)<0.01,
+      aClose:!!a&&Math.abs(a.close-75)<1,
+      hoy:st.hoy.ordenes>=1&&st.hoy.vendido>=334,
+      ui:html.includes('Cierre de hoy')&&html.includes('HRS/ORDEN')&&html.includes('TEC-1')&&html.includes('ASE-1'),
+      csv:csv.includes('Asesor')&&csv.includes('ASE-1')};
+  })()`);
+  check(eq.tHoras && eq.tReal && eq.tEfic && eq.aPiezas && eq.aLabor && eq.aHpo && eq.aClose && eq.hoy && eq.ui && eq.csv, 'Equipo: horas/eficiencia técnico + piezas/labor/hrs-orden/cierre asesor + cierre de hoy + CSV Asesor', JSON.stringify(eq));
+
   // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
   const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });
   await page.evaluate(`setTimeout(function(){enterDemo();},50)`); // reload va fuera del evaluate (destruye el contexto)
