@@ -375,6 +375,10 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <button class="btn a full" onclick="addAsesor()" style="margin-top:8px"><i class="ti ti-user-plus"></i> Agregar asesor</button>
         <div id="ase-list" style="margin-top:10px"></div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-video"></i> Guión de video</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>El saludo que el técnico lee al grabar el video para el cliente (botón 🎥 en cada orden). Usa {tecnico}, {taller}, {vehiculo} y {cliente} — se llenan solos con los datos de la orden.</span></div>
+        <div class="fr1"><div class="fg"><div class="fl">Saludo de apertura</div><textarea id="set-video" style="min-height:80px" oninput="saveSettings()"></textarea></div></div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-sparkles"></i> Inteligencia Artificial</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Las funciones AI (diagnóstico, piezas, labor) usan tu propia API key de Anthropic. Créala en console.anthropic.com. Se guarda solo en este dispositivo.</span></div>
         <div class="fr1"><div class="fg"><div class="fl">API key de Anthropic</div><input id="set-aikey" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveSettings()"></div></div>
@@ -457,7 +461,7 @@ function saveDB(){
     return false;
   }
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;}catch(e){}}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
 
@@ -1025,11 +1029,22 @@ function updInspB(){
 function renderROSvcMenu(){
   var hasJobs=(DB.jobsCustom||[]).length>0;
   var promosViv=(DB.promos||[]).filter(promoVigente);
+  var rec=(typeof RO==='object'&&RO&&RO.vehiculo)?recsMant(RO.vehiculo.odoIn,RO.vehiculo.year):{m:0,recs:[],anos:[]};
   if(activeCat==='__jobs'&&!hasJobs)activeCat='aceites';
   if(activeCat==='__promos'&&!promosViv.length)activeCat='aceites';
-  var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=(promosViv.length?'<div class="cp'+(activeCat==='__promos'?' active':'')+'" onclick="activeCat=\'__promos\';renderROSvcMenu()">🎁 Promos</div>':'')+(hasJobs?'<div class="cp'+(activeCat==='__jobs'?' active':'')+'" onclick="activeCat=\'__jobs\';renderROSvcMenu()">⭐ Guardados</div>':'')+allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
+  if(activeCat==='__recs'&&!rec.recs.length)activeCat='aceites';
+  var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=(rec.recs.length?'<div class="cp'+(activeCat==='__recs'?' active':'')+'" onclick="activeCat=\'__recs\';renderROSvcMenu()">🔧 '+(rec.m/1000)+'k mi</div>':'')+(promosViv.length?'<div class="cp'+(activeCat==='__promos'?' active':'')+'" onclick="activeCat=\'__promos\';renderROSvcMenu()">🎁 Promos</div>':'')+(hasJobs?'<div class="cp'+(activeCat==='__jobs'?' active':'')+'" onclick="activeCat=\'__jobs\';renderROSvcMenu()">⭐ Guardados</div>':'')+allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
   var q=(document.getElementById('ro-sq')||{value:''}).value.toLowerCase();
   var el=document.getElementById('ro-sl');if(!el)return;
+  if(activeCat==='__recs'){
+    el.innerHTML='<div style="font-size:11px;color:var(--gray-400);padding:2px 0 6px">Mantenimiento recomendado a las <b>'+rec.m.toLocaleString()+' millas</b>'+(RO.vehiculo.year?' ('+RO.vehiculo.year+' '+(RO.vehiculo.make||'')+')':'')+' — toca ➕ para añadir al estimado:</div>'+
+      rec.recs.filter(function(r){return !q||r.n.toLowerCase().includes(q);}).map(function(r,i){
+        return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+r.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+r.p+'</span><button class="btn sm p" onclick="addSvcRO(\'rec-'+r.cada+'-'+i+'\',\''+r.n.replace(/'/g,'')+'\','+r.p+')" style="padding:5px 10px">+</button></div>';
+      }).join('')+
+      rec.anos.map(function(a){return '<div style="font-size:11px;color:var(--amber);padding:5px 0;border-top:1px dashed var(--gray-100)">⚠️ '+a+'</div>';}).join('')+
+      '<div style="font-size:10px;color:var(--gray-400);padding-top:6px">Intervalos generales — ajusta según el manual del fabricante. Los precios se editan al configurar el servicio.</div>';
+    return;
+  }
   if(activeCat==='__promos'){
     el.innerHTML=promosViv.filter(function(p){return !q||p.n.toLowerCase().includes(q);}).map(function(p){
       return '<div class="svc-row"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">🎁 '+p.n+'</div>'+(p.det?'<div style="font-size:10px;color:var(--gray-400)">'+p.det+'</div>':'')+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+(+p.p).toFixed(0)+'</span><button class="btn sm p" onclick="addPromoRO(\''+p.id+'\')" style="padding:5px 10px">+</button></div>';
@@ -1548,7 +1563,7 @@ function renderGarage(){
 function setGS(id,val){var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.estado=val;if(val==='ready'&&!c.readyTime){c.readyTime=new Date().toISOString();c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Listo. Timer iniciado.');}if(val==='entregado'){c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Entregado.');}saveDB();renderGarage();}
 function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());inp.value='';saveDB();renderGarage();}
 
-function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){return !q||o.cliente.toLowerCase().includes(q)||(o.id||'').toLowerCase().includes(q)||((o.vehiculo&&o.vehiculo.tag)||'').toLowerCase().includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
+function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){if(!q)return true;var v=o.vehiculo||{};var hay=[o.cliente,o.id,v.tag,v.vin,v.make,v.model,v.year,o.empresa,o.techNotes,o.queja].filter(Boolean).join(' ').toLowerCase();return hay.includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
 
 function renderClientes(){var q=(document.getElementById('cli-q')||{value:''}).value.toLowerCase();var list=DB.clientes.filter(function(c){return !q||c.nombre.toLowerCase().includes(q)||(c.empresa||'').toLowerCase().includes(q);});var el=document.getElementById('clientes-body');if(!el)return;
   var h=flotasHTML(q);
@@ -2206,9 +2221,7 @@ function openRODetail(roId){
     html+='</div></div>';
   }
   // Notas
-  if(o.techNotes){
-    html+='<div class="card"><div class="ch"><i class="ti ti-note"></i> Notas</div><div class="cb"><div style="font-size:13px;line-height:1.5">'+o.techNotes+'</div></div></div>';
-  }
+  html+='<div class="card"><div class="ch"><i class="ti ti-note"></i> Notas</div><div class="cb"><textarea id="det-notas" placeholder="Escribe cualquier nota de esta orden — se guarda en la RO y sale en el PDF." style="min-height:56px;width:100%;font-size:13px;line-height:1.5">'+String(o.techNotes||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea><button class="btn sm full" onclick="saveNotasDetail(\''+o.id+'\')" style="margin-top:6px"><i class="ti ti-device-floppy"></i> Guardar nota</button></div></div>';
   // Photo evidence — condición del vehículo al recibirlo
   if(o.fotos&&o.fotos.length){
     html+='<div class="card"><div class="ch"><i class="ti ti-camera"></i> Fotos de entrada ('+o.fotos.length+')</div><div class="cb">'+
@@ -2304,6 +2317,7 @@ function openRODetail(roId){
   if(o.tel){
     html+='<button class="btn full" onclick="waRecibo(\''+o.id+'\')" style="margin-bottom:8px;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>';
   }
+  html+='<button class="btn full" onclick="showVideoScript(\''+o.id+'\')" style="margin-bottom:8px;background:#7C3AED;color:#fff;border-color:#7C3AED"><i class="ti ti-video"></i> Guión de video para el cliente</button>';
   html+='<button class="btn full" onclick="shareStatus(\''+o.id+'\')" style="margin-bottom:8px;background:#0E1116;color:#fff;border-color:#0E1116"><i class="ti ti-link"></i> Compartir estado con cliente</button>';
   html+='<button class="btn p full" onclick="reExportPDF(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-file-type-pdf"></i> Generar / Ver PDF</button>';
   html+='<button class="btn full" onclick="if(confirm(\'¿Eliminar esta orden permanentemente?\'))deleteRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Eliminar orden</button>';
@@ -2409,6 +2423,7 @@ function initAjustes(){
   document.getElementById('set-bk-repo').value=bk.repo||'';
   document.getElementById('set-bk-token').value=bk.token||'';
   updBackupStatus();
+  var svi=document.getElementById('set-video');if(svi)svi.value=DB.settings.videoIntro||'';
   var db=document.getElementById('demo-btn');
   if(db)db.innerHTML=DB._demo?'<i class="ti ti-door-exit"></i> Salir del demo (vuelven tus datos reales)':'<i class="ti ti-masks-theater"></i> Activar modo demo';
   renderTecnicos();renderAsesores();renderJobsAdmin();
@@ -2491,6 +2506,7 @@ function saveSettings(){
   var sa=document.getElementById('set-ath');if(sa)DB.settings.athMovil=sa.value.trim();
   var sc=document.getElementById('set-cardlink');if(sc)DB.settings.cardLink=sc.value.trim();
   var sv=document.getElementById('set-review');if(sv)DB.settings.reviewLink=sv.value.trim();
+  var svi=document.getElementById('set-video');if(svi&&svi.value.trim())DB.settings.videoIntro=svi.value.trim();
   updAiKeyStatus();
   DB.settings.backup=DB.settings.backup||{};
   DB.settings.backup.repo=document.getElementById('set-bk-repo').value.trim();
@@ -3137,6 +3153,73 @@ function renderAsesores(){
   }).join(''):'<div style="font-size:12px;color:var(--gray-400)">Sin asesores todavía.</div>';
 }
 function asignarAse(roId,aid){var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;o.asesor=aid;saveDB();}
+// ============ NOTAS EDITABLES EN DETALLE ============
+function saveNotasDetail(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var el=document.getElementById('det-notas');if(!el)return;
+  o.techNotes=el.value;saveDB();
+  alert('Nota guardada en la orden.');
+}
+// ============ RECOMENDADOS POR MILLAJE / AÑOS ============
+// Intervalos generales de mantenimiento (severe service — calor y tapones de PR).
+var REC_MANT=[
+  {cada:5000,n:'Cambio de aceite y filtro',p:75},
+  {cada:5000,n:'Rotación de gomas',p:35},
+  {cada:10000,n:'Limpieza y ajuste de frenos traseros',p:45},
+  {cada:15000,n:'Filtro de aire de motor',p:25},
+  {cada:15000,n:'Filtro de aire de cabina',p:30},
+  {cada:25000,n:'Servicio de transmisión (cambio de aceite)',p:120},
+  {cada:25000,n:'Aceite de diferencial',p:60},
+  {cada:25000,n:'Limpieza de inyectores y cámara de combustión',p:89},
+  {cada:50000,n:'Coolant flush (refrigerante)',p:85},
+  {cada:50000,n:'Cambio de líquido de frenos',p:65},
+  {cada:100000,n:'Bujías',p:120},
+  {cada:100000,n:'Correa serpentina',p:90}
+];
+function recsMant(millas,anio){
+  millas=parseInt(String(millas||'').replace(/[^0-9]/g,''),10)||0;
+  if(millas<4000)return {m:0,recs:[],anos:[]};
+  var M=Math.round(millas/5000)*5000;if(M<5000)M=5000;
+  var recs=REC_MANT.filter(function(r){return M%r.cada===0;});
+  var anos=[];var edad=anio?(new Date().getFullYear()-(parseInt(anio,10)||0)):0;
+  if(edad>=3&&edad<40)anos.push('Batería: probar carga — en PR duran ~3 años por el calor (reemplazo $45 instalada).');
+  if(edad>=5&&edad<40&&M%50000!==0)anos.push('Refrigerante: cambiar cada 5 años aunque no llegue al millaje.');
+  return {m:M,recs:recs,anos:anos};
+}
+// ============ GUIÓN DE VIDEO PARA EL CLIENTE ============
+function videoScript(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return '';
+  var t=(DB.tecnicos||[]).find(function(x){return x.id===o.tecnico;});
+  var v=o.vehiculo||{};var veh=[v.year,v.make,v.model].filter(Boolean).join(' ')||'vehículo';
+  var intro=(DB.settings.videoIntro||'').replace(/\{tecnico\}/g,t?t.nombre:'____').replace(/\{taller\}/g,DB.settings.shopName||'el taller').replace(/\{vehiculo\}/g,veh).replace(/\{cliente\}/g,(o.cliente||'').split(' ')[0]);
+  var s='🎬 AL EMPEZAR (grabando el carro):\n'+intro+'\n';
+  var den=(o.denegados||[]).filter(function(d){return !d.auto||d.confirmed;});
+  if(den.length){
+    s+='\n🔍 DESPUÉS DE LA INSPECCIÓN (mostrando lo encontrado):\nEn la inspección de su '+veh+' encontramos:\n';
+    den.forEach(function(d){s+='• '+d.nombre+(d.precio?' — $'+(+d.precio).toFixed(0):'')+(d.urgencia==='urgente'?' (URGENTE)':'')+(d.nota?'. '+d.nota:'')+'\n';});
+    var urg=den.find(function(d){return d.urgencia==='urgente';});
+    if(urg)s+='Le sugiero atender primero: '+urg.nombre+'.\n';
+  }
+  s+='\n👋 CIERRE:\nCualquier pregunta me escribe por aquí mismo. ¡Gracias por confiar en '+(DB.settings.shopName||'nosotros')+'!';
+  return s;
+}
+function showVideoScript(roId){
+  var old=document.getElementById('vs-ov');if(old)old.remove();
+  var s=videoScript(roId);
+  var o=DB.ordenes.find(function(x){return x.id===roId;});
+  var ov=document.createElement('div');ov.id='vs-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML='<div style="background:var(--white);border-radius:12px;max-width:420px;width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">'+
+    '<div style="padding:12px 14px;font-weight:800;border-bottom:1px solid var(--gray-100)">🎥 Guión de video para el cliente</div>'+
+    '<div style="padding:8px 14px;font-size:11px;color:var(--gray-400)">Graba el video con la cámara del teléfono leyendo este guión y mándalo por el WhatsApp del cliente (el video se adjunta en WhatsApp — aquí solo va el guión). El saludo se edita en Ajustes → Guión de video.</div>'+
+    '<textarea id="vs-txt" style="flex:1;margin:0 14px;min-height:200px;font-size:13px;line-height:1.5">'+s.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea>'+
+    '<div style="display:flex;gap:8px;padding:12px 14px">'+
+      '<button class="btn full" style="flex:1" onclick="var t=document.getElementById(\'vs-txt\');t.select();document.execCommand(\'copy\');this.innerHTML=\'✓ Copiado\'"><i class="ti ti-copy"></i> Copiar</button>'+
+      (o&&o.tel?'<button class="btn full" style="flex:1;background:#25D366;color:#fff;border-color:#25D366" onclick="window.open(\'https://wa.me/\'+waNum(\''+o.tel+'\'),\'_blank\')"><i class="ti ti-brand-whatsapp"></i> Abrir chat</button>':'')+
+      '<button class="btn full" style="flex:1" onclick="document.getElementById(\'vs-ov\').remove()">Cerrar</button>'+
+    '</div></div>';
+  document.body.appendChild(ov);
+}
 // ============ FINANZAS → EQUIPO (rendimiento técnicos + asesores + cierre de hoy) ============
 var EQ_PERIOD='sem';
 function setEqPeriod(p){EQ_PERIOD=p;renderEquipo();}

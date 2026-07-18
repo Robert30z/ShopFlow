@@ -175,8 +175,8 @@ function check(ok, name, detail) {
   const viewer = await page.evaluate(() => ({ visible: document.getElementById('foto-viewer').style.display === 'flex', caption: document.getElementById('foto-viewer-caption').textContent }));
   check(viewer.visible && viewer.caption.includes('Capturada'), 'Photo viewer opens with capture timestamp', viewer.caption.slice(0, 80));
   await page.evaluate(`closeFotoViewer()`);
-  const detailNotas = await page.evaluate(() => document.getElementById('ro-detail-body').innerText.includes('Cliente trajo su alternador'));
-  check(detailNotas, 'Detail shows Notas (customer-brought part line)');
+  const detailNotas = await page.evaluate(() => { const n = document.getElementById('det-notas'); return !!n && n.value.includes('Cliente trajo su alternador'); });
+  check(detailNotas, 'Detail shows Notas editable (customer-brought part line in textarea)');
   const woBtnDetail = await page.locator(`#ro-detail-body [onclick^="printWorkOrder"]`).count();
   check(woBtnDetail === 1, 'Work order print button in abierta detail');
   await vclick(`[onclick^="continueRO"]`);
@@ -560,6 +560,45 @@ function check(ok, name, detail) {
       csv:csv.includes('Asesor')&&csv.includes('ASE-1')};
   })()`);
   check(eq.tHoras && eq.tReal && eq.tEfic && eq.aPiezas && eq.aLabor && eq.aHpo && eq.aClose && eq.hoy && eq.ui && eq.csv, 'Equipo: horas/eficiencia técnico + piezas/labor/hrs-orden/cierre asesor + cierre de hoy + CSV Asesor', JSON.stringify(eq));
+
+  // ===== RO 360: búsqueda vin/nota/marca + notas editables + guión de video + recomendados millaje =====
+  const ro360 = await page.evaluate(`(function(){
+    var now=new Date().toISOString();
+    DB.settings.shopName='Pit Stop';
+    DB.ordenes.push({id:'RO-V360',fecha:now,cliente:'Video Tester',tel:'787-555-0600',
+      vehiculo:{year:'2020',make:'Toyota',model:'Tacoma',tag:'VVV-360',vin:'3TMCZ5AN0LM360360',odoIn:'50000'},
+      servicios:[{id:'s1',n:'Diagnostico',ep:60,qty:1,parts:[],laborHours:1}],estado:'pendiente',total:66.90,
+      tecnico:'TEC-1',insp:{},techNotes:'fuga leve en el radiador',
+      denegados:[{nombre:'Pastillas y rotores delanteros',precio:280,urgencia:'urgente',nota:'Cambiar en las proximas 500 millas'}],
+      fotos:[]});
+    saveDB();
+    go('ordenes');
+    var q=document.getElementById('ord-q');
+    var hit=function(term){q.value=term;renderOrdenes();return document.getElementById('ordenes-body').innerHTML.includes('RO-V360');};
+    var byVin=hit('3tmcz5'),byNota=hit('radiador'),byMarca=hit('tacoma');
+    q.value='';renderOrdenes();
+    openRODetail('RO-V360');
+    var det=document.getElementById('ro-detail-body').innerHTML;
+    var notasBox=!!document.getElementById('det-notas');
+    document.getElementById('det-notas').value='fuga leve en el radiador — cliente avisado';
+    saveNotasDetail('RO-V360');
+    var saved=JSON.parse(localStorage.getItem('sf_v1')).ordenes.find(function(o){return o.id==='RO-V360';});
+    var vs=videoScript('RO-V360');
+    var rec=recsMant('50,000','2020');
+    var names=rec.recs.map(function(r){return r.n;}).join('|');
+    DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-V360';});saveDB();
+    return {byVin:byVin,byNota:byNota,byMarca:byMarca,
+      det:det.includes('Pastillas y rotores')&&det.includes('Guión de video'),notasBox:notasBox,
+      notaSaved:!!saved&&saved.techNotes.includes('cliente avisado'),
+      vs:vs.includes('Luis')&&vs.includes('Pit Stop')&&vs.includes('2020 Toyota Tacoma')&&vs.includes('Pastillas y rotores')&&vs.includes('atender primero'),
+      recM:rec.m===50000,
+      recList:names.includes('transmisión')&&names.includes('diferencial')&&names.includes('cámara de combustión')&&names.includes('Rotación')&&names.includes('frenos traseros')&&names.includes('Coolant'),
+      recBattery:rec.anos.length>=1};
+  })()`);
+  check(ro360.byVin && ro360.byNota && ro360.byMarca, 'Búsqueda RO por VIN / nota / marca-modelo', JSON.stringify({vin:ro360.byVin,nota:ro360.byNota,marca:ro360.byMarca}));
+  check(ro360.det && ro360.notasBox && ro360.notaSaved, 'Detalle: denegados + botón guión video + notas editables persisten', JSON.stringify({det:ro360.det,box:ro360.notasBox,saved:ro360.notaSaved}));
+  check(ro360.vs, 'Guión de video: saludo personalizado + hallazgos + sugerencia urgente', String(ro360.vs));
+  check(ro360.recM && ro360.recList && ro360.recBattery, 'Recomendados 50k mi (2020): transmisión/diferencial/cámara combustión/rotación/frenos traseros + aviso batería', JSON.stringify({m:ro360.recM,list:ro360.recList,bat:ro360.recBattery}));
 
   // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
   const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });

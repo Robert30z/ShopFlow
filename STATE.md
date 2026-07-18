@@ -2,7 +2,27 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-18
+## Last updated: 2026-07-18 (batch 2)
+
+## New 2026-07-18 batch 2: Guión de video + búsqueda total + notas editables + recomendados por millaje
+- **Guión de video** (Roberto: tech records walkaround video for customer): settings.videoIntro
+  template (Ajustes card, {tecnico}/{taller}/{vehiculo}/{cliente} placeholders, default = Roberto's
+  pitch in ES) + videoScript(roId) (intro + hallazgos from denegados w/ precio/urgencia/nota +
+  "atender primero" urgente + cierre) + showVideoScript overlay (#vs-ov: copy btn via execCommand,
+  "Abrir chat" wa.me/waNum — video itself attaches in WhatsApp, app only carries the script) +
+  purple 🎥 button in RO detail. NOTE: videos can NOT be stored in the app (localStorage) — by design.
+- **Búsqueda total**: renderOrdenes filter now matches cliente/RO/tag + VIN + make/model/year +
+  empresa + techNotes + queja (joined haystack).
+- **Notas editables en detalle**: read-only Notas card → always-present textarea #det-notas +
+  saveNotasDetail (alert). Old smoke check updated to read textarea value.
+- **Recomendados por millaje/años**: REC_MANT table (intervals 5k/10k/15k/25k/50k/100k, severe-PR;
+  prices aligned to catalog) + recsMant(millas,anio) → nearest 5k bucket M, filter M%cada===0 +
+  age-based avisos (batería 3 años PR, refrigerante 5 años). "🔧 50k mi" chip in wizard Servicios
+  (activeCat '__recs', shown when odoIn≥4000) with tap-to-add via addSvcRO('rec-…'). 50k+2020 Tacoma
+  → aceite, rotación, frenos traseros, transmisión, diferencial, inyectores/cámara, coolant, líq.
+  frenos + aviso batería (matches Roberto's exact example).
+- Smoke: 88 checks green local+live (4 new: búsqueda vin/nota/marca; detalle+notas persist; guión;
+  recsMant math).
 
 ## New 2026-07-18: Asesores de servicio + Finanzas → Equipo (Roberto's direct request)
 Roberto: "window to see how technicians are doing (tech A 130hr this week)" + "tab for how much
