@@ -3267,7 +3267,14 @@ function buildEquipoStats(){
   var oHoy=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d>=h0&&d<h1&&o.estado!=='abierta';});
   var cobrado=DB.ordenes.filter(function(o){if(o.estado!=='pagado')return false;var d=new Date(o.pagadoFecha||o.fecha);return d>=h0&&d<h1;}).reduce(function(s,o){return s+(o.total||0);},0);
   var pend=DB.ordenes.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
-  return {ini:ini,fin:fin,tecs:tecs,ases:ases,hoy:{ordenes:oHoy.length,vendido:oHoy.reduce(function(s,o){return s+(o.total||0);},0),cobrado:cobrado,pendiente:pend}};
+  // $ por hora del período (métrica Tekmetric): ventas sin IVU y ganancia (sin costo de piezas) ÷ horas facturadas
+  var pHoras=0,pSub=0,pPartsCost=0;
+  ords.forEach(function(o){
+    pHoras+=_horasFactDe(o);pSub+=(o.total||0)/1.115;
+    (o.servicios||[]).forEach(function(sv){(sv.parts||[]).forEach(function(p){pPartsCost+=(p.cost||0)*(p.qty||1);});});
+  });
+  var dolHora={horas:pHoras,ventasHora:pHoras>0?pSub/pHoras:null,gananciaHora:pHoras>0?(pSub-pPartsCost)/pHoras:null};
+  return {ini:ini,fin:fin,tecs:tecs,ases:ases,dolHora:dolHora,hoy:{ordenes:oHoy.length,vendido:oHoy.reduce(function(s,o){return s+(o.total||0);},0),cobrado:cobrado,pendiente:pend}};
 }
 function renderEquipo(){
   var el=document.getElementById('f-eq');if(!el)return;
@@ -3282,7 +3289,12 @@ function renderEquipo(){
       '<div class="sc"><div class="sl">Por cobrar</div><div class="sv '+(st.hoy.pendiente>0?'r':'')+'">$'+st.hoy.pendiente.toFixed(0)+'</div></div>'+
     '</div><div style="font-size:10px;color:var(--gray-400);margin-top:6px">Por cobrar = balance de TODAS las órdenes pendientes, no solo de hoy.</div></div></div>'+
     '<div class="tabs" style="margin-bottom:10px;overflow-x:auto">'+chip('sem','Esta semana')+chip('sem1','Semana pasada')+chip('mes','Este mes')+chip('mes1','Mes pasado')+'</div>'+
-    '<div style="text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:8px">'+fmtD(st.ini)+' — '+fmtD(new Date(st.fin.getTime()-86400000))+'</div>';
+    '<div style="text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:8px">'+fmtD(st.ini)+' — '+fmtD(new Date(st.fin.getTime()-86400000))+'</div>'+
+    '<div class="card" style="margin-bottom:10px"><div class="ch"><i class="ti ti-cash"></i> $ por hora del período</div><div class="cb"><div class="sg sg3" style="display:flex;gap:6px">'+
+      '<div class="sc" style="flex:1"><div class="sl">Horas fact.</div><div class="sv">'+st.dolHora.horas.toFixed(1)+'</div></div>'+
+      '<div class="sc" style="flex:1"><div class="sl">Ventas/hora</div><div class="sv g">'+(st.dolHora.ventasHora!==null?'$'+st.dolHora.ventasHora.toFixed(0):'—')+'</div></div>'+
+      '<div class="sc" style="flex:1"><div class="sl">Ganancia/hora</div><div class="sv '+(st.dolHora.gananciaHora!==null&&st.dolHora.gananciaHora>=(DB.settings.laborRate||103)?'g':'')+'">'+(st.dolHora.gananciaHora!==null?'$'+st.dolHora.gananciaHora.toFixed(0):'—')+'</div></div>'+
+    '</div><div style="font-size:10px;color:var(--gray-400);margin-top:6px">Ventas sin IVU ÷ horas facturadas · Ganancia = ventas sin IVU menos costo de piezas. Meta: ganancia/hora ≥ tu labor rate ($'+(DB.settings.laborRate||103)+').</div></div></div>';
   // Técnicos: barra de horas facturadas (el "quién produjo cuánto")
   var maxH=Math.max.apply(null,[0.01].concat(st.tecs.map(function(t){return t.hFact;})));
   html+='<div class="card" style="margin-bottom:10px"><div class="ch"><i class="ti ti-users"></i> Técnicos — horas</div><div class="cb">'+

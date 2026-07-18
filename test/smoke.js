@@ -600,6 +600,21 @@ function check(ok, name, detail) {
   check(ro360.vs, 'Guión de video: saludo personalizado + hallazgos + sugerencia urgente', String(ro360.vs));
   check(ro360.recM && ro360.recList && ro360.recBattery, 'Recomendados 50k mi (2020): transmisión/diferencial/cámara combustión/rotación/frenos traseros + aviso batería', JSON.stringify({m:ro360.recM,list:ro360.recList,bat:ro360.recBattery}));
 
+  // ===== $ por hora (mes pasado aislado: sub 200, piezas 40, 2h → $100/h ventas, $80/h ganancia) =====
+  const dolHora = await page.evaluate(`(function(){
+    var lm=new Date();lm=new Date(lm.getFullYear(),lm.getMonth()-1,15,12,0,0);
+    DB.ordenes.push({id:'RO-DH1',fecha:lm.toISOString(),cliente:'Hora Tester',tel:'',vehiculo:{},estado:'pagado',total:223,insp:{},denegados:[],
+      servicios:[{id:'d1',n:'Frenos',ep:0,qty:1,laborHours:2,parts:[{name:'Pastillas',cost:40,sellPrice:80,qty:1}]}]});
+    saveDB();
+    EQ_PERIOD='mes1';
+    var st=buildEquipoStats();
+    renderEquipo();
+    var html=document.getElementById('f-eq').innerHTML;
+    DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-DH1';});saveDB();EQ_PERIOD='sem';
+    return {horas:Math.abs(st.dolHora.horas-2)<0.01,vH:Math.abs(st.dolHora.ventasHora-100)<0.5,gH:Math.abs(st.dolHora.gananciaHora-80)<0.5,ui:html.includes('por hora del período')};
+  })()`);
+  check(dolHora.horas && dolHora.vH && dolHora.gH && dolHora.ui, '$ por hora: ventas/hora y ganancia/hora (sin IVU, menos piezas) + card en Equipo', JSON.stringify(dolHora));
+
   // ===== Modo demo (entra → datos de ejemplo + backup pausado; sale → datos reales intactos) =====
   const preDemo = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, svcs: d.svcsCustom.map(s => s.n) }; });
   await page.evaluate(`setTimeout(function(){enterDemo();},50)`); // reload va fuera del evaluate (destruye el contexto)

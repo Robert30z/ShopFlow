@@ -2,7 +2,14 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-18 (batch 2)
+## Last updated: 2026-07-18 (batch 3)
+
+## New 2026-07-18 batch 3: $ por hora (Finanzas → Equipo)
+buildEquipoStats now returns dolHora {horas, ventasHora, gananciaHora} for the selected period:
+ventas sin IVU ÷ horas facturadas, ganancia = (sub − costo piezas) ÷ horas (Tekmetric gross $/hr +
+GP/hr). Card under the period chips: 3 tiles (horas fact. / ventas-hora / ganancia-hora, green when
+≥ laborRate) + meta note. Icon ti-cash (ti-clock-dollar not verified in loaded Tabler). Smoke 89
+green (isolated mes-pasado order: sub 200, 2h, piezas $40 → $100/h y $80/h exact).
 
 ## New 2026-07-18 batch 2: Guión de video + búsqueda total + notas editables + recomendados por millaje
 - **Guión de video** (Roberto: tech records walkaround video for customer): settings.videoIntro
