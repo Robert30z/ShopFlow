@@ -1,7 +1,7 @@
 // ShopFlow service worker — la app abre SIN internet (mecánico móvil = señal mala).
 // Estrategia: index.html va red-primero (siempre fresco online, cache offline);
 // CDN y assets van cache-primero. Sube CACHE_V cuando cambie la estrategia.
-var CACHE_V='shopflow-v2';
+var CACHE_V='shopflow-v3';
 
 self.addEventListener('install',function(e){
   e.waitUntil(
@@ -23,6 +23,10 @@ self.addEventListener('fetch',function(e){
   var req=e.request;
   if(req.method!=='GET')return;
   var url=new URL(req.url);
+
+  // API de GitHub (respaldo en la nube): SIEMPRE red directa, nunca caché.
+  // Cachearlo dejaba el "sha" viejo y todo respaldo daba HTTP 409. NO tocar.
+  if(url.hostname==='api.github.com'){e.respondWith(fetch(req));return;}
 
   // App shell: red primero (deploy de GitHub Pages llega al instante), cache si no hay señal
   if(url.origin===location.origin&&(req.mode==='navigate'||url.pathname.endsWith('/index.html')||url.pathname.endsWith('/'))){

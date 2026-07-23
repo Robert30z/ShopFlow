@@ -539,6 +539,8 @@ function cloudBackupPayload(){
   if(copy.settings){delete copy.settings.aiKey;delete copy.settings.backup;}
   return JSON.stringify(copy);
 }
+// Respalda ahora si está configurado y no es demo (usado tras guardar orden y tras enviar PDF)
+function backupNow(){if(!DB._demo&&backupCfg()){clearTimeout(_cbTimer);cloudBackup(false);}}
 function cloudBackup(manual){
   if(DB._demo){if(manual)alert('Modo demo activo — el respaldo en la nube está pausado para no sobrescribir tus datos reales. Sal del demo primero.');return;}
   var cfg=backupCfg();
@@ -546,13 +548,18 @@ function cloudBackup(manual){
   if(_cbBusy)return;
   _cbBusy=true;
   var url='https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json';
-  fetch(url,{headers:ghHeaders(cfg.token)})
-    .then(function(r){return r.status===404?{sha:null}:r.json();})
-    .then(function(cur){
-      var body={message:'ShopFlow auto-backup '+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(cloudBackupPayload())))};
-      if(cur&&cur.sha)body.sha=cur.sha;
-      return fetch(url,{method:'PUT',headers:ghHeaders(cfg.token),body:JSON.stringify(body)});
-    })
+  // GET el sha FRESCO (cache:no-store) y sube. Si da 409 (sha viejo por caché), reintenta 1 vez.
+  function putOnce(retry){
+    return fetch(url,{headers:ghHeaders(cfg.token),cache:'no-store'})
+      .then(function(r){return r.status===404?{sha:null}:r.json();})
+      .then(function(cur){
+        var body={message:'ShopFlow auto-backup '+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(cloudBackupPayload())))};
+        if(cur&&cur.sha)body.sha=cur.sha;
+        return fetch(url,{method:'PUT',headers:ghHeaders(cfg.token),body:JSON.stringify(body),cache:'no-store'});
+      })
+      .then(function(r){if(r.status===409&&!retry)return putOnce(true);return r;});
+  }
+  putOnce(false)
     .then(function(r){
       _cbBusy=false;
       if(r.ok){
@@ -572,7 +579,7 @@ function restoreFromCloud(){
   var cfg=backupCfg();
   if(!cfg){alert('Configura primero el repo y el token.');return;}
   if(!confirm('¿Restaurar desde la nube?\n\nEsto REEMPLAZA los datos de este dispositivo con el último respaldo de GitHub. No se puede deshacer.'))return;
-  fetch('https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json',{headers:ghHeaders(cfg.token)})
+  fetch('https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json',{headers:ghHeaders(cfg.token),cache:'no-store'})
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(function(j){
       var txt=decodeURIComponent(escape(atob((j.content||'').replace(/\n/g,''))));
@@ -1573,6 +1580,7 @@ function exportPDF(){
 var _pdfBlob=null;var _pdfUrl=null;var _pdfFilename='ShopFlow.pdf';var _pdfCtx={};
 function shareViaNative(){
   if(!_pdfBlob){alert('El PDF todavía no está listo. Espera un segundo e intenta de nuevo.');return;}
+  backupNow(); // respalda la orden a la nube al enviar el recibo
   var file=new File([_pdfBlob],_pdfFilename,{type:'application/pdf'});
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
     navigator.share({title:(_pdfCtx.tipo==='orden'?'Orden ':'Recibo ')+(_pdfCtx.id||''),text:((_pdfCtx.tipo==='orden')?'Orden de trabajo de ':'Recibo de ')+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+(_pdfCtx.cliente||''),files:[file]})
@@ -1592,6 +1600,7 @@ function shareViaNative(){
 // descargar el PDF + abrir el chat del cliente con el mensaje para adjuntarlo a mano.
 function sendWhatsAppPDF(){
   if(!_pdfBlob){alert('El PDF todavía no está listo. Espera un segundo e intenta de nuevo.');return;}
+  backupNow(); // respalda la orden a la nube al enviar el recibo
   var file=new File([_pdfBlob],_pdfFilename,{type:'application/pdf'});
   var nom=((_pdfCtx.cliente||'').split(' ')[0])||'';
   var total=(_pdfCtx.total||0).toFixed(2);

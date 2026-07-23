@@ -2,6 +2,30 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-23 (batch 4: 🚨 FIX BUG 409 RESPALDO — root cause del backup roto)
+
+## New 2026-07-23 (batch 4): 🚨 FIX del HTTP 409 que rompía TODO el respaldo en la nube
+Roberto perdió su orden del primer cliente. Investigado: el respaldo en la nube (Robert30z/shopflow-backup)
+tenía SOLO respaldos VACÍOS (07-11 setup + 07-23 14:35, ambos 0 órdenes). "Respaldar ahora" daba **HTTP 409**.
+- **ROOT CAUSE:** el service worker cacheaba las llamadas a `api.github.com` (caían en el bucket
+  "cache-first" del SW). El GET del `sha` devolvía uno VIEJO cacheado → el PUT con sha viejo = **409 Conflict**.
+  Por eso el backup dejó de funcionar tras el primer push exitoso (07-11): quedó el sha cacheado.
+  ⇒ La orden del cliente NUNCA llegó a la nube (probablemente SIGUE en el localStorage del iPad).
+- **FIX (3 frentes):**
+  1. `sw.js`: `if(url.hostname==='api.github.com'){e.respondWith(fetch(req));return;}` (red directa, nunca
+     caché) + CACHE_V v2→v3 (para que el iPad purgue el caché viejo con el sha malo al recargar online).
+  2. `cloudBackup`: GET/PUT con `cache:'no-store'` + **reintento 1 vez si da 409** (putOnce(retry) — GET
+     sha fresco y reintenta). Probado con mock: GET→PUT(409)→GET→PUT(200)→✓.
+  3. `restoreFromCloud` GET también `no-store`.
+- **NUEVO: respalda al enviar el PDF** (pedido de Roberto): `backupNow()` helper (respalda si configurado
+  y no-demo) llamado en `shareViaNative` + `sendWhatsAppPDF`. saveRO ya respaldaba.
+- **RECUPERACIÓN orden perdida:** la nube está vacía → NO ayuda. Único chance = localStorage del iPad.
+  Roberto debe usar Ajustes→**"Exportar respaldo (backup)"** (exportBackup = 100% local, sin GitHub, no
+  puede dar 409) para bajar el .json y ver si la orden está. ⚠️ NO tocar "Restaurar" (bajaría la nube vacía
+  y BORRARÍA el iPad). Pendiente: confirmar si el export local tiene la orden.
+- Backup token (fine-grained PAT, solo shopflow-backup) sigue en project_shopflow.md — verifiqué el repo
+  y el historial de commits con él (funciona).
+
 ## Last updated: 2026-07-23 (batch 3: MODO OSCURO + texto grande + reporte semanal + WhatsApp adjunto)
 
 ## New 2026-07-23 (batch 3): apariencia + reporte semanal + auto-adjunto WhatsApp ("añade todo")
