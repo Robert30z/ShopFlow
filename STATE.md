@@ -2,6 +2,28 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-23 (primer cliente real de Pit Stop 🎉)
+
+## New 2026-07-23: 4 arreglos pedidos tras el primer cliente real
+Roberto atendió su primer cliente con ShopFlow y pidió 4 cosas. Todas hechas (smoke sigue verde, page errors none):
+1. **Cámara rápida (varias fotos seguidas):** el input `multiple` ya existía pero en iPad la cámara nativa
+   solo deja 1 foto y regresa. Nuevo overlay `#cam-ov` con getUserMedia (facingMode environment),
+   botón obturador que NO cierra, contador + tira de últimas 6 + flash. `openCamera/snapPhoto/camUpdateCount/
+   closeCamera` (_camStream). Cada disparo comprime a 1280px JPEG .72 y hace push a RO.fotos en vivo.
+   Botón verde "Cámara rápida" en paso Fotos + se mantiene "Subir de la galería" (input multiple) como fallback.
+3. **PDF no se enviaba:** el fallback viejo era `window.open(_pdfUrl)` = no-op en PWA instalada.
+   `shareViaNative` reescrito: si canShare(files) comparte y en error (≠Abort) descarga + explica;
+   si no, descarga garantizada + instrucción. Nuevo `sendWhatsAppPDF()` = descarga PDF + abre wa.me
+   del cliente con mensaje (RO + total). Modal PDF: botón verde grande "Enviar por WhatsApp" arriba.
+2+4. **Backup + pestaña RO en vivo:** botón "👁 Ver RO" en la barra del wizard (junto al RO-id) → overlay
+   `#roview-ov` (showROView/roViewHTML): progreso con checks (cliente/veh/fotos/servicios/firmas/guardada),
+   cliente+vehículo, servicios+total calculado, denegados, estado de guardado+respaldo, saltos rápidos a pasos.
+   saveRO ahora dispara `cloudBackup(false)` inmediato (no espera 45s) + alert dice el estado del respaldo.
+   ⚠️ **RIESGO DETECTADO:** órdenes guardadas en MODO DEMO se BORRAN al salir (sf_v1_real las sobrescribe).
+   roViewHTML y saveRO ahora avisan en ROJO si DB._demo. Verificar que Roberto NO estaba en demo con su cliente.
+   NOTA: no puedo ver su localStorage/GitHub reales — el path de guardado es correcto (upsertRO→saveDB), pero
+   confirmar con él que Ajustes→Respaldo tiene repo+token (si no, los datos solo viven en el iPad).
+
 ## Last updated: 2026-07-18 (batch 3)
 
 ## New 2026-07-18 batch 3: $ por hora (Finanzas → Equipo)

@@ -186,7 +186,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   <div class="tb">
     <button class="tb-back" onclick="go('home')"><i class="ti ti-arrow-left"></i> Home</button>
     <div style="color:#fff;font-size:13px;font-weight:700">Nueva RO</div>
-    <div id="ro-id-lbl" style="font-size:10px;color:rgba(255,255,255,.45)"></div>
+    <button onclick="showROView()" style="background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:8px;padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-eye"></i> Ver RO <span id="ro-id-lbl" style="opacity:.6;font-weight:400"></span></button>
   </div>
   <div class="steps-bar" id="ro-steps-bar"></div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="ro-panes-wrap"></div>
@@ -685,7 +685,7 @@ function buildPanes(){
 function buildPane(id){
   if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" list="cli-dl" placeholder="Juan García" oninput="RO.cliente=this.value;pickCli(this.value)"><datalist id="cli-dl"></datalist></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Empresa / flota (opcional — agrupa órdenes y genera estado de cuenta)</div><input id="c-emp" list="emp-dl" placeholder="Ej: Pest Control Rivera" oninput="RO.empresa=this.value"><datalist id="emp-dl"></datalist></div></div><div id="cli-veh-chips" style="margin-top:4px"></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase();if(this.value.length===17)decodeVIN(this.value)"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
 
-  if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Tira todas las fotos que necesites.</span></div><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Tomar / Seleccionar Fotos<input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
+  if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Con la <strong>cámara rápida</strong> tiras varias fotos seguidas sin salir ni darle guardar.</span></div><button class="btn g full" onclick="openCamera()" style="margin-bottom:8px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Cámara rápida (varias seguidas)</button><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-photo" style="font-size:20px"></i>&nbsp; Subir de la galería<input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
 
 
 
@@ -830,6 +830,44 @@ function deletePhoto(i){
 
 // Legacy single handlePhoto — keep for safety
 function handlePhoto(e,i){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){if(!Array.isArray(RO.fotos))RO.fotos=[];RO.fotos[i]=ev.target.result;renderPhotosGrid();};r.readAsDataURL(f);}
+
+// ============ CÁMARA RÁPIDA — varias fotos seguidas sin salir (resuelve el "save y continuar") ============
+var _camStream=null;
+function openCamera(){
+  var ov=document.getElementById('cam-ov');if(!ov)return;
+  ov.style.display='flex';
+  var vid=document.getElementById('cam-video');
+  var st=document.getElementById('cam-status');
+  st.textContent='Iniciando cámara...';
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){st.textContent='Este navegador no permite la cámara en vivo — usa "Subir de la galería".';return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+    .then(function(stream){_camStream=stream;vid.srcObject=stream;var pr=vid.play();if(pr&&pr.catch)pr.catch(function(){});st.textContent='Apunta y toca el botón — quédate aquí y tira todas las que quieras.';camUpdateCount();})
+    .catch(function(e){st.textContent='No se pudo abrir la cámara ('+((e&&e.name)||'error')+'). Da permiso de cámara o usa "Subir de la galería".';});
+}
+function snapPhoto(){
+  var vid=document.getElementById('cam-video');
+  if(!vid||!vid.videoWidth)return;
+  var max=1280,w=vid.videoWidth,h=vid.videoHeight;
+  if(w>max||h>max){var k=Math.min(max/w,max/h);w=Math.round(w*k);h=Math.round(h*k);}
+  var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+  cv.getContext('2d').drawImage(vid,0,0,w,h);
+  if(!Array.isArray(RO.fotos))RO.fotos=[];
+  RO.fotos.push({d:cv.toDataURL('image/jpeg',0.72),t:new Date().toISOString()});
+  var fl=document.getElementById('cam-flash');if(fl){fl.style.opacity='.85';setTimeout(function(){fl.style.opacity='0';},120);}
+  camUpdateCount();
+}
+function camUpdateCount(){
+  var n=(RO.fotos||[]).length;
+  var c=document.getElementById('cam-count');if(c)c.textContent=n+' foto'+(n!==1?'s':'');
+  var strip=document.getElementById('cam-strip');
+  if(strip)strip.innerHTML=(RO.fotos||[]).slice(-6).map(function(f){return '<img src="'+fotoSrc(f)+'" style="height:46px;width:46px;object-fit:cover;border-radius:6px;border:2px solid #fff">';}).join('');
+}
+function closeCamera(){
+  if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
+  var vid=document.getElementById('cam-video');if(vid)vid.srcObject=null;
+  var ov=document.getElementById('cam-ov');if(ov)ov.style.display='none';
+  renderPhotosGrid();
+}
 
 // ============ VIN SCANNER (ZXing — Code39, Code128, QR, DataMatrix) ============
 var _zxingReader=null;
@@ -1202,6 +1240,76 @@ function calcEst(){
   return tot;
 }
 
+// ============ RESUMEN EN VIVO DEL RO — ver cómo va quedando mientras se arma ============
+function showROView(){
+  if(typeof RO==='undefined'||!RO){alert('Abre o empieza una orden primero.');return;}
+  document.getElementById('roview-body').innerHTML=roViewHTML();
+  document.getElementById('roview-ov').style.display='flex';
+}
+function closeROView(){var ov=document.getElementById('roview-ov');if(ov)ov.style.display='none';}
+function _rowCard(title,rows){return '<div class="card" style="margin-bottom:10px"><div class="ch" style="font-size:13px">'+title+'</div><div class="cb" style="font-size:13px">'+rows+'</div></div>';}
+function roViewHTML(){
+  var rate=DB.settings.laborRate||103;
+  var veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
+  var sub=0;
+  var svcRows=(RO.servicios||[]).map(function(s){
+    var laborC=(s.laborHours||0)*rate;
+    var partsC=(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);
+    var lineT=(s.ep||0)*(s.qty||1)+laborC+partsC;sub+=lineT;
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--gray-100)"><span>'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>';
+  }).join('')||'<div style="color:var(--gray-400)">Todavía sin servicios.</div>';
+  var d=RO.descuento||0;var descAmt=RO.descTipo==='$'?Math.min(d,sub):sub*d/100;
+  var ad=sub-descAmt;var ivu=RO.cortesia?0:ad*.115;var tot=RO.cortesia?0:ad+ivu;
+  var denConf=(RO.denegados||[]).filter(function(x){return !x.auto||(x.auto&&x.confirmed);});
+  var fotoN=(RO.fotos||[]).length;
+  var sig1=!!((RO.sigData&&RO.sigData.sig1)||RO.sig1);
+  var sig2=!!((RO.sigData&&RO.sigData.sig2)||RO.sig2);
+  var saved=DB.ordenes.some(function(o){return o.id===RO.id;});
+  var chk=function(ok){return ok?'<span style="color:var(--green);font-weight:700">✓</span>':'<span style="color:var(--gray-300)">○</span>';};
+  var h='';
+  // Aviso demo (crítico — órdenes hechas en demo se borran al salir)
+  if(DB._demo)h+='<div style="background:#fde8e8;border:1.5px solid var(--red);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--red);font-weight:700">🎭 ESTÁS EN MODO DEMO — esta orden NO es real y se borrará al salir del demo. Sal del demo antes de atender un cliente de verdad.</div>';
+  // Progreso
+  h+='<div class="card" style="margin-bottom:10px"><div class="ch" style="font-size:13px"><i class="ti ti-list-check"></i> Progreso</div><div class="cb" style="font-size:13px;line-height:1.9">'+
+    chk(!!RO.cliente)+' Cliente &nbsp; '+chk(!!veh)+' Vehículo<br>'+
+    chk(fotoN>0)+' Fotos ('+fotoN+') &nbsp; '+chk((RO.servicios||[]).length>0)+' Servicios ('+(RO.servicios||[]).length+')<br>'+
+    chk(sig1)+' Firma autorización &nbsp; '+chk(sig2)+' Firma final<br>'+
+    chk(saved)+' Guardada en el sistema</div></div>';
+  // Cliente / vehículo
+  h+=_rowCard('<i class="ti ti-user"></i> Cliente y vehículo',
+    '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400)">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Tel</span><span>'+(RO.tel||'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Tablilla</span><span>'+(RO.vehiculo.tag||'—')+'</span>'+
+    (RO.queja?'<span style="color:var(--gray-400)">Queja</span><span>'+RO.queja+'</span>':'')+'</div>');
+  // Servicios + total
+  h+='<div class="card" style="margin-bottom:10px"><div class="ch" style="font-size:13px"><i class="ti ti-tool"></i> Servicios</div><div class="cb" style="font-size:13px">'+svcRows+
+    '<div style="border-top:2px solid var(--gray-200);margin-top:8px;padding-top:8px">'+
+    '<div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>$'+sub.toFixed(2)+'</span></div>'+
+    (descAmt>0&&!RO.cortesia?'<div style="display:flex;justify-content:space-between;color:var(--green)"><span>Descuento</span><span>— $'+descAmt.toFixed(2)+'</span></div>':'')+
+    '<div style="display:flex;justify-content:space-between"><span>IVU 11.5%</span><span>$'+ivu.toFixed(2)+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;color:var(--red);margin-top:4px"><span>Total</span><span>'+(RO.cortesia?'$0.00 🤝':'$'+tot.toFixed(2))+'</span></div></div></div></div>';
+  // Denegados
+  if(denConf.length){var dt=denConf.reduce(function(s,x){return s+(x.precio||0);},0);
+    h+=_rowCard('<i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Recomendados no autorizados',
+      denConf.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>'+x.nombre+'</span><span>$'+(x.precio||0).toFixed(2)+'</span></div>';}).join('')+
+      '<div style="border-top:1px solid var(--gray-100);margin-top:5px;padding-top:5px;font-weight:700;display:flex;justify-content:space-between"><span>Total</span><span>$'+dt.toFixed(2)+'</span></div>');}
+  // Estado / respaldo
+  var bk=(DB.settings&&DB.settings.backup)||{};
+  var bkTxt=DB._demo?'Pausado (modo demo)':((bk.token&&bk.repo)?(bk.last?('Último respaldo: '+new Date(bk.last).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):'Configurado — se sube al guardar'):'<span style="color:var(--red)">SIN configurar — solo en este iPad</span>');
+  h+=_rowCard('<i class="ti ti-cloud"></i> Guardado y respaldo',
+    '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400)">Estado</span><span style="font-weight:700">'+(saved?'Guardada ✓':'Sin guardar todavía')+'</span>'+
+    '<span style="color:var(--gray-400)">Técnico</span><span>'+(RO.tecnico?tecName(RO.tecnico):'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Respaldo</span><span>'+bkTxt+'</span></div>');
+  // Saltos rápidos
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">'+
+    '<button class="btn sm" onclick="closeROView();gotoStep(1)"><i class="ti ti-camera"></i> Fotos</button>'+
+    '<button class="btn sm" onclick="closeROView();gotoStep(2)"><i class="ti ti-tool"></i> Servicios</button>'+
+    '<button class="btn sm" onclick="closeROView();gotoStep(3)"><i class="ti ti-receipt"></i> Estimado</button>'+
+    '<button class="btn sm p" onclick="closeROView();gotoStep(8)"><i class="ti ti-flag-check"></i> Cierre</button></div>';
+  return h;
+}
+
 function upsertRO(){
   var idx=DB.ordenes.findIndex(function(x){return x.id===RO.id;});
   if(idx===-1){RO.id=nextRONum();DB.ordenes.push(JSON.parse(JSON.stringify(RO)));}
@@ -1230,7 +1338,14 @@ function saveRO(){
     DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
   }
   if(!saveDB())return;
-  alert('Orden '+RO.id+' guardada. $'+RO.total.toFixed(2));go('home');
+  // Respaldo a la nube AHORA (no esperar los 45s) para que la reparación quede segura al instante
+  var bk=backupCfg();
+  if(bk&&!DB._demo){clearTimeout(_cbTimer);cloudBackup(false);}
+  var msg='Orden '+RO.id+' guardada ✓   $'+RO.total.toFixed(2);
+  if(DB._demo)msg+='\n\n🎭 OJO: estás en MODO DEMO — esta orden NO es real y se borra al salir del demo.';
+  else if(bk)msg+='\n\nSubiendo respaldo a la nube...';
+  else msg+='\n\n⚠️ Respaldo en la nube SIN configurar — esta orden solo vive en este iPad. Configúralo en Ajustes → Respaldo para no perder nada.';
+  alert(msg);go('home');
 }
 function autoSaveCli(){
   if(!RO.cliente)return;
@@ -1424,15 +1539,31 @@ function exportPDF(){
 
 var _pdfBlob=null;var _pdfUrl=null;var _pdfFilename='ShopFlow.pdf';
 function shareViaNative(){
-  if(!_pdfBlob)return;
+  if(!_pdfBlob){alert('El PDF todavía no está listo. Espera un segundo e intenta de nuevo.');return;}
   var file=new File([_pdfBlob],_pdfFilename,{type:'application/pdf'});
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({title:'ShopFlow — '+RO.id,text:'Orden de servicio para '+RO.cliente,files:[file]})
-    .catch(function(e){if(e.name!=='AbortError'){window.open(_pdfUrl,'_blank');}});
-  }else{
-    // Fallback: open in new tab (user can share/save from there)
-    window.open(_pdfUrl,'_blank');
+    navigator.share({title:'Recibo '+RO.id,text:'Recibo de '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+(RO.cliente||''),files:[file]})
+    .catch(function(e){
+      if(e&&e.name==='AbortError')return; // el usuario cerró el menú — normal
+      downloadPDF();
+      alert('No se pudo abrir el menú de compartir en este dispositivo. Descargué el PDF a tu iPad ✓\n\nÁbrelo desde Archivos/Descargas y tócalo para enviarlo por WhatsApp.');
+    });
+    return;
   }
+  // App instalada / navegador que no comparte archivos: descarga garantizada + instrucción
+  downloadPDF();
+  alert('Este dispositivo no permite compartir el PDF directo desde la app. Lo descargué a tu iPad ✓\n\nÁbrelo desde Archivos/Descargas y tócalo para enviarlo por WhatsApp, o adjúntalo en el chat.');
+}
+// Abre el chat de WhatsApp del cliente con el mensaje + descarga el PDF para adjuntar
+function sendWhatsAppPDF(){
+  if(!_pdfBlob){alert('El PDF todavía no está listo. Espera un segundo e intenta de nuevo.');return;}
+  downloadPDF();
+  var tel=waNum(RO.tel);
+  var nom=((RO.cliente||'').split(' ')[0])||'';
+  var total=(RO.total||0).toFixed(2);
+  var msg='Hola '+nom+', aquí está tu recibo de '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+RO.id+', total $'+total+'. Te adjunto el PDF. ¡Gracias por tu preferencia! 🏁';
+  var url=(tel?'https://wa.me/'+tel:'https://wa.me/')+'?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
 }
 function printPDF(){
   if(!_pdfUrl)return;
@@ -3672,10 +3803,13 @@ document.addEventListener('click',hideSplash,{once:true});
       <div style="font-size:18px;font-weight:700;color:var(--green)"><i class="ti ti-check"></i> Recibo listo</div>
       <div style="font-size:13px;color:var(--gray-500);margin-top:4px">¿Cómo quieres enviarlo al cliente?</div>
     </div>
+    <button onclick="sendWhatsAppPDF()" class="btn full" style="background:#25D366;color:#fff;border:none;margin-bottom:10px;font-weight:700;font-size:14px;height:auto;padding:14px">
+      <i class="ti ti-brand-whatsapp" style="font-size:22px"></i>&nbsp; Enviar por WhatsApp al cliente
+    </button>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
       <button onclick="shareViaNative()" class="btn p" style="flex-direction:column;padding:16px 8px;gap:8px;font-size:12px;height:auto;justify-content:center">
         <i class="ti ti-share" style="font-size:28px"></i>
-        <span>WhatsApp<br>Email · SMS</span>
+        <span>Compartir<br>Otras apps</span>
       </button>
       <button onclick="printPDF()" class="btn" style="flex-direction:column;padding:16px 8px;gap:8px;font-size:12px;height:auto;justify-content:center">
         <i class="ti ti-printer" style="font-size:28px"></i>
@@ -3687,6 +3821,35 @@ document.addEventListener('click',hideSplash,{once:true});
       </button>
     </div>
     <button onclick="closePDFShare()" class="btn full" style="color:var(--gray-500)"><i class="ti ti-x"></i> Cerrar</button>
+  </div>
+</div>
+
+<!-- CÁMARA RÁPIDA (varias fotos seguidas) -->
+<div id="cam-ov" style="display:none;position:fixed;inset:0;z-index:500;background:#000;flex-direction:column">
+  <div style="position:relative;flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center">
+    <video id="cam-video" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;background:#000"></video>
+    <div id="cam-flash" style="position:absolute;inset:0;background:#fff;opacity:0;transition:opacity .12s;pointer-events:none"></div>
+    <div id="cam-count" style="position:absolute;top:14px;left:14px;background:rgba(0,0,0,.55);color:#fff;padding:5px 12px;border-radius:20px;font-size:13px;font-weight:700">0 fotos</div>
+    <div id="cam-strip" style="position:absolute;bottom:12px;left:12px;display:flex;gap:5px"></div>
+  </div>
+  <div style="background:#000;padding:12px 16px 26px;text-align:center">
+    <div id="cam-status" style="color:rgba(255,255,255,.7);font-size:12px;margin-bottom:12px;min-height:16px">Iniciando cámara...</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <button onclick="closeCamera()" style="background:#333;color:#fff;border:none;border-radius:10px;padding:12px 14px;min-width:84px;font-size:13px;cursor:pointer"><i class="ti ti-x"></i> Cerrar</button>
+      <button onclick="snapPhoto()" aria-label="Tomar foto" style="width:74px;height:74px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.4);cursor:pointer;flex-shrink:0;padding:0"></button>
+      <button onclick="closeCamera()" style="background:var(--green);color:#fff;border:none;border-radius:10px;padding:12px 14px;min-width:84px;font-size:13px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i> Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESUMEN EN VIVO DEL RO -->
+<div id="roview-ov" style="display:none;position:fixed;inset:0;z-index:450;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center">
+  <div style="background:var(--gray-50);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column">
+    <div style="padding:14px 18px 10px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;background:var(--white);border-radius:18px 18px 0 0">
+      <div style="font-size:16px;font-weight:800;color:var(--navy)"><i class="ti ti-eye"></i> RO en vivo</div>
+      <button onclick="closeROView()" style="background:var(--gray-100);border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;color:var(--gray-500)"><i class="ti ti-x"></i> Cerrar</button>
+    </div>
+    <div id="roview-body" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 28px"></div>
   </div>
 </div>
 
