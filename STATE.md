@@ -2,7 +2,28 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-23 (primer cliente real de Pit Stop 🎉)
+## Last updated: 2026-07-23 (batch 2: diagnóstico full-app + firma/inspección/bug PDF)
+
+## New 2026-07-23 (batch 2): diagnóstico completo + firma más grande + notas inspección + bug PDF
+Roberto pidió diagnóstico de TODA la app + 3 ajustes. Todo hecho, `test/diag.js` (nueva herramienta) + smoke = TODO VERDE, page errors none.
+- **`test/diag.js` (NUEVA herramienta de diagnóstico full-app):** auditoría ESTÁTICA de cableado
+  (regex saca todos los on* del HTML y confirma que cada función llamada existe — 141 handlers OK) +
+  E2E: todas las pantallas, jsPDF/ZXing cargadas, PDF recibo/orden válidos (%PDF magic), _pdfCtx,
+  botones del modal, fallback de descarga, cámara sin-cámara, RO en vivo, respaldo, reExportPDF no
+  corrompe RO. Correr: `python -m http.server 8931` (raíz) + `cd test && node diag.js`.
+- **BUG ENCONTRADO Y ARREGLADO (PDF):** `reExportPDF` restaura `RO` justo después de `exportPDF()`, pero
+  los botones del modal (shareViaNative/sendWhatsAppPDF) leían `RO.*` al hacer clic → mensaje de WhatsApp
+  con datos del RO equivocado al reenviar un recibo viejo desde historial. Fix: `_pdfCtx` congela
+  {id,cliente,tel,total,tipo} al generar el PDF (en exportPDF Y workOrderPDF); share/WhatsApp usan _pdfCtx.
+- **Firma más grande:** `.sig-pad` 170px→230px + los 3 canvas buffer 600×230 (sig-den era 90). Además
+  arreglé `pos()` en initSP para escalar x/y por separado (scx/scy) — antes usaba solo el ancho para
+  ambos ejes = firma distorsionada; ahora buffer 1:1 con display, tinta nítida.
+- **Notas de inspección (campo aparte):** textarea `#insp-gen` → `RO.inspGeneral` al final del paso
+  Inspección; se restaura en fillROInputs; sale en el PDF de inspección (dviPDF, sección NOTAS DE
+  INSPECCIÓN arriba) y en el WhatsApp waDVI (línea 📝 Notas).
+- **Blindaje:** roViewHTML ahora usa `vv=RO.vehiculo||{}` (no truena si falta el vehículo).
+
+## New 2026-07-23 (primer cliente real de Pit Stop 🎉)
 
 ## New 2026-07-23: 4 arreglos pedidos tras el primer cliente real
 Roberto atendió su primer cliente con ShopFlow y pidió 4 cosas. Todas hechas (smoke sigue verde, page errors none):
