@@ -2,6 +2,28 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-23 (batch 3: MODO OSCURO + texto grande + reporte semanal + WhatsApp adjunto)
+
+## New 2026-07-23 (batch 3): apariencia + reporte semanal + auto-adjunto WhatsApp ("añade todo")
+Roberto: clientes mañana y sábado, necesita dark mode HOY. Todo hecho, verificado con screenshots, diag+smoke verde (147 handlers).
+- **MODO OSCURO:** el CSS ya usaba variables → tema por override en `:root[data-theme="dark"]`.
+  Truco clave: `--navy` se queda OSCURO (barras/botones se ven bien); los 17 textos `color:var(--navy)`
+  se cambiaron por `color:var(--ink)` (nueva var: navy en claro, casi-blanco en oscuro) vía sed. También
+  sed `background:#fff`→`var(--white)`. `applyTheme()` pone data-theme en <html> + meta theme-color;
+  se llama en boot tras loadDB. Toggle en Ajustes (card "Apariencia", primero). Persiste en DB.settings.theme.
+  ⚠️ BUG cazado con screenshot: `:root[data-theme="dark"] input` (esp. 0,2,1) pisaba `.tgl` → el switch salía
+  oscuro. Fix: `input:not(.tgl)`. Switch ON verde #34C759 fijo, OFF gris.
+- **TEXTO GRANDE:** `html.bigtext{zoom:1.15}` (zoom funciona en WebKit/iPad; inline px por todos lados hace
+  que zoom sea la vía confiable). Toggle en Apariencia. DB.settings.bigText.
+- **Switches tipo iOS:** clase `.tgl` (el global `appearance:none` mataba el look nativo → hechos a mano).
+- **REPORTE SEMANAL:** botón verde arriba del P&L (Finanzas) → `reporteSemana()` (lunes-domingo actual):
+  carros, facturado, cobrado, por cobrar semana, ticket prom, top 3 servicios, por cobrar TOTAL. Modal
+  `#rep-ov` con Copiar/Compartir (navigator.share→WhatsApp). NOTA: push automático los domingos NO es
+  posible offline sin backend — es on-demand. (Si Roberto quiere auto-domingo real = cloud agent aparte.)
+- **WhatsApp auto-adjunto:** `sendWhatsAppPDF` ahora usa navigator.share con el PDF+mensaje (eliges
+  WhatsApp y el PDF va PEGADO); fallback `waFallbackPDF` = descarga + wa.me con texto.
+- Herramienta: screenshots de verificación en scratchpad (dark_home/estimado/inspeccion/ajustes/finanzas).
+
 ## Last updated: 2026-07-23 (batch 2: diagnóstico full-app + firma/inspección/bug PDF)
 
 ## New 2026-07-23 (batch 2): diagnóstico completo + firma más grande + notas inspección + bug PDF

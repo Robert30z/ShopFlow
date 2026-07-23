@@ -20,7 +20,21 @@
 <title>ShopFlow — Auto Service Management</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
-:root{--navy:#0B1F3A;--blue:#2196F3;--blue-light:#E3F2FD;--red:#D32F2F;--red-light:#FFEBEE;--green:#3B6D11;--green-light:#EAF3DE;--amber:#BA7517;--amber-light:#FFF8E1;--gray-50:#F8F9FA;--gray-100:#F1F3F5;--gray-200:#E9ECEF;--gray-300:#DEE2E6;--gray-400:#ADB5BD;--gray-500:#6C757D;--gray-600:#495057;--gray-900:#212529;--white:#FFFFFF;--r-sm:6px;--r-md:10px;--r-lg:14px}
+:root{--navy:#0B1F3A;--ink:#0B1F3A;--blue:#2196F3;--blue-light:#E3F2FD;--red:#D32F2F;--red-light:#FFEBEE;--green:#3B6D11;--green-light:#EAF3DE;--amber:#BA7517;--amber-light:#FFF8E1;--gray-50:#F8F9FA;--gray-100:#F1F3F5;--gray-200:#E9ECEF;--gray-300:#DEE2E6;--gray-400:#ADB5BD;--gray-500:#6C757D;--gray-600:#495057;--gray-700:#495057;--gray-900:#212529;--white:#FFFFFF;--r-sm:6px;--r-md:10px;--r-lg:14px}
+/* ===== MODO OSCURO — barras quedan oscuras; textos que eran navy usan --ink ===== */
+:root[data-theme="dark"]{--ink:#EAF0F6;--blue:#4FA8F7;--blue-light:#132A40;--red:#EF5350;--red-light:#3A1E22;--green:#7BB84A;--green-light:#233016;--amber:#E0A83C;--amber-light:#33290F;--gray-50:#26333F;--gray-100:#2C3A48;--gray-200:#3A4A5C;--gray-300:#4A5C70;--gray-400:#93A0AF;--gray-500:#AEBBC8;--gray-600:#C7D1DB;--gray-700:#D8E0E8;--gray-900:#EAF0F6;--white:#1E2A38}
+:root[data-theme="dark"] body,:root[data-theme="dark"] html{background:#10161E}
+:root[data-theme="dark"] .card{box-shadow:0 1px 3px rgba(0,0,0,.45)}
+:root[data-theme="dark"] input:not(.tgl),:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:#17212C}
+:root[data-theme="dark"] input::placeholder,:root[data-theme="dark"] textarea::placeholder{color:#61707F}
+:root[data-theme="dark"] .sig-pad{background:#141C26}
+/* ===== TEXTO GRANDE (para el sol / manos ocupadas) ===== */
+html.bigtext{zoom:1.15}
+/* ===== Switch tipo iOS (ON/OFF claro) ===== */
+.tgl{position:relative;width:50px;height:29px;flex-shrink:0;-webkit-appearance:none;appearance:none;background:var(--gray-300);border-radius:20px;border:none;cursor:pointer;transition:background .2s;padding:0;margin:0}
+.tgl:checked{background:#34C759}
+.tgl::after{content:"";position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s}
+.tgl:checked::after{left:24px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;font-size:14px;color:var(--gray-900);background:var(--gray-100);overscroll-behavior:none}
 .pg{display:none;height:100vh;overflow:hidden;flex-direction:column;position:relative}
@@ -47,7 +61,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
 textarea{resize:vertical;min-height:52px;line-height:1.5}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid var(--gray-200);background:var(--white);color:var(--gray-700);font-family:inherit}
 .btn:active{opacity:.8}
-.btn.p{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.p{background:var(--navy);color:#fff;border-color:var(--ink)}
 .btn.g{background:var(--green);color:#fff;border-color:var(--green)}
 .btn.a{background:var(--amber);color:#fff;border-color:var(--amber)}
 .btn.r{background:var(--red);color:#fff;border-color:var(--red)}
@@ -78,7 +92,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 .pan.active{display:block}
 .act{display:flex;gap:8px;padding:10px 14px;background:var(--white);border-top:1px solid var(--gray-100);flex-wrap:wrap;position:sticky;bottom:0;z-index:10;flex-shrink:0}
 .insp-zone{margin-bottom:14px}
-.izt{font-size:12px;font-weight:700;color:var(--navy);padding:7px 10px;background:var(--blue-light);border-radius:var(--r-sm);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+.izt{font-size:12px;font-weight:700;color:var(--ink);padding:7px 10px;background:var(--blue-light);border-radius:var(--r-sm);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
 .ig{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .ii{border:1.5px solid var(--gray-200);border-radius:var(--r-sm);padding:7px 9px;background:var(--white)}
 .ii.verde{border-color:var(--green);background:var(--green-light)}
@@ -97,14 +111,14 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 .cat-scroll{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}
 .cat-scroll::-webkit-scrollbar{display:none}
 .cp{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--gray-200);white-space:nowrap;background:var(--white);color:var(--gray-600)}
-.cp.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.cp.active{background:var(--navy);color:#fff;border-color:var(--ink)}
 .sg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
 .sg3{grid-template-columns:repeat(3,1fr)}
 .sg4{grid-template-columns:repeat(4,1fr)}
 .sc{background:var(--white);border-radius:var(--r-md);padding:11px 12px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
 .sl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:4px}
 .sv{font-size:20px;font-weight:700}
-.sv.g{color:var(--green)}.sv.r{color:var(--red)}.sv.a{color:var(--amber)}.sv.b{color:var(--blue)}.sv.n{color:var(--navy)}
+.sv.g{color:var(--green)}.sv.r{color:var(--red)}.sv.a{color:var(--amber)}.sv.b{color:var(--blue)}.sv.n{color:var(--ink)}
 .tabs{display:flex;border-bottom:2px solid var(--gray-200);background:var(--white);overflow-x:auto;flex-shrink:0;position:sticky;top:0;z-index:90}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;color:var(--gray-400);white-space:nowrap;margin-bottom:-2px}
@@ -339,6 +353,12 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0">
     <div style="padding:14px 16px">
+      <div class="card"><div class="ch"><i class="ti ti-adjustments"></i> Apariencia</div><div class="cb">
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer"><span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700"><i class="ti ti-moon" style="font-size:18px"></i> Modo oscuro</span><input type="checkbox" id="set-dark" class="tgl" onchange="toggleTheme(this.checked)"></label>
+        <div style="font-size:11px;color:var(--gray-400);margin:2px 0 10px">Fondo negro — más fácil de leer bajo el sol y de noche.</div>
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;border-top:1px solid var(--gray-100)"><span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700"><i class="ti ti-text-increase" style="font-size:18px"></i> Texto grande</span><input type="checkbox" id="set-bigtext" class="tgl" onchange="toggleBigText(this.checked)"></label>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Agranda todo — útil con las manos ocupadas en el taller.</div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-clock-dollar"></i> Tarifa de labor</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Esta es tu tarifa por hora de labor. Se usa para calcular el costo de mano de obra en cada trabajo.</span></div>
         <div class="fr1"><div class="fg"><div class="fl">Tarifa por hora ($)</div><input id="set-labor" type="number" step="1" placeholder="103" oninput="saveSettings()"></div></div>
@@ -471,6 +491,15 @@ function saveDB(){
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
+// ============ APARIENCIA: modo oscuro + texto grande ============
+function applyTheme(){
+  var t=(DB.settings&&DB.settings.theme)==='dark'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.documentElement.classList.toggle('bigtext',!!(DB.settings&&DB.settings.bigText));
+  var mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.setAttribute('content',t==='dark'?'#10161E':'#0B1F3A');
+}
+function toggleTheme(on){if(!DB.settings)DB.settings={};DB.settings.theme=on?'dark':'light';saveDB();applyTheme();}
+function toggleBigText(on){if(!DB.settings)DB.settings={};DB.settings.bigText=!!on;saveDB();applyTheme();}
 
 // ============ AI HELPER ============
 // La API key se guarda en Ajustes (localStorage) — nunca en el código ni en el repo.
@@ -691,7 +720,7 @@ function buildPane(id){
 
   if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de servicios y precios':'Autorización final (entrega)';var desc=id==='firma1'?'El cliente autoriza los servicios y precios presentados en el estimado, y la inspección/diagnóstico del vehículo.':'El cliente confirma el total final, incluyendo servicios agregados o ajustados durante el trabajo.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
 
-  if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--navy);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
+  if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--ink);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
 
   if(id==='servicios')return '<div class="sw"><i class="ti ti-search si"></i><input id="ro-sq" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div><div class="cat-scroll" id="ro-sc"></div><div id="ro-sl"></div><button class="btn sm full" onclick="addManualSvc()" style="margin:8px 0;justify-content:center"><i class="ti ti-plus"></i> Servicio manual (nombre y precio libre)</button><div class="dv"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden</div><button class="btn sm" onclick="RO.servicios=[];renderROSO()"><i class="ti ti-trash"></i></button></div><div id="ro-so"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div><div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas (salen en el recibo y la orden de trabajo)</div><textarea id="tech-n" placeholder="Ej: Cliente trajo su alternador — sin garantía" oninput="RO.techNotes=this.value"></textarea></div>';
 
@@ -699,7 +728,7 @@ function buildPane(id){
 
   if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="RO.cortesia=this.checked;calcEst();document.getElementById(\'est-cort-m-row\').style.display=this.checked?\'block\':\'none\'"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
-  if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div>'+((DB.asesores||[]).length?'<div class="card"><div class="ch"><i class="ti ti-user-check"></i> Asesor de servicio</div><div class="cb"><select onchange="RO.asesor=this.value">'+aseOptionsHTML(RO.asesor)+'</select></div></div>':'')+'<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--navy)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
+  if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div>'+((DB.asesores||[]).length?'<div class="card"><div class="ch"><i class="ti ti-user-check"></i> Asesor de servicio</div><div class="cb"><select onchange="RO.asesor=this.value">'+aseOptionsHTML(RO.asesor)+'</select></div></div>':'')+'<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--ink)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
 }
 
@@ -1025,7 +1054,7 @@ function aiDiagnosticSummary(){
       (r.problems||[]).forEach(function(p){
         html+='<div style="background:var(--white);border-radius:6px;padding:8px 10px;margin-bottom:6px;border-left:3px solid '+(sevColor[p.severity]||'var(--gray-300)')+'">'+
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
-          '<div style="font-size:11px;font-weight:700;color:var(--navy)">'+p.area+'</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--ink)">'+p.area+'</div>'+
           '<span class="badge '+(p.severity==='alta'?'br':p.severity==='media'?'ba':'bg')+'" style="flex-shrink:0">'+p.severity+'</span>'+
           '</div>'+
           '<div style="font-size:11px;margin-top:2px">⚠️ '+p.issue+'</div>'+
@@ -1135,7 +1164,7 @@ function renderROSO(){
         '<div><div class="fl" style="margin-bottom:2px">Labor / servicio ($)</div><input type="number" value="'+s.ep+'" step="0.01" style="font-size:12px;font-weight:700;color:var(--red)" oninput="RO.servicios['+i+'].ep=parseFloat(this.value)||0;renderROSO()"></div>'+
         '<div><div class="fl" style="margin-bottom:2px">Horas labor <span style="color:var(--blue)">@$'+rate+'</span></div><div style="display:flex;gap:4px"><input type="number" value="'+s.laborHours+'" step="0.05" min="0" inputmode="decimal" placeholder="0.0" style="font-size:12px;font-weight:700" oninput="RO.servicios['+i+'].laborHours=parseFloat(this.value)||0;updROSub()" onblur="renderROSO()"><button class="btn sm blue" onclick="aiLaborEstimate('+i+')" style="padding:5px 8px;flex-shrink:0" title="Estimar con AI"><i class="ti ti-sparkles"></i></button></div></div>'+
       '</div>'+
-      (s.laborHours>0?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Mano de obra: '+s.laborHours+'h × $'+rate+' = <strong style="color:var(--navy)">$'+laborCost.toFixed(2)+'</strong></div>':'')+
+      (s.laborHours>0?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Mano de obra: '+s.laborHours+'h × $'+rate+' = <strong style="color:var(--ink)">$'+laborCost.toFixed(2)+'</strong></div>':'')+
       '<button class="btn sm" onclick="openPartsModalRO('+i+')" style="width:100%;justify-content:center;font-size:11px;'+(partsCount>0?'background:var(--green-light);border-color:var(--green);color:var(--green)':'')+'"><i class="ti ti-receipt"></i> '+(partsCount>0?partsCount+' pieza'+(partsCount>1?'s':'')+' · costo $'+partsCost.toFixed(2)+' · venta $'+partsSell.toFixed(2):'Agregar piezas compradas')+'</button>'+
       '<div style="text-align:right;margin-top:7px;padding-top:7px;border-top:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400)">Total línea:</span> <strong style="color:var(--red);font-size:14px">$'+lineTotal.toFixed(2)+'</strong></div>'+
     '</div>';
@@ -1558,17 +1587,71 @@ function shareViaNative(){
   downloadPDF();
   alert('Este dispositivo no permite compartir el PDF directo desde la app. Lo descargué a tu iPad ✓\n\nÁbrelo desde Archivos/Descargas y tócalo para enviarlo por WhatsApp, o adjúntalo en el chat.');
 }
-// Abre el chat de WhatsApp del cliente con el mensaje + descarga el PDF para adjuntar
+// Enviar por WhatsApp: en iPad abre el menú de compartir con el PDF YA ADJUNTO + el
+// mensaje; eliges WhatsApp y el contacto, y el PDF va pegado. Si no se puede, cae a
+// descargar el PDF + abrir el chat del cliente con el mensaje para adjuntarlo a mano.
 function sendWhatsAppPDF(){
   if(!_pdfBlob){alert('El PDF todavía no está listo. Espera un segundo e intenta de nuevo.');return;}
-  downloadPDF();
-  var tel=waNum(_pdfCtx.tel);
+  var file=new File([_pdfBlob],_pdfFilename,{type:'application/pdf'});
   var nom=((_pdfCtx.cliente||'').split(' ')[0])||'';
   var total=(_pdfCtx.total||0).toFixed(2);
   var doctxt=(_pdfCtx.tipo==='orden')?'la orden de trabajo':'tu recibo';
-  var msg='Hola '+nom+', aquí está '+doctxt+' de '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+(_pdfCtx.id||'')+', total $'+total+'. Te adjunto el PDF. ¡Gracias por tu preferencia! 🏁';
+  var msg='Hola '+nom+', aquí está '+doctxt+' de '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+(_pdfCtx.id||'')+', total $'+total+'. ¡Gracias por tu preferencia! 🏁';
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({title:'Recibo '+(_pdfCtx.id||''),text:msg,files:[file]})
+      .catch(function(e){if(e&&e.name==='AbortError')return;waFallbackPDF(msg);});
+    return;
+  }
+  waFallbackPDF(msg);
+}
+function waFallbackPDF(msg){
+  downloadPDF();
+  var tel=waNum(_pdfCtx.tel);
   var url=(tel?'https://wa.me/'+tel:'https://wa.me/')+'?text='+encodeURIComponent(msg);
   window.open(url,'_blank');
+}
+
+// ============ REPORTE SEMANAL (resumen de la semana, compartible) ============
+var _repTxt='';
+function reporteSemana(){
+  var now=new Date();
+  var day=(now.getDay()+6)%7; // 0 = lunes
+  var start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-day);
+  var sT=start.getTime(),eT=sT+7*86400000;
+  var ords=(DB.ordenes||[]).filter(function(o){var t=new Date(o.fecha).getTime();return t>=sT&&t<eT&&o.estado!=='abierta';});
+  var carros=ords.length;
+  var ingresos=ords.reduce(function(s,o){return s+(o.total||0);},0);
+  var cobrado=0,porCobrar=0;
+  ords.forEach(function(o){var ab=o.estado==='pagado'?(o.total||0):(o.abonado||0);cobrado+=ab;porCobrar+=Math.max(0,(o.total||0)-ab);});
+  var pendTotal=(DB.ordenes||[]).filter(function(o){return o.estado!=='abierta'&&o.estado!=='pagado';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  var ticket=carros?ingresos/carros:0;
+  var freq={};ords.forEach(function(o){(o.servicios||[]).forEach(function(sv){var n=sv.n||sv.nombre||'—';freq[n]=(freq[n]||0)+1;});});
+  var top=Object.keys(freq).map(function(k){return{n:k,c:freq[k]};}).sort(function(x,y){return y.c-x.c;}).slice(0,3);
+  var fmt=function(d){return d.toLocaleDateString('es-PR',{day:'numeric',month:'short'});};
+  var L=[];
+  L.push('📊 *Reporte semanal — '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+'*');
+  L.push(fmt(start)+' al '+fmt(new Date(eT-1)));
+  L.push('');
+  L.push('🚗 Carros atendidos: '+carros);
+  L.push('💰 Facturado: $'+ingresos.toFixed(2));
+  L.push('✅ Cobrado: $'+cobrado.toFixed(2));
+  L.push('⏳ Por cobrar (semana): $'+porCobrar.toFixed(2));
+  L.push('🎫 Ticket promedio: $'+ticket.toFixed(2));
+  if(top.length){L.push('');L.push('🔧 Top servicios:');top.forEach(function(t){L.push('• '+t.n+' ('+t.c+')');});}
+  L.push('');
+  L.push('📌 Por cobrar TOTAL (todas las órdenes): $'+pendTotal.toFixed(2));
+  _repTxt=L.join('\n');
+  var body=document.getElementById('rep-body');if(body)body.textContent=_repTxt;
+  var ov=document.getElementById('rep-ov');if(ov)ov.style.display='flex';
+}
+function closeReporte(){var ov=document.getElementById('rep-ov');if(ov)ov.style.display='none';}
+function shareReporte(){
+  if(navigator.share){navigator.share({title:'Reporte semanal',text:_repTxt}).catch(function(){});return;}
+  window.open('https://wa.me/?text='+encodeURIComponent(_repTxt),'_blank');
+}
+function copyReporte(){
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(_repTxt).then(function(){alert('Reporte copiado ✓');},function(){alert('No se pudo copiar.');});}
+  else{try{var t=document.getElementById('rep-body');var r=document.createRange();r.selectNode(t);var s=window.getSelection();s.removeAllRanges();s.addRange(r);document.execCommand('copy');s.removeAllRanges();alert('Reporte copiado ✓');}catch(e){alert('No se pudo copiar.');}}
 }
 function printPDF(){
   if(!_pdfUrl)return;
@@ -1885,11 +1968,11 @@ function renderPL(){
       var ting=tor.reduce(function(s,o){return s+(o.total||0);},0);
       var tsecs=0;ords.forEach(function(o){(o.relojLog||[]).forEach(function(r){if(r.tec===t.id)tsecs+=(r.secs||0);});});
       var com=t.com?(ting/1.115)*t.com/100:0;
-      return '<div style="padding:7px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:700"><span style="font-family:monospace;color:var(--blue)">'+t.id+'</span> · '+t.nombre+'</span><span style="font-size:12px;font-weight:700;color:var(--green)">$'+ting.toFixed(0)+'</span></div><div style="font-size:10px;color:var(--gray-400)">'+tor.length+' '+(tor.length===1?'orden':'órdenes')+' · '+(tsecs/3600).toFixed(1)+' h de reloj'+(t.com?' · comisión ('+t.com+'%): <b style="color:var(--navy)">$'+com.toFixed(2)+'</b>':'')+'</div></div>';
+      return '<div style="padding:7px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:700"><span style="font-family:monospace;color:var(--blue)">'+t.id+'</span> · '+t.nombre+'</span><span style="font-size:12px;font-weight:700;color:var(--green)">$'+ting.toFixed(0)+'</span></div><div style="font-size:10px;color:var(--gray-400)">'+tor.length+' '+(tor.length===1?'orden':'órdenes')+' · '+(tsecs/3600).toFixed(1)+' h de reloj'+(t.com?' · comisión ('+t.com+'%): <b style="color:var(--ink)">$'+com.toFixed(2)+'</b>':'')+'</div></div>';
     }).join('')+'<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Comisión calculada sobre el subtotal sin IVU de las órdenes asignadas.</div></div></div>';
   }
   var el=document.getElementById('f-pl');if(!el)return;
-  el.innerHTML='<div style="padding:14px 16px"><div style="text-align:center;font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:10px">'+MESES[m]+' '+a+'</div>'+
+  el.innerHTML='<div style="padding:14px 16px"><button class="btn g full" onclick="reporteSemana()" style="margin-bottom:12px;justify-content:center"><i class="ti ti-calendar-stats"></i> Reporte de la semana</button><div style="text-align:center;font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:10px">'+MESES[m]+' '+a+'</div>'+
     '<div class="sg sg4" style="margin-bottom:14px">'+
       '<div class="sc"><div class="sl">Ingresos</div><div class="sv g">$'+ing.toFixed(0)+'</div></div>'+
       '<div class="sc"><div class="sl">Costo piezas</div><div class="sv r">$'+partsCost.toFixed(0)+'</div></div>'+
@@ -1898,8 +1981,8 @@ function renderPL(){
     '</div>'+
     '<div class="card"><div class="ch">P&L — '+MESES[m]+' '+a+'</div><div class="cb">'+
       '<div class="er"><span>Ingresos brutos</span><span style="font-weight:700;color:var(--green)">$'+ing.toFixed(2)+'</span></div>'+
-      '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, IVU cobrado (11.5%)</span><span style="color:var(--navy)">$'+ivuMes.toFixed(2)+'</span></div>'+
-      (laborRev>0?'<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, labor</span><span style="color:var(--navy)">$'+laborRev.toFixed(2)+'</span></div>':'')+
+      '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, IVU cobrado (11.5%)</span><span style="color:var(--ink)">$'+ivuMes.toFixed(2)+'</span></div>'+
+      (laborRev>0?'<div class="er"><span style="padding-left:10px;color:var(--gray-400)">↳ de esto, labor</span><span style="color:var(--ink)">$'+laborRev.toFixed(2)+'</span></div>':'')+
       '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">— Costo de piezas</span><span style="color:var(--red)">— $'+partsCost.toFixed(2)+'</span></div>'+
       '<div class="er" style="font-weight:700"><span>Ganancia bruta</span><span>$'+ganBruta.toFixed(2)+'</span></div>'+
       '<div class="er"><span style="padding-left:10px;color:var(--gray-400)">— Gastos operacionales</span><span style="color:var(--red)">— $'+gastos.toFixed(2)+'</span></div>'+
@@ -2240,7 +2323,7 @@ function renderHistDia(){
   });
   var el=document.getElementById('h-dia');if(!el)return;
   el.innerHTML='<div style="padding:14px 16px">'+
-    '<div style="text-align:center;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">'+now.toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div>'+
+    '<div style="text-align:center;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px">'+now.toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div>'+
     '<div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:14px">Resumen del día</div>'+
     '<div class="sg sg4" style="margin-bottom:14px">'+
       '<div class="sc"><div class="sl">Carros</div><div class="sv n">'+carCount+'</div></div>'+
@@ -2259,7 +2342,7 @@ function roCardHTML(o){
   var denCount=(o.denegados||[]).filter(function(d){return !d.auto||(d.auto&&d.confirmed);}).length;
   return '<div onclick="openRODetail(\''+o.id+'\')" style="background:var(--white);border-radius:var(--r-lg);padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;border-left:4px solid '+(o.estado==='pagado'?'var(--green)':o.estado==='abierta'?'var(--blue)':'var(--amber)')+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
-      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:700;color:var(--navy)">'+o.id+'</span><span style="font-size:11px;color:var(--gray-400)">'+time+'</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:700;color:var(--ink)">'+o.id+'</span><span style="font-size:11px;color:var(--gray-400)">'+time+'</span></div>'+
       '<span class="badge '+(o.estado==='pagado'?'bg':o.estado==='abierta'?'bb':'ba')+'">'+(o.estado==='pagado'?'Pagado':o.estado==='abierta'?'Abierta':'Pendiente')+'</span>'+
     '</div>'+
     '<div style="font-size:13px;font-weight:700">'+o.cliente+'</div>'+
@@ -2358,7 +2441,7 @@ function openRODetail(roId){
     [['sig1','Autorización de inspección'],['sig2','Autorización de trabajos']].forEach(function(p){
       if(o.sigData[p[0]]){
         html+='<div style="margin-bottom:10px"><div style="font-size:11px;color:var(--gray-500);font-weight:600;margin-bottom:4px">'+p[1]+(o.sigTimes&&o.sigTimes[p[0]]?' · firmada '+new Date(o.sigTimes[p[0]]).toLocaleString('es-PR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'')+'</div>'+
-          '<img src="'+o.sigData[p[0]]+'" style="width:100%;max-width:300px;border:1px solid var(--gray-200);border-radius:6px;background:#fff">'+'</div>';
+          '<img src="'+o.sigData[p[0]]+'" style="width:100%;max-width:300px;border:1px solid var(--gray-200);border-radius:6px;background:var(--white)">'+'</div>';
       }
     });
     if(o.terms)html+='<div style="font-size:10px;color:var(--gray-400);margin-top:4px"><i class="ti ti-file-certificate"></i> Términos v'+o.terms.v+' aceptados el '+new Date(o.terms.fecha).toLocaleString('es-PR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+' (texto congelado en esta orden)</div>';
@@ -2455,7 +2538,7 @@ function openRODetail(roId){
   if(Object.keys(o.insp||{}).length){
     html+='<div style="display:flex;gap:8px;margin-bottom:8px">'+
       (o.tel?'<button class="btn full" onclick="waDVI(\''+o.id+'\')" style="background:#25D366;color:#fff;border-color:#25D366;flex:1"><i class="ti ti-clipboard-check"></i> DVI WhatsApp</button>':'')+
-      '<button class="btn full" onclick="dviPDF(\''+o.id+'\')" style="background:var(--navy);color:#fff;border-color:var(--navy);flex:1"><i class="ti ti-file-type-pdf"></i> DVI PDF</button>'+
+      '<button class="btn full" onclick="dviPDF(\''+o.id+'\')" style="background:var(--navy);color:#fff;border-color:var(--ink);flex:1"><i class="ti ti-file-type-pdf"></i> DVI PDF</button>'+
     '</div>';
   }
   if(o.tel){
@@ -2554,6 +2637,8 @@ function deleteRO(roId){
 
 // ============ AJUSTES / SETTINGS ============
 function initAjustes(){
+  var sd=document.getElementById('set-dark');if(sd)sd.checked=(DB.settings.theme==='dark');
+  var sbt=document.getElementById('set-bigtext');if(sbt)sbt.checked=!!DB.settings.bigText;
   document.getElementById('set-labor').value=DB.settings.laborRate||103;
   document.getElementById('set-name').value=DB.settings.shopName||'';
   document.getElementById('set-phone').value=DB.settings.shopPhone||'';
@@ -3222,7 +3307,7 @@ function renderCustomerStatus(){
   document.body.style.background='#F6F4F0';
   document.body.innerHTML='<div style="max-width:520px;margin:0 auto;padding:0 16px 40px;font-family:-apple-system,Helvetica,Arial,sans-serif;color:#12161C">'
     +'<div style="text-align:center;padding:26px 0 18px"><div style="font-family:Arial Black,sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px"><span style="color:#E23B2E">●</span> '+E(d.n)+'</div><div style="color:#888;font-size:12px;margin-top:2px">Estado de tu reparación</div></div>'
-    +'<div style="background:#fff;border:1px solid #E4E0D8;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.06)">'
+    +'<div style="background:var(--white);border:1px solid #E4E0D8;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.06)">'
     +'<div style="font-size:12px;color:#888">Orden '+E(d.id)+'</div>'
     +'<div style="font-family:Arial Black,sans-serif;font-size:20px;margin:2px 0 4px">'+E(d.v)+'</div>'
     +'<div style="font-size:13px;color:#555;margin-bottom:18px">Hola '+E(d.c)+' — aquí está el estado y el presupuesto de tu servicio.</div>'
@@ -3774,6 +3859,7 @@ function buildDemoDB(){
 }
 
 loadDB();
+applyTheme();
 if(location.hash.slice(0,3)==='#s='){ renderCustomerStatus(); } else {
 // Registra el service worker — la app abre offline (señal mala en la calle)
 if('serviceWorker' in navigator){
@@ -3843,7 +3929,7 @@ document.addEventListener('click',hideSplash,{once:true});
 <div id="cam-ov" style="display:none;position:fixed;inset:0;z-index:500;background:#000;flex-direction:column">
   <div style="position:relative;flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center">
     <video id="cam-video" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;background:#000"></video>
-    <div id="cam-flash" style="position:absolute;inset:0;background:#fff;opacity:0;transition:opacity .12s;pointer-events:none"></div>
+    <div id="cam-flash" style="position:absolute;inset:0;background:var(--white);opacity:0;transition:opacity .12s;pointer-events:none"></div>
     <div id="cam-count" style="position:absolute;top:14px;left:14px;background:rgba(0,0,0,.55);color:#fff;padding:5px 12px;border-radius:20px;font-size:13px;font-weight:700">0 fotos</div>
     <div id="cam-strip" style="position:absolute;bottom:12px;left:12px;display:flex;gap:5px"></div>
   </div>
@@ -3851,8 +3937,23 @@ document.addEventListener('click',hideSplash,{once:true});
     <div id="cam-status" style="color:rgba(255,255,255,.7);font-size:12px;margin-bottom:12px;min-height:16px">Iniciando cámara...</div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <button onclick="closeCamera()" style="background:#333;color:#fff;border:none;border-radius:10px;padding:12px 14px;min-width:84px;font-size:13px;cursor:pointer"><i class="ti ti-x"></i> Cerrar</button>
-      <button onclick="snapPhoto()" aria-label="Tomar foto" style="width:74px;height:74px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.4);cursor:pointer;flex-shrink:0;padding:0"></button>
+      <button onclick="snapPhoto()" aria-label="Tomar foto" style="width:74px;height:74px;border-radius:50%;background:var(--white);border:5px solid rgba(255,255,255,.4);cursor:pointer;flex-shrink:0;padding:0"></button>
       <button onclick="closeCamera()" style="background:var(--green);color:#fff;border:none;border-radius:10px;padding:12px 14px;min-width:84px;font-size:13px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i> Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- REPORTE SEMANAL -->
+<div id="rep-ov" style="display:none;position:fixed;inset:0;z-index:450;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:16px;font-weight:800;color:var(--ink)"><i class="ti ti-calendar-stats"></i> Reporte semanal</div>
+      <button onclick="closeReporte()" style="background:var(--gray-100);border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;color:var(--gray-500)"><i class="ti ti-x"></i></button>
+    </div>
+    <pre id="rep-body" style="flex:1;overflow-y:auto;margin:0;padding:16px 18px;font-family:inherit;font-size:13.5px;line-height:1.7;white-space:pre-wrap;color:var(--gray-900)"></pre>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 18px;border-top:1px solid var(--gray-100)">
+      <button onclick="copyReporte()" class="btn"><i class="ti ti-copy"></i> Copiar</button>
+      <button onclick="shareReporte()" class="btn g"><i class="ti ti-brand-whatsapp"></i> Compartir</button>
     </div>
   </div>
 </div>
@@ -3861,7 +3962,7 @@ document.addEventListener('click',hideSplash,{once:true});
 <div id="roview-ov" style="display:none;position:fixed;inset:0;z-index:450;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center">
   <div style="background:var(--gray-50);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column">
     <div style="padding:14px 18px 10px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;background:var(--white);border-radius:18px 18px 0 0">
-      <div style="font-size:16px;font-weight:800;color:var(--navy)"><i class="ti ti-eye"></i> RO en vivo</div>
+      <div style="font-size:16px;font-weight:800;color:var(--ink)"><i class="ti ti-eye"></i> RO en vivo</div>
       <button onclick="closeROView()" style="background:var(--gray-100);border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;color:var(--gray-500)"><i class="ti ti-x"></i> Cerrar</button>
     </div>
     <div id="roview-body" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 28px"></div>
@@ -3966,9 +4067,9 @@ document.addEventListener('click',hideSplash,{once:true});
         <div class="ch">Agregar pieza comprada</div>
         <div class="cb">
           <button class="btn blue full" onclick="aiPartSuggest()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> Sugerir specs con AI (aceite, filtro, etc.)</button>
-          <div id="ai-suggest-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--navy);line-height:1.5"></div>
+          <div id="ai-suggest-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--ink);line-height:1.5"></div>
           <div class="fr fr1"><div class="fg"><div class="fl">Nombre de la pieza</div><input id="pp-name" placeholder="Ej: Filtro de aceite Fram PH3593A" oninput="schedulePartDescribe(this.value)"></div></div>
-          <div id="pp-ai-desc" style="display:none;background:var(--blue-light);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--navy);line-height:1.6"></div>
+          <div id="pp-ai-desc" style="display:none;background:var(--blue-light);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--ink);line-height:1.6"></div>
           <div class="fr"><div class="fg"><div class="fl"># Pieza / parte</div><input id="pp-num" placeholder="PH3593A"></div><div class="fg"><div class="fl">Suplidor</div><input id="pp-sup" placeholder="Advance Auto Parts"></div></div>
           <div class="fr fr3">
             <div class="fg"><div class="fl">Costo c/u ($)</div><input id="pp-cost" type="number" step="0.01" placeholder="0.00" oninput="autoMarkup();calcPartProfit()"></div>
