@@ -444,6 +444,11 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(event)">
         <div style="font-size:11px;color:var(--gray-400);margin-top:8px;line-height:1.5">Exporta tus datos regularmente. Si reseteas el iPad o borras Safari, esto te permite recuperar todo.</div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-database-cog"></i> Almacenamiento</div><div class="cb">
+        <div class="tip-box" style="background:var(--green-light);color:var(--green)"><i class="ti ti-photo" style="font-size:16px;flex-shrink:0"></i><span>Las fotos ahora se guardan en el almacén grande del iPad (IndexedDB), no en la memoria chica. Aguanta cientos de carros con fotos sin llenarse.</span></div>
+        <div id="set-storage-info" style="font-size:12px;line-height:1.7;margin:4px 0 10px">Calculando...</div>
+        <button class="btn full" onclick="liberarEspacio()"><i class="ti ti-eraser"></i> Liberar espacio (limpiar restos)</button>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-masks-theater"></i> Modo demo (para vender)</div><div class="cb">
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Llena la app con datos de ejemplo realistas (órdenes, citas, KPIs, fotos, firmas) para enseñársela a un cliente. Tus datos reales quedan guardados en este dispositivo y vuelven intactos al salir. Mientras el demo está activo, el respaldo en la nube queda pausado.</span></div>
         <button id="demo-btn" class="btn full" onclick="demoToggle()"><i class="ti ti-masks-theater"></i> Activar modo demo</button>
@@ -510,6 +515,132 @@ function saveDB(){
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
+
+// ============ ALMACÉN DE FOTOS (IndexedDB — la "caja grande") ============
+// Las fotos NO caben en localStorage (5MB, se llena con una sola orden de 35 fotos).
+// Se guardan en IndexedDB (cientos de MB) y en la orden queda solo una referencia
+// {id,t}. Así 100+ carros con 35 fotos c/u caben sin llenar nada. localStorage solo
+// guarda datos + firmas (chiquitos). Compatibilidad: fotos viejas {d} o string se
+// migran a IDB al arrancar (migratePhotosToIDB).
+var _photoDB=null,_photoCache={},_photoDBFail=false,_photoDBPromise=null;
+// placeholder gris mientras carga desde IDB
+var PH_PLACEHOLDER='data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="%23e6e9ef"/></svg>');
+function photoDBOpen(){
+  if(_photoDB)return Promise.resolve(_photoDB);
+  if(_photoDBFail)return Promise.reject(new Error('idb-unavailable'));
+  if(_photoDBPromise)return _photoDBPromise;
+  _photoDBPromise=new Promise(function(res,rej){
+    try{
+      if(!window.indexedDB){_photoDBFail=true;return rej(new Error('no-idb'));}
+      var rq=indexedDB.open('shopflow_fotos',1);
+      rq.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('fotos'))db.createObjectStore('fotos',{keyPath:'id'});};
+      rq.onsuccess=function(e){_photoDB=e.target.result;res(_photoDB);};
+      rq.onerror=function(){_photoDBFail=true;rej(rq.error||new Error('idb-open'));};
+      rq.onblocked=function(){_photoDBFail=true;rej(new Error('idb-blocked'));};
+    }catch(e){_photoDBFail=true;rej(e);}
+  });
+  return _photoDBPromise;
+}
+function photoPut(id,url,t){
+  return photoDBOpen().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('fotos','readwrite');
+    tx.objectStore('fotos').put({id:id,url:url,t:t});
+    tx.oncomplete=function(){res(true);};
+    tx.onerror=function(){rej(tx.error);};
+    tx.onabort=function(){rej(tx.error||new Error('idb-abort'));};
+  });});
+}
+function photoGet(id){
+  if(_photoCache[id])return Promise.resolve(_photoCache[id]);
+  return photoDBOpen().then(function(db){return new Promise(function(res,rej){
+    var rq=db.transaction('fotos','readonly').objectStore('fotos').get(id);
+    rq.onsuccess=function(){var r=rq.result;if(r&&r.url)_photoCache[id]=r.url;res(r?r.url:null);};
+    rq.onerror=function(){rej(rq.error);};
+  });});
+}
+function photoDel(id){
+  delete _photoCache[id];
+  return photoDBOpen().then(function(db){return new Promise(function(res){
+    var tx=db.transaction('fotos','readwrite');tx.objectStore('fotos').delete(id);
+    tx.oncomplete=function(){res(true);};tx.onerror=function(){res(false);};
+  });}).catch(function(){});
+}
+// ¿es una referencia nueva (en IDB) o una foto vieja inline?
+function fotoIsRef(f){return !!(f&&typeof f==='object'&&f.id&&!f.d);}
+function fotoSrc(f){if(typeof f==='string')return f;if(!f)return '';if(f.d)return f.d;if(f.id)return _photoCache[f.id]||'';return '';}
+function fotoTime(f){return (typeof f==='string'||!f||!f.t)?null:f.t;}
+// Comprime una imagen/video a JPEG apuntando a ~targetKB (baja la calidad hasta lograrlo).
+function compressToDataURL(src,maxDim,targetKB){
+  var w=src.videoWidth||src.naturalWidth||src.width,h=src.videoHeight||src.naturalHeight||src.height;
+  if(!w||!h)return null;
+  var max=maxDim||1280;
+  if(w>max||h>max){var k=Math.min(max/w,max/h);w=Math.round(w*k);h=Math.round(h*k);}
+  var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+  cv.getContext('2d').drawImage(src,0,0,w,h);
+  var q=0.6,url=cv.toDataURL('image/jpeg',q),limBytes=(targetKB||110)*1024;
+  // url.length (chars base64) ≈ bytes*1.37; bajar calidad hasta caber
+  while(url.length>limBytes*1.37 && q>0.3){q-=0.1;url=cv.toDataURL('image/jpeg',q);}
+  return url;
+}
+// Guarda un dataURL en IDB y devuelve el ref {id,t}. Cachea el dataURL para la UI.
+function storePhoto(dataURL){
+  var id='ph-'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  var t=new Date().toISOString();
+  _photoCache[id]=dataURL;
+  photoPut(id,dataURL,t).catch(function(){});
+  return {id:id,t:t};
+}
+// Carga en cache (async) los dataURLs de una lista de fotos (refs) desde IDB.
+function hydratePhotos(fotos){
+  var ids=(fotos||[]).filter(function(f){return fotoIsRef(f)&&!_photoCache[f.id];}).map(function(f){return f.id;});
+  if(!ids.length)return Promise.resolve();
+  return Promise.all(ids.map(function(id){return photoGet(id).catch(function(){return null;});}));
+}
+// Rellena los <img data-fid> pendientes cargando desde IDB (render sync + carga async).
+function fillPhotoImgs(root){
+  var scope=root||document;var imgs;
+  try{imgs=[].slice.call(scope.querySelectorAll('img[data-fid]'));}catch(e){return;}
+  imgs.forEach(function(im){
+    var id=im.getAttribute('data-fid');
+    if(_photoCache[id]){im.src=_photoCache[id];im.removeAttribute('data-fid');return;}
+    photoGet(id).then(function(u){if(u)im.src=u;}).catch(function(){}).then(function(){im.removeAttribute('data-fid');});
+  });
+}
+// Devuelve el <img> para una foto: legacy = src directo; ref = data-fid (carga async).
+function photoImg(f,style){
+  var s=fotoSrc(f);
+  if(s)return '<img src="'+s+'" style="'+style+'">';
+  if(fotoIsRef(f))return '<img data-fid="'+f.id+'" src="'+PH_PLACEHOLDER+'" style="'+style+'">';
+  return '<img src="'+PH_PLACEHOLDER+'" style="'+style+'">';
+}
+// Mueve las fotos inline (viejas o de otro dispositivo) a IDB y las reemplaza por refs.
+// Solo commitea (saveDB) si TODOS los puts funcionaron — si IDB falla, deja todo inline.
+function migratePhotosToIDB(){
+  if(DB._demo||_photoDBFail)return Promise.resolve();
+  var work=[]; // {o,i,url,t}
+  (DB.ordenes||[]).forEach(function(o){
+    if(!Array.isArray(o.fotos))return;
+    o.fotos.forEach(function(f,i){
+      var url=(typeof f==='string')?f:(f&&f.d);
+      if(url&&!(f&&f.id))work.push({o:o,i:i,url:url,t:(f&&f.t)||o.fecha||new Date().toISOString()});
+    });
+  });
+  if(!work.length)return Promise.resolve();
+  return photoDBOpen().then(function(){
+    return Promise.all(work.map(function(w){
+      var id='ph-'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)+w.i;
+      w.id=id;_photoCache[id]=w.url;
+      return photoPut(id,w.url,w.t).then(function(){return true;}).catch(function(){return false;});
+    }));
+  }).then(function(res){
+    if(res.length&&res.every(function(x){return x===true;})){
+      work.forEach(function(w){w.o.fotos[w.i]={id:w.id,t:w.t};});
+      saveDB();
+    }
+    // si algún put falló, NO tocar las fotos inline (no perder nada)
+  }).catch(function(){/* IDB no disponible — se queda como estaba */});
+}
+
 // ============ AUTOGUARDADO DE ORDEN A MEDIAS (borrador) ============
 // Una orden en progreso vive SOLO en memoria hasta que le das Guardar. Esto la
 // respalda en el navegador cada pocos segundos y justo cuando la app se manda a
@@ -1000,25 +1131,22 @@ function handlePhotos(e){
   files.forEach(function(f){
     var r=new FileReader();
     r.onload=function(ev){
-      // Comprime a max 1280px / JPEG 72% — evita llenar el almacenamiento del navegador
+      // Comprime fuerte (~110KB) y guarda en IndexedDB — en la orden solo va el ref {id,t}
       var img=new Image();
       img.onload=function(){
-        var max=1280,w=img.width,h=img.height;
-        if(w>max||h>max){var k=Math.min(max/w,max/h);w=Math.round(w*k);h=Math.round(h*k);}
-        var cv=document.createElement('canvas');cv.width=w;cv.height=h;
-        cv.getContext('2d').drawImage(img,0,0,w,h);
-        RO.fotos.push({d:cv.toDataURL('image/jpeg',0.72),t:new Date().toISOString()});
+        var url=compressToDataURL(img,1280,110);
+        if(url)RO.fotos.push(storePhoto(url));
         done++;
         if(done===files.length)renderPhotosGrid();
       };
-      img.onerror=function(){RO.fotos.push({d:ev.target.result,t:new Date().toISOString()});done++;if(done===files.length)renderPhotosGrid();};
+      // Si no se pudo leer la imagen, NO guardar el original crudo (eso llenaba la memoria)
+      img.onerror=function(){done++;if(done===files.length)renderPhotosGrid();};
       img.src=ev.target.result;
     };
     r.readAsDataURL(f);
   });
 }
-function fotoSrc(f){return typeof f==='string'?f:f.d;}
-function fotoTime(f){return (typeof f==='string'||!f.t)?null:f.t;}
+// (fotoSrc/fotoTime ahora viven en el módulo de fotos IndexedDB, más arriba)
 function renderPhotosGrid(){
   var grid=document.getElementById('photo-grid-dyn');
   var lbl=document.getElementById('photo-count-lbl');
@@ -1028,20 +1156,23 @@ function renderPhotosGrid(){
   grid.innerHTML=photos.map(function(f,i){
     var t=fotoTime(f);
     return '<div style="position:relative;aspect-ratio:1;border-radius:var(--r-md);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+
-      '<img src="'+fotoSrc(f)+'" style="width:100%;height:100%;object-fit:cover">'+
+      photoImg(f,'width:100%;height:100%;object-fit:cover')+
       '<button onclick="deletePhoto('+i+')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>'+
       '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:3px">'+(t?new Date(t).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'FOTO '+(i+1))+'</div>'+
     '</div>';
   }).join('');
+  fillPhotoImgs(grid);
 }
 function deletePhoto(i){
   if(!confirm('¿Eliminar esta foto?'))return;
+  var f=(RO.fotos||[])[i];
   RO.fotos.splice(i,1);
+  if(fotoIsRef(f))photoDel(f.id); // libera la foto de IndexedDB
   renderPhotosGrid();
 }
 
 // Legacy single handlePhoto — keep for safety
-function handlePhoto(e,i){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){if(!Array.isArray(RO.fotos))RO.fotos=[];RO.fotos[i]=ev.target.result;renderPhotosGrid();};r.readAsDataURL(f);}
+function handlePhoto(e,i){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){if(!Array.isArray(RO.fotos))RO.fotos=[];var img=new Image();img.onload=function(){var url=compressToDataURL(img,1280,110);if(url)RO.fotos[i]=storePhoto(url);renderPhotosGrid();};img.src=ev.target.result;};r.readAsDataURL(f);}
 
 // ============ CÁMARA RÁPIDA — varias fotos seguidas sin salir (resuelve el "save y continuar") ============
 var _camStream=null;
@@ -1059,12 +1190,9 @@ function openCamera(){
 function snapPhoto(){
   var vid=document.getElementById('cam-video');
   if(!vid||!vid.videoWidth)return;
-  var max=1280,w=vid.videoWidth,h=vid.videoHeight;
-  if(w>max||h>max){var k=Math.min(max/w,max/h);w=Math.round(w*k);h=Math.round(h*k);}
-  var cv=document.createElement('canvas');cv.width=w;cv.height=h;
-  cv.getContext('2d').drawImage(vid,0,0,w,h);
   if(!Array.isArray(RO.fotos))RO.fotos=[];
-  RO.fotos.push({d:cv.toDataURL('image/jpeg',0.72),t:new Date().toISOString()});
+  var url=compressToDataURL(vid,1280,110);
+  if(url)RO.fotos.push(storePhoto(url));
   var fl=document.getElementById('cam-flash');if(fl){fl.style.opacity='.85';setTimeout(function(){fl.style.opacity='0';},120);}
   camUpdateCount();
 }
@@ -1072,7 +1200,7 @@ function camUpdateCount(){
   var n=(RO.fotos||[]).length;
   var c=document.getElementById('cam-count');if(c)c.textContent=n+' foto'+(n!==1?'s':'');
   var strip=document.getElementById('cam-strip');
-  if(strip)strip.innerHTML=(RO.fotos||[]).slice(-6).map(function(f){return '<img src="'+fotoSrc(f)+'" style="height:46px;width:46px;object-fit:cover;border-radius:6px;border:2px solid #fff">';}).join('');
+  if(strip){strip.innerHTML=(RO.fotos||[]).slice(-6).map(function(f){return photoImg(f,'height:46px;width:46px;object-fit:cover;border-radius:6px;border:2px solid #fff');}).join('');fillPhotoImgs(strip);}
 }
 function closeCamera(){
   if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
@@ -2645,7 +2773,7 @@ function openRODetail(roId){
       '<div class="photo-grid">'+o.fotos.map(function(f,i){
         var t=fotoTime(f);
         return '<div onclick="openFotoViewer(\''+o.id+'\','+i+')" style="position:relative;aspect-ratio:1;border-radius:var(--r-md);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15);cursor:pointer">'+
-          '<img src="'+fotoSrc(f)+'" style="width:100%;height:100%;object-fit:cover">'+
+          photoImg(f,'width:100%;height:100%;object-fit:cover')+
           '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:3px">'+(t?new Date(t).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'FOTO '+(i+1))+'</div>'+
         '</div>';
       }).join('')+'</div>'+
@@ -2739,6 +2867,7 @@ function openRODetail(roId){
   html+='<button class="btn full" onclick="if(confirm(\'¿Eliminar esta orden permanentemente?\'))deleteRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Eliminar orden</button>';
   html+='</div>';
   document.getElementById('ro-detail-body').innerHTML=html;
+  fillPhotoImgs(document.getElementById('ro-detail-body'));
   go('ro-detail');
 }
 
@@ -2797,7 +2926,11 @@ function openFotoViewer(roId,idx){
 }
 function updFotoViewer(){
   var f=_fvOrden.fotos[_fvIdx];if(!f)return;
-  document.getElementById('foto-viewer-img').src=fotoSrc(f);
+  var im=document.getElementById('foto-viewer-img');
+  var direct=fotoSrc(f);
+  if(direct){im.src=direct;}
+  else if(fotoIsRef(f)){im.src=PH_PLACEHOLDER;photoGet(f.id).then(function(u){if(u&&_fvOrden.fotos[_fvIdx]===f)im.src=u;}).catch(function(){});}
+  else{im.src=PH_PLACEHOLDER;}
   var t=fotoTime(f);
   document.getElementById('foto-viewer-caption').innerHTML=_fvOrden.id+' · Foto '+(_fvIdx+1)+' de '+_fvOrden.fotos.length+(t?'<br><span style="font-weight:400;font-size:11px;color:rgba(255,255,255,.7)">Capturada: '+new Date(t).toLocaleString('es-PR',{weekday:'short',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</span>':'');
 }
@@ -2817,6 +2950,8 @@ function reExportPDF(roId){
 function deleteRO(roId){
   var idx=DB.ordenes.findIndex(function(x){return x.id===roId;});
   if(idx>-1){
+    var o=DB.ordenes[idx];
+    (o.fotos||[]).forEach(function(f){if(fotoIsRef(f))photoDel(f.id);}); // libera las fotos de IndexedDB
     DB.ordenes.splice(idx,1);
     DB.garage=DB.garage.filter(function(g){return g.roId!==roId;});
     saveDB();alert('Orden eliminada.');go('historial');
@@ -2824,8 +2959,38 @@ function deleteRO(roId){
 }
 
 
+// ============ ALMACENAMIENTO (info + limpieza) ============
+function lsBytes(){var t=0;try{for(var k in localStorage){if(Object.prototype.hasOwnProperty.call(localStorage,k))t+=(localStorage[k].length+k.length);}}catch(e){}return t*2;}
+function photoAllIds(){return photoDBOpen().then(function(db){return new Promise(function(res){var ids=[];try{var rq=db.transaction('fotos','readonly').objectStore('fotos').openKeyCursor();rq.onsuccess=function(e){var c=e.target.result;if(c){ids.push(c.key);c.continue();}else res(ids);};rq.onerror=function(){res(ids);};}catch(e){res(ids);}});}).catch(function(){return [];});}
+function renderStorageInfo(){
+  var el=document.getElementById('set-storage-info');if(!el)return;
+  var ls=(lsBytes()/1024).toFixed(0);
+  var nfotos=0;(DB.ordenes||[]).forEach(function(o){nfotos+=((o.fotos||[]).length);});
+  var base='Datos (memoria chica): <b>'+ls+' KB</b><br>Fotos guardadas: <b>'+nfotos+'</b> (en el almacén grande)';
+  el.innerHTML=base;
+  if(navigator.storage&&navigator.storage.estimate){navigator.storage.estimate().then(function(e){
+    if(!e||!e.quota)return;
+    var usedMB=(e.usage/1048576).toFixed(0),quotaMB=(e.quota/1048576).toFixed(0);
+    el.innerHTML=base+'<br>Uso total del app: <b>'+usedMB+' MB</b> de ~'+quotaMB+' MB';
+  }).catch(function(){});}
+}
+function liberarEspacio(){
+  var freed=[];
+  if(!DB._demo){try{if(localStorage.getItem('sf_v1_real')!==null){localStorage.removeItem('sf_v1_real');freed.push('respaldo temporal de un demo viejo');}}catch(e){}}
+  var used={};(DB.ordenes||[]).forEach(function(o){(o.fotos||[]).forEach(function(f){if(fotoIsRef(f))used[f.id]=1;});});
+  photoAllIds().then(function(ids){
+    var orphans=ids.filter(function(id){return !used[id];});
+    return Promise.all(orphans.map(function(id){return photoDel(id);})).then(function(){return orphans.length;});
+  }).then(function(n){
+    if(n)freed.push(n+' foto'+(n!==1?'s':'')+' huérfana'+(n!==1?'s':'')+' (de órdenes borradas)');
+    alert(freed.length?('Espacio liberado: '+freed.join(' + ')+'.'):'Todo limpio — no había restos que borrar.');
+    renderStorageInfo();
+  }).catch(function(){alert(freed.length?('Espacio liberado: '+freed.join(' + ')+'.'):'Nada que limpiar.');renderStorageInfo();});
+}
+
 // ============ AJUSTES / SETTINGS ============
 function initAjustes(){
+  renderStorageInfo();
   var sd=document.getElementById('set-dark');if(sd)sd.checked=(DB.settings.theme==='dark');
   var sbt=document.getElementById('set-bigtext');if(sbt)sbt.checked=!!DB.settings.bigText;
   document.getElementById('set-labor').value=DB.settings.laborRate||103;
@@ -3371,6 +3536,8 @@ function sharePDFDoc(doc,fname,title){
 }
 function dviPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  // Cargar las fotos desde IndexedDB ANTES de armar el PDF (addImage es síncrono)
+  if((o.fotos||[]).some(function(f){return fotoIsRef(f)&&!_photoCache[f.id];})){hydratePhotos(o.fotos).then(function(){dviPDF(roId);});return;}
   if(typeof window.jspdf==='undefined'){alert('PDF cargando... intenta de nuevo.');return;}
   var doc=new window.jspdf.jsPDF();var y=0;
   var s=inspSummary(o);
@@ -4050,6 +4217,11 @@ function buildDemoDB(){
 
 loadDB();
 applyTheme();
+// Pide almacenamiento persistente para que iOS no borre las fotos por presión de espacio
+if(navigator.storage&&navigator.storage.persist){try{navigator.storage.persist().catch(function(){});}catch(e){}}
+// Mueve fotos viejas (guardadas inline en localStorage) a IndexedDB y libera espacio.
+// No hace nada en modo demo ni si IndexedDB no está disponible.
+migratePhotosToIDB().catch(function(){});
 if(location.hash.slice(0,3)==='#s='){ renderCustomerStatus(); } else {
 // Registra el service worker — la app abre offline (señal mala en la calle)
 if('serviceWorker' in navigator){

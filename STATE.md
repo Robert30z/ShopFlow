@@ -2,7 +2,52 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-24 (batch 5: 🚨🚨 FOTOS A IndexedDB — fix "ALMACENAMIENTO LLENO")
+
+## 2026-07-24 (batch 5): las FOTOS ya no llenan la memoria — se movieron a IndexedDB
+🔴 **SÍNTOMA REAL (Roberto en el campo, 2do carro):** al darle Guardar salía "⚠️ ALMACENAMIENTO
+LLENO — LOS DATOS NO SE GUARDARON" y perdió órdenes. Causa: las fotos se guardaban como base64
+DENTRO de localStorage (~5MB tope de Safari). Una sola orden de **35 fotos** (vuelta redonda al
+carro) llenaba los 5MB. Además el fallback `img.onerror` guardaba el ORIGINAL crudo sin comprimir.
+Roberto pidió aguantar **mínimo 100 carros** — imposible en localStorage.
+✅ **ARREGLO (root cause):** las fotos ahora viven en **IndexedDB** (la "caja grande", cientos de MB).
+En la orden queda solo un ref `{id,t}`; localStorage guarda datos+firmas (chiquito). Verificado:
+**35 fotos → 5KB de localStorage** (antes reventaba 5MB), 135 fotos → 17KB.
+- **Módulo nuevo** (arriba de saveDB): `photoDBOpen/photoPut/photoGet/photoDel`, `_photoCache` (cache
+  en memoria pa render síncrono), `storePhoto` (comprime→IDB→ref), `hydratePhotos`, `fillPhotoImgs`
+  (rellena `<img data-fid>` async), `photoImg` (tag), `compressToDataURL` (baja calidad hasta ~110KB;
+  probado 117KB→33KB), `fotoSrc/fotoTime/fotoIsRef` (soportan ref nuevo + legacy {d}/string).
+- **Captura** (galería + cámara rápida + handlePhoto): comprimen y hacen `storePhoto`. El `onerror`
+  YA NO guarda el original crudo (ese era el bug que llenaba todo).
+- **Render** (grid, strip cámara, galería de detalle, visor, dviPDF): usan photoImg/hydrate. dviPDF
+  hidrata las fotos desde IDB ANTES de armar el PDF (addImage es síncrono).
+- **Migración al arrancar** (`migratePhotosToIDB`): mueve fotos viejas inline→IDB y libera localStorage.
+  Solo commitea si TODOS los puts funcionan (si IDB falla, deja las fotos inline, no pierde nada).
+  Skip en demo. + pide `navigator.storage.persist()` (que iOS no borre las fotos por presión).
+- **Limpieza:** deletePhoto/deleteRO borran las fotos de IDB. Ajustes → card "Almacenamiento"
+  (medidor localStorage/uso + botón "Liberar espacio" = borra restos de sf_v1_real viejo + fotos
+  huérfanas de órdenes borradas).
+- **SW CACHE_V v3→v4** (que el iPad purgue y baje la versión nueva al recargar online).
+- **Test nuevo `test/photos-idb.js`** (13 checks, TODO VERDE): captura→ref, roundtrip IDB, compresión,
+  35 y 135 fotos sin llenar LS, persistencia tras recargar, migración libera LS, dviPDF hidrata.
+  diag.js (150 handlers) + smoke.js (36) siguen verdes, 0 page errors.
+⚠️ **TRADEOFF:** el respaldo en la nube/JSON ahora lleva los DATOS + refs, NO los blobs de fotos
+(280MB no caben en GitHub). Las fotos viven en IDB local + en los PDFs generados. Restaurar en otro
+equipo trae órdenes/firmas completas pero las fotos saldrían en gris (aceptable; evidencia = local+PDF).
+📌 **PENDIENTE Roberto:** recargar la app en el iPad (2 veces si hace falta, pa que el SW v4 entre) —
+la migración corre sola y libera la memoria. Sus 2 órdenes actuales están a salvo.
+🔮 **FUTURO opcional:** "exportar fotos" a un archivo/carpeta pa archivo externo si algún día quiere
+respaldo de imágenes fuera del iPad.
+
 ## Last updated: 2026-07-23 (batch 4: 🚨 FIX BUG 409 RESPALDO — root cause del backup roto)
+
+## 2026-07-24: INSPECCIÓN COMPLETA (Claude, mientras Roberto atendía cliente) — TODO VERDE
+diag.js (150 handlers, 10 pantallas, PDF válido, cámara, RO en vivo, respaldo) + smoke.js (36 checks) = 0 errores de página.
+Verificado que el fix del 409 (batch 4) está en código Y desplegado: sw.js v3 + bypass api.github.com (línea 29),
+cloudBackup putOnce no-store + reintento 409, backupNow() en shareViaNative/sendWhatsAppPDF. **live == repo** (blob
+index.html idéntico), todo pusheado (main==origin/main). Cuando el iPad recargue online purgará el caché con el sha malo.
+⚠️ SIGUE PENDIENTE (tarea de Roberto): Ajustes→"Exportar respaldo" en el iPad pa recuperar la orden del primer cliente
+(la nube estaba vacía). NO tocar "Restaurar" (borraría el iPad con la nube vacía).
 
 ## New 2026-07-23 (batch 4): 🚨 FIX del HTTP 409 que rompía TODO el respaldo en la nube
 Roberto perdió su orden del primer cliente. Investigado: el respaldo en la nube (Robert30z/shopflow-backup)
