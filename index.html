@@ -491,6 +491,41 @@ function saveDB(){
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';}catch(e){}}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
+// ============ AUTOGUARDADO DE ORDEN A MEDIAS (borrador) ============
+// Una orden en progreso vive SOLO en memoria hasta que le das Guardar. Esto la
+// respalda en el navegador cada pocos segundos y justo cuando la app se manda a
+// segundo plano (iOS mata Safari al bloquear la pantalla / cambiar de app), para
+// que una orden a medio hacer NUNCA se pierda por un corte, refresh o crash.
+var _roWizardOpen=false;
+function draftHasContent(){
+  if(!RO||DB._demo)return false;
+  return !!((RO.cliente&&RO.cliente.trim())||(RO.servicios&&RO.servicios.length)||(RO.fotos&&RO.fotos.length)||RO.sig1||RO.sig2||(RO.insp&&Object.keys(RO.insp).length)||(RO.vehiculo&&(RO.vehiculo.tag||RO.vehiculo.make||RO.vehiculo.model)));
+}
+function saveDraft(){
+  try{
+    if(!_roWizardOpen||!draftHasContent())return;
+    localStorage.setItem('sf_draft',JSON.stringify({ro:RO,step:curStep,ts:Date.now()}));
+  }catch(e){}
+}
+function clearDraft(){try{localStorage.removeItem('sf_draft');}catch(e){}}
+function checkDraft(){
+  var s;try{s=localStorage.getItem('sf_draft');}catch(e){return;}
+  if(!s)return;
+  var d;try{d=JSON.parse(s);}catch(e){clearDraft();return;}
+  if(!d||!d.ro){clearDraft();return;}
+  // Si esa orden ya está en DB (se guardó como ABIERTA o completa) el respaldo la
+  // cubre — el borrador ya no hace falta, se descarta sin molestar.
+  if(d.ro.id&&DB.ordenes.some(function(o){return o.id===d.ro.id;})){clearDraft();return;}
+  var quien=(d.ro.cliente&&d.ro.cliente.trim())?d.ro.cliente:'sin nombre';
+  var cuando=d.ts?new Date(d.ts).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  if(confirm('Tienes una orden a medias ('+quien+') que no llegaste a guardar'+(cuando?' — '+cuando:'')+'.\n\nAceptar = continuarla donde la dejaste.\nCancelar = descartarla.')){
+    _resumeRO=d.ro;
+    go('ro');
+    if(typeof d.step==='number'){setTimeout(function(){try{gotoStep(d.step);}catch(e){}},240);}
+  }else{
+    clearDraft();
+  }
+}
 // ============ APARIENCIA: modo oscuro + texto grande ============
 function applyTheme(){
   var t=(DB.settings&&DB.settings.theme)==='dark'?'dark':'light';
@@ -605,6 +640,7 @@ function updBackupStatus(err){
 }
 
 function go(p){
+  if(p!=='ro'){saveDraft();_roWizardOpen=false;}
   document.querySelectorAll('.pg').forEach(function(x){x.classList.remove('v');});
   var el=document.getElementById(p);if(el){el.classList.add('v');el.scrollTop=0;}
   if(p==='home')renderHome();
@@ -643,6 +679,7 @@ function renderHome(){
 }
 
 function initRO(){
+  _roWizardOpen=true;
   if(_resumeRO){
     RO=_resumeRO;_resumeRO=null;
     curStep=0;buildSteps();buildPanes();
@@ -755,6 +792,7 @@ function gotoStep(n){
   if(n===3)buildEstSum();
   if(n===6){renderAutoRecs();renderDenList();}
   if(n===8){var cn=document.getElementById('cier-next');if(cn)cn.value=RO.nextDate;}
+  saveDraft();
 }
 function nextStep(){if(curStep<8)gotoStep(curStep+1);}
 function prevStep(){if(curStep>0)gotoStep(curStep-1);}
@@ -1358,8 +1396,11 @@ function saveOpenRO(){
   calcEst();RO.total=Math.round(RO.total*100)/100;
   upsertRO();autoSaveCli();
   if(!saveDB())return;
+  // Respaldo a la nube AHORA (no esperar los 45s) — la orden ABIERTA queda segura al instante
+  var bkO=backupCfg();
+  if(bkO&&!DB._demo){clearTimeout(_cbTimer);cloudBackup(false);}
   document.getElementById('ro-id-lbl').textContent=RO.id+' · ABIERTA';
-  alert('Orden '+RO.id+' guardada como ABIERTA ✓\n\nFirmas, fotos e inspección protegidas. Puedes cerrar la app y continuarla luego desde Órdenes → '+RO.id+'.');
+  alert('Orden '+RO.id+' guardada como ABIERTA ✓\n\nFirmas, fotos e inspección protegidas'+(bkO?' y respaldándose a la nube':'')+'. Puedes cerrar la app y continuarla luego desde Órdenes → '+RO.id+'.');
 }
 function saveRO(){
   if(!RO.cliente){alert('Agrega el nombre del cliente.');gotoStep(0);return;}
@@ -1375,6 +1416,7 @@ function saveRO(){
     DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
   }
   if(!saveDB())return;
+  clearDraft();_roWizardOpen=false;
   // Respaldo a la nube AHORA (no esperar los 45s) para que la reparación quede segura al instante
   var bk=backupCfg();
   if(bk&&!DB._demo){clearTimeout(_cbTimer);cloudBackup(false);}
@@ -3881,6 +3923,14 @@ var now=new Date();
 document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate();
 renderHome();
 demoBanner();
+
+// Autoguardado de la orden a medias: al mandar la app a segundo plano (iOS mata
+// Safari al bloquear/cambiar de app) y cada 5s como red de seguridad. checkDraft
+// ofrece recuperar una orden que quedó sin guardar la última vez.
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')saveDraft();});
+window.addEventListener('pagehide',saveDraft);
+setInterval(saveDraft,5000);
+setTimeout(checkDraft,1400);
 
 // Hide splash after 1.2s — works on iOS Safari
 function hideSplash(){
