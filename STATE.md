@@ -2,6 +2,21 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-24 (batch 7: firma visible en dark mode + EDITAR pieza ingresada)
+
+## 2026-07-24 (batch 7): 2 arreglos que pidió Roberto en el campo
+- **🖊 Firma invisible en dark mode → ARREGLADO.** La tinta es `#1a1a1a` (negro) pero el `.sig-pad`
+  en dark tenía fondo `#141C26` (oscuro) → firma no se veía. Fix: `:root[data-theme="dark"] .sig-pad`
+  ahora `background:#fff` (cajón blanco, como pidió) + border `#3a4759`. Los canvas sig-1/sig-2/sig-den
+  llevan class sig-pad → aplica. (Regla CSS verificada; el elemento solo existe al llegar al paso de firma.)
+- **🔧 EDITAR una pieza ya ingresada → AGREGADO.** Antes solo se podía borrar y volver a crear (si había
+  typo). Ahora cada pieza tiene botón ✏️ (lápiz azul) además del 🗑. `editPartRO(i)`/`editPart(i)` llenan
+  el form con la pieza + `_editPartIdx=i` + el botón cambia a "Actualizar pieza"; `savePartRO`/`savePart`
+  reemplazan en ese índice (NO duplican) y NO re-descuentan inventario al editar. Reset tras guardar y al
+  abrir el modal. Funciona en las 2 vistas de piezas (RO específica + catálogo del menú).
+- **Test nuevo `test/parts-edit.js`** (7 checks verde): agregar con typo → editar → actualiza en su sitio
+  sin duplicar + resetea modo edición. diag+smoke verdes, 0 page errors. **live==repo, SW no cambió** (v5).
+
 ## Last updated: 2026-07-24 (batch 6: ☁️ FOTOS EN LA NUBE (Supabase Storage) + diagnóstico de sync)
 
 ## 2026-07-24 (batch 6): cloud-first de verdad — fotos en Supabase Storage (visión de vender)

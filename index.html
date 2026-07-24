@@ -27,7 +27,7 @@
 :root[data-theme="dark"] .card{box-shadow:0 1px 3px rgba(0,0,0,.45)}
 :root[data-theme="dark"] input:not(.tgl),:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:#17212C}
 :root[data-theme="dark"] input::placeholder,:root[data-theme="dark"] textarea::placeholder{color:#61707F}
-:root[data-theme="dark"] .sig-pad{background:#141C26}
+:root[data-theme="dark"] .sig-pad{background:#fff;border-color:#3a4759}
 /* ===== TEXTO GRANDE (para el sol / manos ocupadas) ===== */
 html.bigtext{zoom:1.15}
 /* ===== Switch tipo iOS (ON/OFF claro) ===== */
@@ -2471,6 +2471,7 @@ function openPartsModalRO(svcIdx){
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
   var air=document.getElementById('ai-suggest-result');if(air){air.style.display='none';air.innerHTML='';}
+  _editPartIdx=-1;setPartBtnLabel();
   calcPartProfit();
   renderPartsListRO();
   document.getElementById('parts-modal').style.display='block';
@@ -2484,7 +2485,7 @@ function renderPartsListRO(){
   el.innerHTML='<div class="st" style="margin-top:6px">Piezas registradas</div>'+parts.map(function(p,i){
     var tcost=p.cost*p.qty;var tsell=p.sellPrice*p.qty;var profit=tsell-tcost;
     return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--white)">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div><div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+'</div></div><button onclick="deletePartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div><div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+'</div></div><button onclick="editPartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;margin-right:4px"><i class="ti ti-edit"></i></button><button onclick="deletePartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button></div>'+
       '<div style="display:flex;gap:6px;font-size:11px"><div style="flex:1;background:var(--red-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">COSTO</div><div style="color:var(--red);font-weight:700">$'+tcost.toFixed(2)+'</div></div><div style="flex:1;background:var(--blue-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">VENTA</div><div style="color:var(--blue);font-weight:700">$'+tsell.toFixed(2)+'</div></div><div style="flex:1;background:var(--green-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">GANANCIA</div><div style="color:var(--green);font-weight:700">$'+profit.toFixed(2)+'</div></div></div>'+
     '</div>';
   }).join('');
@@ -2546,6 +2547,23 @@ function aiLaborEstimate(svcIdx){
 
 // ============ PARTS TRACKING ============
 var currentPartService=null;
+var _editPartIdx=-1; // >=0 = editando la pieza en ese índice (en vez de agregar una nueva)
+function setPartBtnLabel(){var b=document.getElementById('pm-save-btn');if(b)b.innerHTML=(_editPartIdx>=0?'<i class="ti ti-device-floppy"></i> Actualizar pieza':'<i class="ti ti-plus"></i> Agregar pieza');}
+function fillPartForm(p){
+  document.getElementById('pp-name').value=p.name||'';
+  document.getElementById('pp-num').value=p.partNum||'';
+  document.getElementById('pp-sup').value=p.supplier||'';
+  document.getElementById('pp-cost').value=(p.cost!=null?p.cost:'');
+  document.getElementById('pp-qty').value=p.qty||1;
+  document.getElementById('pp-sell').value=(p.sellPrice!=null?p.sellPrice:'');
+  document.getElementById('pp-receipt').value=p.receipt||'';
+  var d=document.getElementById('pp-date');if(d&&p.date)d.value=p.date;
+  calcPartProfit();
+  var nm=document.getElementById('pp-name');if(nm){nm.scrollIntoView({behavior:'smooth',block:'center'});nm.focus();}
+}
+function editPartRO(i){var svc=RO.servicios[currentROPartIdx];if(!svc||!(svc.parts||[])[i])return;_editPartIdx=i;setPartBtnLabel();fillPartForm(svc.parts[i]);}
+function editPart(i){if(!currentPartService)return;var arr=DB.serviceParts[currentPartService.id]||[];if(!arr[i])return;_editPartIdx=i;setPartBtnLabel();fillPartForm(arr[i]);}
+function cancelEditPart(){_editPartIdx=-1;setPartBtnLabel();['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});document.getElementById('pp-qty').value='1';calcPartProfit();}
 function openPartsModal(svcId,svcName){
   partsContext='menu';
   currentPartService={id:svcId,name:svcName};
@@ -2556,6 +2574,7 @@ function openPartsModal(svcId,svcName){
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
   var air2=document.getElementById('ai-suggest-result');if(air2){air2.style.display='none';air2.innerHTML='';}
+  _editPartIdx=-1;setPartBtnLabel();
   calcPartProfit();
   renderPartsList();
   document.getElementById('parts-modal').style.display='block';
@@ -2609,12 +2628,17 @@ function savePart(){
     date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]
   };
   if(!DB.serviceParts[currentPartService.id])DB.serviceParts[currentPartService.id]=[];
-  DB.serviceParts[currentPartService.id].push(part);
-  // Auto-deduct from inventory silently if part exists — no prompt
-  if(DB.inventario.length>0){
-    var inv=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
-    if(inv){inv.qty=Math.max(0,inv.qty-qty);saveDB();}
+  if(_editPartIdx>=0&&DB.serviceParts[currentPartService.id][_editPartIdx]){
+    DB.serviceParts[currentPartService.id][_editPartIdx]=part; // EDITAR la pieza existente
+  }else{
+    DB.serviceParts[currentPartService.id].push(part);
+    // Auto-deduct from inventory silently — solo al AGREGAR, no al editar
+    if(DB.inventario.length>0){
+      var inv=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
+      if(inv){inv.qty=Math.max(0,inv.qty-qty);}
+    }
   }
+  _editPartIdx=-1;setPartBtnLabel();
   saveDB();
   // Clear form
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
@@ -2632,12 +2656,17 @@ function savePartRO(){
   var sell=parseFloat(document.getElementById('pp-sell').value)||0;
   var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]};
   if(!svc.parts)svc.parts=[];
-  svc.parts.push(part);
-  // Auto-deduct from inventory silently if part exists — no prompt
-  if(DB.inventario.length>0){
-    var inv2=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
-    if(inv2){inv2.qty=Math.max(0,inv2.qty-qty);saveDB();}
+  if(_editPartIdx>=0&&svc.parts[_editPartIdx]){
+    svc.parts[_editPartIdx]=part; // EDITAR la pieza existente (arregla el typo, no crea otra)
+  }else{
+    svc.parts.push(part);
+    // Auto-deduct from inventory silently — solo al AGREGAR, no al editar
+    if(DB.inventario.length>0){
+      var inv2=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
+      if(inv2){inv2.qty=Math.max(0,inv2.qty-qty);saveDB();}
+    }
   }
+  _editPartIdx=-1;setPartBtnLabel();
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
   calcPartProfit();
@@ -2655,7 +2684,7 @@ function renderPartsList(){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">'+
         '<div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div>'+
         '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+'</div></div>'+
-        '<button onclick="deletePart('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button>'+
+        '<button onclick="editPart('+i+')" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;margin-right:4px"><i class="ti ti-edit"></i></button><button onclick="deletePart('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button>'+
       '</div>'+
       '<div style="display:flex;gap:6px;font-size:11px">'+
         '<div style="flex:1;background:var(--red-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">COSTO</div><div style="color:var(--red);font-weight:700">$'+tcost.toFixed(2)+'</div></div>'+
@@ -4533,7 +4562,7 @@ document.addEventListener('click',hideSplash,{once:true});
             <div><div style="font-size:9px;font-weight:700;color:var(--gray-400);text-transform:uppercase">Venta total</div><div style="font-size:14px;font-weight:700;color:var(--blue)" id="pp-tsell">$0.00</div></div>
             <div><div style="font-size:9px;font-weight:700;color:var(--gray-400);text-transform:uppercase">Ganancia</div><div style="font-size:14px;font-weight:700;color:var(--green)" id="pp-profit">$0.00</div></div>
           </div>
-          <button class="btn p full" onclick="savePart()"><i class="ti ti-plus"></i> Agregar pieza</button>
+          <button class="btn p full" id="pm-save-btn" onclick="savePart()"><i class="ti ti-plus"></i> Agregar pieza</button>
         </div>
       </div>
       <div id="pm-list"></div>
