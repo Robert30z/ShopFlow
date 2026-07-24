@@ -2,6 +2,39 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-24 (batch 6: ☁️ FOTOS EN LA NUBE (Supabase Storage) + diagnóstico de sync)
+
+## 2026-07-24 (batch 6): cloud-first de verdad — fotos en Supabase Storage (visión de vender)
+Roberto aclaró: **buena señal + 3 dispositivos + su visión es VENDER ShopFlow.** Con eso, offline-only
+localStorage NO es el camino — es cloud-first como los grandes. Ya teníamos el backend Supabase (datos).
+Faltaba: (a) las fotos (batch 5 las metió en IndexedDB LOCAL → dejaron de sincronizar entre equipos),
+(b) el bug del iPhone que no baja datos. Clean slate (iPad+iPhone vacíos, 1 cuenta) = momento perfecto.
+- **Backend (hecho por Claude vía Management API con el PAT de Roberto):** bucket **`fotos`** privado
+  (3MB máx, jpeg/png/webp) + **4 políticas RLS** (select/insert/update/delete) que aíslan cada taller a
+  su carpeta `{auth.uid()}/` → multi-tenant listo para vender. Verificado.
+- **App (index.html):** nuevas funciones de fotos-nube: `photoDownload` (baja de Storage por sp),
+  `photoResolve` (cache → IndexedDB local → Storage), `photoUploadPending`/`schedulePhotoUpload`
+  (sube las fotos sin `sp` cuando hay sesión; corre tras capturar, tras syncPull y tras login),
+  `photoDelCloud`, `dataURLToBlob`/`blobToDataURL`. El ref ahora es `{id,t,sp}` donde sp = ruta en la
+  nube. `photoImg`/`fillPhotoImgs`/`hydratePhotos`/visor/dviPDF ahora resuelven vía `photoResolve`
+  (bajan de la nube si no está local). **Offline-first intacto:** sin sesión = solo local, sube solo
+  cuando vuelve la conexión.
+- **Diagnóstico de sync (para cazar el bug del iPhone):** `syncPull` ahora registra `_lastPullAt` +
+  `_lastSyncErr` y muestra en Ajustes→Sincronización "**última sync HH:MM:SS**" o el **error en rojo**
+  (antes fallaba callado). Así en el iPhone se ve si está logueado y bajando, o qué falla.
+- **SW CACHE_V v4→v5.**
+- **PROBADO:** `test/photos-cloud.js` (round-trip real con usuario temporal): captura→sube a Storage→
+  ref recibe sp→archivo existe en bucket→**borra copia local→BAJA de la nube→re-cachea** = TODO VERDE.
+  Usuario temporal + su foto BORRADOS después (users=1, shops=1, bucket=0, limpio). diag+smoke+
+  photos-idb siguen verdes, 0 page errors. **live==repo verificado.**
+- 📌 **PENDIENTE ROBERTO:** (1) recargar la app en iPad **y** iPhone (SW v5) → login del taller
+  (rjohn7148@gmail.com) en ambos → en Ajustes→Sincronización mirar "última sync" para confirmar que
+  el iPhone SÍ baja ahora (el v5 + diagnóstico deben resolver/mostrar el bug viejo). (2) Probar:
+  foto en iPad → aparece en iPhone. (3) SEGURIDAD: rotar el PAT de Supabase `sbp_c433...` (ya no se
+  necesita, el setup terminó) + cambiar la contraseña de la cuenta Supabase (se pegó en chat).
+- ⚠️ **TRADEOFF que cambia:** ahora las fotos SÍ van a la nube (Storage) — resuelve lo que batch 5
+  dejó local. El respaldo GitHub sigue siendo datos+refs (no bytes). Storage = donde viven las fotos.
+
 ## Last updated: 2026-07-24 (batch 5: 🚨🚨 FOTOS A IndexedDB — fix "ALMACENAMIENTO LLENO")
 
 ## 2026-07-24 (batch 5): las FOTOS ya no llenan la memoria — se movieron a IndexedDB

@@ -588,29 +588,30 @@ function storePhoto(dataURL){
   var t=new Date().toISOString();
   _photoCache[id]=dataURL;
   photoPut(id,dataURL,t).catch(function(){});
+  schedulePhotoUpload(); // sube a la nube si hay sesión (si no, se queda local y sube luego)
   return {id:id,t:t};
 }
 // Carga en cache (async) los dataURLs de una lista de fotos (refs) desde IDB.
 function hydratePhotos(fotos){
-  var ids=(fotos||[]).filter(function(f){return fotoIsRef(f)&&!_photoCache[f.id];}).map(function(f){return f.id;});
-  if(!ids.length)return Promise.resolve();
-  return Promise.all(ids.map(function(id){return photoGet(id).catch(function(){return null;});}));
+  var pend=(fotos||[]).filter(function(f){return fotoIsRef(f)&&!_photoCache[f.id];});
+  if(!pend.length)return Promise.resolve();
+  return Promise.all(pend.map(function(f){return photoResolve(f).catch(function(){return null;});}));
 }
 // Rellena los <img data-fid> pendientes cargando desde IDB (render sync + carga async).
 function fillPhotoImgs(root){
   var scope=root||document;var imgs;
   try{imgs=[].slice.call(scope.querySelectorAll('img[data-fid]'));}catch(e){return;}
   imgs.forEach(function(im){
-    var id=im.getAttribute('data-fid');
+    var id=im.getAttribute('data-fid'),sp=im.getAttribute('data-sp')||'';
     if(_photoCache[id]){im.src=_photoCache[id];im.removeAttribute('data-fid');return;}
-    photoGet(id).then(function(u){if(u)im.src=u;}).catch(function(){}).then(function(){im.removeAttribute('data-fid');});
+    photoResolve({id:id,sp:sp}).then(function(u){if(u)im.src=u;}).catch(function(){}).then(function(){im.removeAttribute('data-fid');});
   });
 }
 // Devuelve el <img> para una foto: legacy = src directo; ref = data-fid (carga async).
 function photoImg(f,style){
   var s=fotoSrc(f);
   if(s)return '<img src="'+s+'" style="'+style+'">';
-  if(fotoIsRef(f))return '<img data-fid="'+f.id+'" src="'+PH_PLACEHOLDER+'" style="'+style+'">';
+  if(fotoIsRef(f))return '<img data-fid="'+f.id+'"'+(f.sp?' data-sp="'+f.sp+'"':'')+' src="'+PH_PLACEHOLDER+'" style="'+style+'">';
   return '<img src="'+PH_PLACEHOLDER+'" style="'+style+'">';
 }
 // Mueve las fotos inline (viejas o de otro dispositivo) a IDB y las reemplaza por refs.
@@ -639,6 +640,66 @@ function migratePhotosToIDB(){
     }
     // si algún put falló, NO tocar las fotos inline (no perder nada)
   }).catch(function(){/* IDB no disponible — se queda como estaba */});
+}
+
+// ============ FOTOS EN LA NUBE (Supabase Storage — para que se vean en los 3 equipos) ============
+// La foto se guarda local (IndexedDB, cache rápido) Y se sube a Supabase Storage cuando hay sesión.
+// En la orden queda el ref {id,t,sp} donde sp = ruta en la nube. Otro equipo baja de la nube por sp.
+// Offline / sin login = solo local; se sube solo cuando vuelve la conexión (photoUploadPending).
+function dataURLToBlob(u){try{var a=u.split(',');var m=(a[0].match(/:(.*?);/)||[])[1]||'image/jpeg';var bin=atob(a[1]);var n=bin.length;var arr=new Uint8Array(n);while(n--)arr[n]=bin.charCodeAt(n);return new Blob([arr],{type:m});}catch(e){return null;}}
+function blobToDataURL(b){return new Promise(function(res){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=function(){res('');};r.readAsDataURL(b);});}
+// Baja una foto desde Supabase Storage (otro equipo la subió) y la cachea local.
+function photoDownload(f){
+  var c=(typeof sbReady==='function')?sbReady():null;
+  if(!c||!f||!f.sp)return Promise.resolve(null);
+  return c.storage.from('fotos').download(f.sp).then(function(res){
+    if(res.error||!res.data)return null;
+    return blobToDataURL(res.data).then(function(u){if(u){_photoCache[f.id]=u;photoPut(f.id,u,f.t||new Date().toISOString()).catch(function(){});}return u;});
+  }).catch(function(){return null;});
+}
+// Resuelve una foto: cache en memoria -> IndexedDB local -> Supabase Storage (sp).
+function photoResolve(f){
+  if(!f)return Promise.resolve(null);
+  var id=f.id;
+  if(!id)return Promise.resolve(fotoSrc(f)||null);
+  if(_photoCache[id])return Promise.resolve(_photoCache[id]);
+  return photoGet(id).then(function(u){
+    if(u)return u;
+    if(f.sp)return photoDownload(f);
+    return null;
+  }).catch(function(){return f.sp?photoDownload(f):null;});
+}
+// Sube a la nube las fotos que aún no tienen sp (las que este equipo capturó offline o antes del login).
+var _upBusy=false,_upTimer=null;
+function schedulePhotoUpload(){if(!_syncOn)return;clearTimeout(_upTimer);_upTimer=setTimeout(photoUploadPending,2000);}
+function photoUploadPending(){
+  if(_upBusy||!_syncOn)return;
+  var c=(typeof sbReady==='function')?sbReady():null;if(!c)return;
+  c.auth.getSession().then(function(r){
+    var sess=r&&r.data&&r.data.session;if(!sess)return;var uid=sess.user.id;
+    var pend=[];
+    function scan(fotos){(fotos||[]).forEach(function(f){if(fotoIsRef(f)&&!f.sp)pend.push(f);});}
+    (DB.ordenes||[]).forEach(function(o){scan(o.fotos);});
+    if(typeof RO!=='undefined'&&RO)scan(RO.fotos);
+    if(!pend.length)return;
+    _upBusy=true;var i=0,changed=false;
+    (function next(){
+      if(i>=pend.length){_upBusy=false;if(changed){saveLocalOnly();scheduleSyncPush();}return;}
+      var f=pend[i++];var path=uid+'/'+f.id+'.jpg';
+      photoResolve(f).then(function(url){
+        var blob=url?dataURLToBlob(url):null;
+        if(!blob){next();return;}
+        c.storage.from('fotos').upload(path,blob,{contentType:'image/jpeg',upsert:true}).then(function(res){
+          if(!res.error){f.sp=path;changed=true;}next();
+        }).catch(function(){next();});
+      }).catch(function(){next();});
+    })();
+  }).catch(function(){});
+}
+function photoDelCloud(f){
+  if(!fotoIsRef(f)||!f.sp)return;
+  var c=(typeof sbReady==='function')?sbReady():null;if(!c)return;
+  try{c.storage.from('fotos').remove([f.sp]);}catch(e){}
 }
 
 // ============ AUTOGUARDADO DE ORDEN A MEDIAS (borrador) ============
@@ -714,7 +775,7 @@ function aiFetch(msg,maxTokens){
 // sincroniza cuando hay sesión y señal. Sin sesión, todo funciona igual que antes.
 var SB_URL='https://pvsddtmgwmqcdcmuvhim.supabase.co';
 var SB_KEY='sb_publishable_RLIGlQ1gsNrh8tsB_ihWNA_8PazIEW2'; // clave pública (la protege RLS)
-var _sb=null,_sbChan=null,_syncTimer=null,_syncBusy=false,_syncOn=false,_syncApplying=false,_lastPushRev=0;
+var _sb=null,_sbChan=null,_syncTimer=null,_syncBusy=false,_syncOn=false,_syncApplying=false,_lastPushRev=0,_lastPullAt=0,_lastSyncErr='';
 function deviceLabel(){var d=localStorage.getItem('sf_device');if(!d){d='disp-'+Math.random().toString(36).slice(2,6);try{localStorage.setItem('sf_device',d);}catch(e){}}return d;}
 function sbReady(){if(_sb)return _sb;if(typeof supabase==='undefined'||!supabase.createClient)return null;_sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sf_auth'}});return _sb;}
 function saveLocalOnly(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}}
@@ -736,14 +797,16 @@ function mergeDB(local,remote){
 function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes}[v.id];if(f)try{f();}catch(e){}}
 function sbSession(cb){var c=sbReady();if(!c){cb(null);return;}c.auth.getSession().then(function(r){cb(r&&r.data&&r.data.session||null);}).catch(function(){cb(null);});}
 async function syncPull(){
-  var c=sbReady();if(!c)return;var sess=(await c.auth.getSession()).data.session;if(!sess)return;var uid=sess.user.id;
+  var c=sbReady();if(!c)return;var sess=(await c.auth.getSession()).data.session;if(!sess){_lastSyncErr='sin sesión';updSyncStatus();return;}var uid=sess.user.id;
   var res=await c.from('shops').select('data,rev').eq('owner',uid).maybeSingle();
-  if(res.error){console.warn('sync pull',res.error.message);return;}
+  if(res.error){_lastSyncErr=res.error.message;console.warn('sync pull',res.error.message);updSyncStatus('error');return;}
   if(!res.data){ // primer equipo: crea la fila con lo que haya local
-    await c.from('shops').insert({owner:uid,name:(DB.settings&&DB.settings.shopName)||'Taller',data:cloudDataPayload(),rev:1,updated_by:deviceLabel()});
-    _lastPushRev=1;return;
+    var ins=await c.from('shops').insert({owner:uid,name:(DB.settings&&DB.settings.shopName)||'Taller',data:cloudDataPayload(),rev:1,updated_by:deviceLabel()});
+    if(ins&&ins.error){_lastSyncErr=ins.error.message;updSyncStatus('error');return;}
+    _lastPushRev=1;_lastPullAt=Date.now();_lastSyncErr='';schedulePhotoUpload();updSyncStatus('ok');return;
   }
   _syncApplying=true;DB=mergeDB(DB,res.data.data||{});_lastPushRev=res.data.rev||0;saveLocalOnly();_syncApplying=false;rerenderCurrent();
+  _lastPullAt=Date.now();_lastSyncErr='';schedulePhotoUpload();updSyncStatus('ok');
 }
 function scheduleSyncPush(){if(!_syncOn||_syncApplying||DB._demo)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(syncPush,1500);}
 async function syncPush(){
@@ -810,7 +873,11 @@ function updSyncStatus(state){
     var on=!!sess;
     if(out)out.style.display=on?'none':'block';
     if(inn)inn.style.display=on?'block':'none';
-    if(on&&st2){var em=sess.user&&sess.user.email||'';st2.innerHTML='<i class="ti ti-cloud-check" style="color:var(--green)"></i> Sincronizado como <strong>'+em+'</strong> · equipo "'+deviceLabel()+'"'+(state==='error'?' · <span style="color:var(--red)">último guardado falló</span>':'');}
+    if(on&&st2){var em=sess.user&&sess.user.email||'';var extra='';
+      if(_lastPullAt)extra+=' · última sync '+new Date(_lastPullAt).toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      if(_lastSyncErr)extra+=' · <span style="color:var(--red)">error: '+_lastSyncErr+'</span>';
+      else if(state==='error')extra+=' · <span style="color:var(--red)">último guardado falló</span>';
+      st2.innerHTML='<i class="ti ti-cloud-check" style="color:var(--green)"></i> Sincronizado como <strong>'+em+'</strong> · equipo "'+deviceLabel()+'"'+extra;}
     if(st)st.textContent=on?'':'Entra o crea el taller para sincronizar tus dispositivos.';
   });
 }
@@ -1167,7 +1234,7 @@ function deletePhoto(i){
   if(!confirm('¿Eliminar esta foto?'))return;
   var f=(RO.fotos||[])[i];
   RO.fotos.splice(i,1);
-  if(fotoIsRef(f))photoDel(f.id); // libera la foto de IndexedDB
+  if(fotoIsRef(f)){photoDel(f.id);photoDelCloud(f);} // libera la foto de IndexedDB y de la nube
   renderPhotosGrid();
 }
 
@@ -2929,7 +2996,7 @@ function updFotoViewer(){
   var im=document.getElementById('foto-viewer-img');
   var direct=fotoSrc(f);
   if(direct){im.src=direct;}
-  else if(fotoIsRef(f)){im.src=PH_PLACEHOLDER;photoGet(f.id).then(function(u){if(u&&_fvOrden.fotos[_fvIdx]===f)im.src=u;}).catch(function(){});}
+  else if(fotoIsRef(f)){im.src=PH_PLACEHOLDER;photoResolve(f).then(function(u){if(u&&_fvOrden.fotos[_fvIdx]===f)im.src=u;}).catch(function(){});}
   else{im.src=PH_PLACEHOLDER;}
   var t=fotoTime(f);
   document.getElementById('foto-viewer-caption').innerHTML=_fvOrden.id+' · Foto '+(_fvIdx+1)+' de '+_fvOrden.fotos.length+(t?'<br><span style="font-weight:400;font-size:11px;color:rgba(255,255,255,.7)">Capturada: '+new Date(t).toLocaleString('es-PR',{weekday:'short',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</span>':'');
@@ -2951,7 +3018,7 @@ function deleteRO(roId){
   var idx=DB.ordenes.findIndex(function(x){return x.id===roId;});
   if(idx>-1){
     var o=DB.ordenes[idx];
-    (o.fotos||[]).forEach(function(f){if(fotoIsRef(f))photoDel(f.id);}); // libera las fotos de IndexedDB
+    (o.fotos||[]).forEach(function(f){if(fotoIsRef(f)){photoDel(f.id);photoDelCloud(f);}}); // libera las fotos de IndexedDB y la nube
     DB.ordenes.splice(idx,1);
     DB.garage=DB.garage.filter(function(g){return g.roId!==roId;});
     saveDB();alert('Orden eliminada.');go('historial');
