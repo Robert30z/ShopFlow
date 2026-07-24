@@ -411,7 +411,24 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="fr1"><div class="fg"><div class="fl">API key de Anthropic</div><input id="set-aikey" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveSettings()"></div></div>
         <div id="set-aikey-status" style="font-size:11px;color:var(--gray-400);margin-top:6px">Sin configurar — los botones AI mostrarán un aviso.</div>
       </div></div>
-      <div class="card"><div class="ch"><i class="ti ti-cloud-upload"></i> Respaldo automático en la nube</div><div class="cb">
+      <div class="card"><div class="ch"><i class="ti ti-refresh"></i> Sincronización entre dispositivos</div><div class="cb">
+        <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-devices" style="font-size:16px;flex-shrink:0"></i><span>Entra con el MISMO correo y contraseña en tu iPad y tus iPhones y todos comparten los mismos datos en vivo. Esto es lo que "linkea" tus equipos — se acabó perder órdenes o pisar datos.</span></div>
+        <div id="sync-logged-out">
+          <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Correo del taller</div><input id="set-sync-email" type="email" autocapitalize="off" autocomplete="off" placeholder="taller@correo.com"></div></div>
+          <div class="fr1"><div class="fg"><div class="fl">Contraseña</div><input id="set-sync-pass" type="password" autocomplete="off" placeholder="••••••••"></div></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn p full" onclick="shopLogin(document.getElementById('set-sync-email').value,document.getElementById('set-sync-pass').value)"><i class="ti ti-login"></i> Entrar</button>
+            <button class="btn full" onclick="shopSignup(document.getElementById('set-sync-email').value,document.getElementById('set-sync-pass').value,DB.settings.shopName)"><i class="ti ti-user-plus"></i> Crear taller</button>
+          </div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:8px">La 1ª vez usa "Crear taller". En los demás equipos usa "Entrar" con el mismo correo y clave.</div>
+        </div>
+        <div id="sync-logged-in" style="display:none">
+          <div id="sync-status2" style="font-size:12px;margin-bottom:10px"></div>
+          <button class="btn full" onclick="shopLogout()"><i class="ti ti-logout"></i> Cerrar sesión en este equipo</button>
+        </div>
+        <div id="set-sync-status" style="font-size:11px;color:var(--gray-400);margin-top:8px"></div>
+      </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-cloud-upload"></i> Respaldo automático en la nube (respaldo extra)</div><div class="cb">
         <div class="tip-box" style="background:var(--green-light);color:var(--green)"><i class="ti ti-shield-lock" style="font-size:16px;flex-shrink:0"></i><span>Cada cambio se sube solo a un repositorio PRIVADO tuyo de GitHub. Si el iPad se pierde o Safari borra los datos, restauras todo con un toque.</span></div>
         <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Repositorio (usuario/repo)</div><input id="set-bk-repo" placeholder="Robert30z/shopflow-backup" autocapitalize="off" autocomplete="off" oninput="saveSettings()"></div></div>
         <div class="fr1"><div class="fg"><div class="fl">Token de GitHub (fine-grained, solo ese repo, permiso Contents)</div><input id="set-bk-token" type="password" placeholder="github_pat_..." autocomplete="off" oninput="saveSettings()"></div></div>
@@ -438,6 +455,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
@@ -481,6 +499,7 @@ function saveDB(){
   try{
     localStorage.setItem('sf_v1',JSON.stringify(DB));
     scheduleCloudBackup();
+    scheduleSyncPush();
     return true;
   }
   catch(e){
@@ -558,8 +577,112 @@ function aiFetch(msg,maxTokens){
 }
 
 // ============ RESPALDO EN LA NUBE (GitHub privado) ============
-// Cada cambio se sube (con retraso de 45s) a un repo PRIVADO de GitHub del usuario.
-// El token y la API key de AI nunca se incluyen en el contenido del respaldo.
+// ============ SINCRONIZACIÓN MULTI-DISPOSITIVO (Supabase) ============
+// Entrar con el mismo correo+clave en varios equipos = comparten los mismos datos en vivo.
+// La app SIGUE siendo offline-first: localStorage['sf_v1'] es la copia de trabajo; Supabase
+// sincroniza cuando hay sesión y señal. Sin sesión, todo funciona igual que antes.
+var SB_URL='https://pvsddtmgwmqcdcmuvhim.supabase.co';
+var SB_KEY='sb_publishable_RLIGlQ1gsNrh8tsB_ihWNA_8PazIEW2'; // clave pública (la protege RLS)
+var _sb=null,_sbChan=null,_syncTimer=null,_syncBusy=false,_syncOn=false,_syncApplying=false,_lastPushRev=0;
+function deviceLabel(){var d=localStorage.getItem('sf_device');if(!d){d='disp-'+Math.random().toString(36).slice(2,6);try{localStorage.setItem('sf_device',d);}catch(e){}}return d;}
+function sbReady(){if(_sb)return _sb;if(typeof supabase==='undefined'||!supabase.createClient)return null;_sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sf_auth'}});return _sb;}
+function saveLocalOnly(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}}
+function cloudDataPayload(){var c=JSON.parse(JSON.stringify(DB));if(c.settings){delete c.settings.aiKey;delete c.settings.backup;}delete c._demo;delete c._demoAt;delete c._snapshot;return c;}
+// Une los datos de dos equipos: por id, sobreviven las órdenes/clientes de AMBOS (anti-clobber).
+function mergeDB(local,remote){
+  if(!remote)return local;
+  var out=JSON.parse(JSON.stringify(remote));
+  ['ordenes','clientes','citas','garage','gastos','inventario','tecnicos','asesores','svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS'].forEach(function(k){
+    var rIds={};(out[k]||[]).forEach(function(it){if(it&&it.id)rIds[it.id]=1;});
+    (local[k]||[]).forEach(function(it){if(it&&it.id&&!rIds[it.id])(out[k]=out[k]||[]).push(it);});
+  });
+  ['roCounter','tecCounter','aseCounter'].forEach(function(k){out[k]=Math.max(local[k]||0,remote[k]||0);});
+  out.settings=out.settings||{};local.settings=local.settings||{};
+  out.settings.aiKey=local.settings.aiKey;out.settings.backup=local.settings.backup; // secretos por-dispositivo, no viajan
+  out.serviceParts=Object.assign({},remote.serviceParts||{},local.serviceParts||{});
+  return out;
+}
+function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes}[v.id];if(f)try{f();}catch(e){}}
+function sbSession(cb){var c=sbReady();if(!c){cb(null);return;}c.auth.getSession().then(function(r){cb(r&&r.data&&r.data.session||null);}).catch(function(){cb(null);});}
+async function syncPull(){
+  var c=sbReady();if(!c)return;var sess=(await c.auth.getSession()).data.session;if(!sess)return;var uid=sess.user.id;
+  var res=await c.from('shops').select('data,rev').eq('owner',uid).maybeSingle();
+  if(res.error){console.warn('sync pull',res.error.message);return;}
+  if(!res.data){ // primer equipo: crea la fila con lo que haya local
+    await c.from('shops').insert({owner:uid,name:(DB.settings&&DB.settings.shopName)||'Taller',data:cloudDataPayload(),rev:1,updated_by:deviceLabel()});
+    _lastPushRev=1;return;
+  }
+  _syncApplying=true;DB=mergeDB(DB,res.data.data||{});_lastPushRev=res.data.rev||0;saveLocalOnly();_syncApplying=false;rerenderCurrent();
+}
+function scheduleSyncPush(){if(!_syncOn||_syncApplying||DB._demo)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(syncPush,1500);}
+async function syncPush(){
+  var c=sbReady();if(!c||!_syncOn||DB._demo)return;var sess=(await c.auth.getSession()).data.session;if(!sess)return;
+  if(_syncBusy){scheduleSyncPush();return;}_syncBusy=true;
+  var rev=_lastPushRev+1;
+  var res=await c.from('shops').update({data:cloudDataPayload(),rev:rev,updated_by:deviceLabel(),name:(DB.settings&&DB.settings.shopName)||'Taller'}).eq('owner',sess.user.id).select('rev');
+  _syncBusy=false;
+  if(res.error){updSyncStatus('error');return;}
+  if(!res.data||!res.data.length){await syncPull();} // no había fila → créala
+  else _lastPushRev=rev;
+  updSyncStatus('ok');
+}
+function subscribeRealtime(){
+  var c=sbReady();if(!c)return;var self=deviceLabel();
+  sbSession(function(sess){
+    if(!sess)return;var uid=sess.user.id;
+    if(_sbChan)c.removeChannel(_sbChan);
+    _sbChan=c.channel('shop-'+uid)
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'shops',filter:'owner=eq.'+uid},function(p){
+        var row=p.new;if(!row||row.updated_by===self)return;if((row.rev||0)<=_lastPushRev)return;
+        _syncApplying=true;DB=mergeDB(DB,row.data||{});_lastPushRev=row.rev||0;saveLocalOnly();_syncApplying=false;rerenderCurrent();syncToast('Datos actualizados desde otro equipo ✓');
+      }).subscribe();
+  });
+}
+function syncToast(msg){
+  var t=document.getElementById('sync-toast');
+  if(!t){t=document.createElement('div');t.id='sync-toast';t.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:80px;background:var(--green,#16a34a);color:#fff;padding:9px 16px;border-radius:20px;font-size:12px;font-weight:700;z-index:600;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:opacity .3s';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';clearTimeout(t._h);t._h=setTimeout(function(){t.style.opacity='0';},2600);
+}
+async function shopSignup(email,pass,shopName){
+  email=(email||'').trim();if(!email||!pass){alert('Escribe correo y contraseña.');return;}
+  var c=sbReady();if(!c){alert('No se pudo cargar la nube. Revisa tu conexión e intenta de nuevo.');return;}
+  var r=await c.auth.signUp({email:email,password:pass});
+  if(r.error){alert('No se pudo crear el taller: '+r.error.message);return;}
+  _syncOn=true;await syncPull();subscribeRealtime();updSyncStatus('ok');
+  alert('Taller creado y sincronizado ✓\n\nAhora entra con ESTE mismo correo y contraseña en tus otros iPhones/iPad para linkearlos — compartirán los mismos datos en vivo.');
+  go('home');
+}
+async function shopLogin(email,pass){
+  email=(email||'').trim();if(!email||!pass){alert('Escribe correo y contraseña.');return;}
+  var c=sbReady();if(!c){alert('No se pudo cargar la nube. Revisa tu conexión.');return;}
+  var r=await c.auth.signInWithPassword({email:email,password:pass});
+  if(r.error){alert('No se pudo entrar: '+r.error.message);return;}
+  _syncOn=true;await syncPull();subscribeRealtime();updSyncStatus('ok');
+  alert('Sesión iniciada ✓ Este dispositivo está sincronizado.');go('home');
+}
+async function shopLogout(){
+  var c=sbReady();if(!c)return;
+  if(!confirm('¿Cerrar sesión de sincronización en este equipo?\n\nTus datos siguen guardados en este dispositivo, solo deja de sincronizar.'))return;
+  if(_sbChan){c.removeChannel(_sbChan);_sbChan=null;}
+  _syncOn=false;await c.auth.signOut();updSyncStatus();
+}
+function syncBoot(){
+  var c=sbReady();if(!c){updSyncStatus();return;}
+  sbSession(function(sess){
+    if(sess){_syncOn=true;updSyncStatus('ok');syncPull().catch(function(){});subscribeRealtime();}
+    else updSyncStatus();
+  });
+}
+function updSyncStatus(state){
+  var out=document.getElementById('sync-logged-out'),inn=document.getElementById('sync-logged-in'),st=document.getElementById('set-sync-status'),st2=document.getElementById('sync-status2');
+  sbSession(function(sess){
+    var on=!!sess;
+    if(out)out.style.display=on?'none':'block';
+    if(inn)inn.style.display=on?'block':'none';
+    if(on&&st2){var em=sess.user&&sess.user.email||'';st2.innerHTML='<i class="ti ti-cloud-check" style="color:var(--green)"></i> Sincronizado como <strong>'+em+'</strong> · equipo "'+deviceLabel()+'"'+(state==='error'?' · <span style="color:var(--red)">último guardado falló</span>':'');}
+    if(st)st.textContent=on?'':'Entra o crea el taller para sincronizar tus dispositivos.';
+  });
+}
 var _cbTimer=null,_cbBusy=false;
 function backupCfg(){var b=(DB.settings&&DB.settings.backup)||{};return (b.token&&b.repo)?b:null;}
 function scheduleCloudBackup(){
@@ -2718,6 +2841,7 @@ function initAjustes(){
   document.getElementById('set-bk-repo').value=bk.repo||'';
   document.getElementById('set-bk-token').value=bk.token||'';
   updBackupStatus();
+  updSyncStatus();
   var svi=document.getElementById('set-video');if(svi)svi.value=DB.settings.videoIntro||'';
   var db=document.getElementById('demo-btn');
   if(db)db.innerHTML=DB._demo?'<i class="ti ti-door-exit"></i> Salir del demo (vuelven tus datos reales)':'<i class="ti ti-masks-theater"></i> Activar modo demo';
@@ -3946,6 +4070,9 @@ document.addEventListener('visibilitychange',function(){if(document.visibilitySt
 window.addEventListener('pagehide',saveDraft);
 setInterval(saveDraft,5000);
 setTimeout(checkDraft,1400);
+
+// Sincronización multi-dispositivo: reanuda sesión y baja datos al abrir.
+try{syncBoot();}catch(e){}
 
 // Hide splash after 1.2s — works on iOS Safari
 function hideSplash(){
