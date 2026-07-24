@@ -4066,8 +4066,14 @@ demoBanner();
 // Autoguardado de la orden a medias: al mandar la app a segundo plano (iOS mata
 // Safari al bloquear/cambiar de app) y cada 5s como red de seguridad. checkDraft
 // ofrece recuperar una orden que quedó sin guardar la última vez.
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')saveDraft();});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden'){saveDraft();}
+  else if(_syncOn){ // al volver a la app (iOS suspende la conexión en segundo plano): baja lo nuevo y reconecta
+    syncPull().catch(function(){});subscribeRealtime();
+  }
+});
 window.addEventListener('pagehide',saveDraft);
+window.addEventListener('online',function(){if(_syncOn){syncPull().catch(function(){});subscribeRealtime();}});
 setInterval(saveDraft,5000);
 setTimeout(checkDraft,1400);
 
