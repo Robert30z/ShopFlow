@@ -588,23 +588,33 @@ function cloudBackup(manual){
     return fetch(url,{headers:ghHeaders(cfg.token),cache:'no-store'})
       .then(function(r){return r.status===404?{sha:null}:r.json();})
       .then(function(cur){
+        // 🛡️ GUARD anti-borrón: NUNCA dejar que un dispositivo vacío pise un respaldo con datos.
+        // (Con 3 aparatos compartiendo un solo respaldo, el iPad vacío borraría el iPhone bueno.)
+        var localN=(DB.ordenes||[]).length,cloudN=0;
+        if(cur&&cur.content){try{cloudN=((JSON.parse(decodeURIComponent(escape(atob(cur.content.replace(/\n/g,'')))))||{}).ordenes||[]).length;}catch(e){}}
+        if(localN===0&&cloudN>0)return {__blocked:cloudN};
         var body={message:'ShopFlow auto-backup '+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(cloudBackupPayload())))};
         if(cur&&cur.sha)body.sha=cur.sha;
         return fetch(url,{method:'PUT',headers:ghHeaders(cfg.token),body:JSON.stringify(body),cache:'no-store'});
       })
-      .then(function(r){if(r.status===409&&!retry)return putOnce(true);return r;});
+      .then(function(r){if(r&&r.status===409&&!retry)return putOnce(true);return r;});
   }
   putOnce(false)
     .then(function(r){
       _cbBusy=false;
-      if(r.ok){
+      if(r&&r.__blocked){
+        updBackupStatus('⛔ equipo vacío — usa RESTAURAR, no Respaldar');
+        alert('⛔ Respaldo BLOQUEADO — este dispositivo tiene 0 órdenes y la nube tiene '+r.__blocked+'.\n\nSubir ahora BORRARÍA esas '+r.__blocked+' órdenes de la nube.\n\nSi querías traer tus datos a este equipo, usa RESTAURAR (baja de la nube), no Respaldar (sube a la nube).');
+        return;
+      }
+      if(r&&r.ok){
         DB.settings.backup.last=new Date().toISOString();
         try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}
         updBackupStatus();
-        if(manual)alert('Respaldo subido a GitHub ✓');
+        if(manual)alert('Respaldo subido a GitHub ✓ ('+(DB.ordenes||[]).length+' órdenes)');
       }else{
-        updBackupStatus('error HTTP '+r.status);
-        if(manual)alert('Error al respaldar (HTTP '+r.status+'). Verifica que el repo exista y el token tenga permiso de Contents.');
+        updBackupStatus('error HTTP '+(r?r.status:'?'));
+        if(manual)alert('Error al respaldar (HTTP '+(r?r.status:'?')+'). Verifica que el repo exista y el token tenga permiso de Contents.');
       }
     })
     .catch(function(){_cbBusy=false;updBackupStatus('sin conexión');if(manual)alert('Sin conexión. El respaldo se reintenta con el próximo cambio.');});
@@ -620,6 +630,11 @@ function restoreFromCloud(){
       var txt=decodeURIComponent(escape(atob((j.content||'').replace(/\n/g,''))));
       var data=JSON.parse(txt);
       if(!data||!data.ordenes)throw new Error('respaldo inválido');
+      // 🛡️ GUARD anti-borrón: si este equipo tiene MÁS órdenes que el respaldo, restaurar las borra.
+      var inN=(data.ordenes||[]).length,curN=(DB.ordenes||[]).length;
+      if(curN>0&&inN<curN){
+        if(!confirm('⚠️ CUIDADO — este dispositivo tiene '+curN+' órdenes y el respaldo de la nube solo '+inN+'.\n\nRestaurar BORRA las '+curN+' de aquí y las deja en '+inN+'. Si ESTE es tu equipo con los datos buenos, cancela y dale RESPALDAR (sube), no Restaurar.\n\n¿Restaurar de todos modos?'))return;
+      }
       var keep={aiKey:DB.settings.aiKey,backup:DB.settings.backup};
       DB=data;DB.settings=DB.settings||{};DB.settings.aiKey=keep.aiKey;DB.settings.backup=keep.backup;
       if(!DB.serviceParts)DB.serviceParts={};
