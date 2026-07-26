@@ -813,6 +813,17 @@ function scheduleSyncPush(){if(!_syncOn||_syncApplying||DB._demo)return;clearTim
 async function syncPush(){
   var c=sbReady();if(!c||!_syncOn||DB._demo)return;var sess=(await c.auth.getSession()).data.session;if(!sess)return;
   if(_syncBusy){scheduleSyncPush();return;}_syncBusy=true;
+  // 🛡️ GUARD anti-borrón (mismo criterio que el respaldo GitHub): un equipo VACÍO nunca pisa una
+  // nube CON órdenes. Sin esto, abrir la app en un aparato limpio borra el taller de los demás.
+  if(((DB.ordenes||[]).length)===0){
+    var chk=await c.from('shops').select('data').eq('owner',sess.user.id).maybeSingle();
+    var remN=0;try{remN=((chk&&chk.data&&chk.data.data&&chk.data.data.ordenes)||[]).length;}catch(e){}
+    if(remN>0){
+      _syncBusy=false;_lastSyncErr='⛔ equipo vacío — usa Restaurar, no subir';updSyncStatus('error');
+      alert('⛔ Sincronización BLOQUEADA — este equipo tiene 0 órdenes y la nube tiene '+remN+'.\n\nSubir ahora las BORRARÍA. Tus datos están a salvo en la nube: recarga la app para bajarlos.');
+      return;
+    }
+  }
   var rev=_lastPushRev+1;
   var res=await c.from('shops').update({data:cloudDataPayload(),rev:rev,updated_by:deviceLabel(),name:(DB.settings&&DB.settings.shopName)||'Taller'}).eq('owner',sess.user.id).select('rev');
   _syncBusy=false;
@@ -3260,9 +3271,15 @@ function importBackup(e){
   r.onload=function(ev){
     try{
       var imported=JSON.parse(ev.target.result);
-      if(!confirm('¿Reemplazar todos los datos actuales con el respaldo? Esto no se puede deshacer.'))return;
+      var nIn=((imported&&imported.ordenes)||[]).length,nNow=(DB.ordenes||[]).length;
+      if(!confirm('¿Reemplazar los datos de este equipo ('+nNow+' órdenes) con el respaldo ('+nIn+' órdenes)? Esto no se puede deshacer.'))return;
+      // Los secretos son POR EQUIPO y no viajan en el respaldo: si no los conservamos, importar
+      // apaga el respaldo sin decir nada y el equipo se queda desprotegido.
+      var keep={aiKey:(DB.settings||{}).aiKey,backup:(DB.settings||{}).backup};
       DB=imported;
       if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};
+      if(keep.aiKey)DB.settings.aiKey=keep.aiKey;
+      if(keep.backup&&keep.backup.token&&keep.backup.repo)DB.settings.backup=keep.backup;
       if(!DB.serviceParts)DB.serviceParts={};
       saveDB();
       alert('Respaldo importado correctamente.');

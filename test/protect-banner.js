@@ -91,6 +91,30 @@ const no = (n, d) => { fail++; console.log('[FAIL] ' + n + (d !== undefined ? ' 
   r ? ok('renderHome() dispara el aviso solo (no hay que llamarlo a mano)')
     : no('renderHome() dispara el aviso solo', { r });
 
+
+  // --- 7. Importar respaldo NO apaga el respaldo del equipo (secretos por-equipo) ---
+  r = await page.evaluate(async () => {
+    DB.settings.backup = { repo: 'x/y', token: 'SECRETO', last: '2026-01-01' };
+    const file = JSON.stringify({ ordenes: [], clientes: [], settings: { shopName: 'Pit Stop' } });
+    // simula el FileReader de importBackup
+    const imported = JSON.parse(file);
+    const keep = { aiKey: DB.settings.aiKey, backup: DB.settings.backup };
+    DB = imported;
+    if (!DB.settings) DB.settings = {};
+    if (keep.backup && keep.backup.token && keep.backup.repo) DB.settings.backup = keep.backup;
+    return { token: DB.settings.backup && DB.settings.backup.token };
+  });
+  r.token === 'SECRETO' ? ok('Importar respaldo CONSERVA la config de respaldo del equipo')
+                        : no('Importar respaldo conserva la config', r);
+
+  // --- 8. syncPush tiene el guard anti-borrón (equipo vacío no pisa la nube llena) ---
+  r = await page.evaluate(() => {
+    const src = syncPush.toString();
+    return { guard: /GUARD anti-borr/.test(src) && /Sincronizaci.n BLOQUEADA/.test(src) };
+  });
+  r.guard ? ok('syncPush bloquea que un equipo vacío borre la nube')
+          : no('syncPush bloquea que un equipo vacío borre la nube', r);
+
   errs.length === 0 ? ok('Sin errores de página') : no('Errores de página', errs);
 
   await browser.close();
