@@ -2,6 +2,41 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-26 (batch 9: 🛟 RESCATE de la orden perdida + guards que faltaban)
+
+## 2026-07-26 (batch 9): la app estaba VACÍA — se rescató una orden real del historial de respaldos
+Roberto: *"shopflow is empty even if i respaldar ahora nothing is going to show up"* (y aclaró que el
+respaldo vacío de hoy 14:03 **fue una prueba suya**). O sea: no era solo "falta respaldar", los datos
+del equipo ya no estaban.
+🛟 **RESCATE (el respaldo es un repo git = recuperación punto-en-el-tiempo).** Se recorrieron los 22
+commits de `Robert30z/shopflow-backup` contando órdenes por versión:
+| fecha (AST) | órdenes/clientes/garage | commit |
+|---|---|---|
+| 07-10 21:39 | 1 / 0 / 0 | cf5765c |
+| 07-23 23:11 | 1 / 1 / 0 | 07014d6 |
+| 07-24 09:50 | 1 / 1 / 0 | f5824a9 |
+| **07-24 10:01** | **2 / 2 / 1** ⭐ | **4836d0b** |
+| 07-24 12:15 | 0 / 0 / 0 ← se vació | a2a8a35 |
+| 07-26 14:03 | 0 / 0 / 0 (prueba de Roberto) | 95414f4 |
+⇒ Rescatado de `4836d0b`: **RO-2 Migdalia Cotto, 2020 Kia Forte, tablilla JLJ712, $88.20 pendiente,
+35 fotos (base64 inline, se recuperan), firma del cliente, piezas con costo/suplidor (Valvoline 5w-20
+$20.81→$35.38 + filtro 26300-35505) y 4 denegados de gomas marcados urgentes.** (RO-1 "PRUEBA" es
+basura de prueba, se puede borrar tras importar.) Archivo entregado:
+`HQ\Pit Stop\ShopFlow-Rescate\RESCATE-shopflow-2026-07-24.json` → Ajustes → **Importar respaldo**.
+⚠️ **Sin rescate posible para clientes del 25-26**: ningún respaldo los capturó nunca.
+🔧 **DOS HUECOS TAPADOS (los que permitían el borrón):**
+1. **`syncPush` no tenía guard.** El respaldo GitHub sí lo tenía desde `b0ef2a4` (07-23 22:21), pero la
+   sincronización a Supabase subía a ciegas → un equipo con 0 órdenes pisaba la nube del taller. Ahora
+   consulta la nube antes: si el equipo está vacío y la nube tiene órdenes, **BLOQUEA** y dice que
+   recargue para bajarlas.
+2. **`importBackup` hacía `DB=imported` de golpe.** Como los secretos son por-equipo y NO viajan en el
+   respaldo, importar dejaba el aparato **sin respaldo configurado y sin avisar** (círculo vicioso).
+   Ahora conserva `aiKey` + config de respaldo, y el confirm dice cuántas órdenes entran vs se pierden.
+📌 **Nota sobre el borrón del 07-24 12:15:** el guard de GitHub YA existía ese día, así que lo más
+probable es que el equipo corriera una build vieja cacheada (ese fue el día de la crisis de
+"ALMACENAMIENTO LLENO" + migración de fotos, SW v3→v4→v5). No se pudo determinar con certeza.
+✅ `test/protect-banner.js` ahora 10 checks. diag + smoke verdes, live==repo.
+
 ## Last updated: 2026-07-26 (batch 8: 🚨 HALLAZGO — 2 días sin respaldo + aviso en el home)
 
 ## 2026-07-26 (batch 8): la app dejaba trabajar SIN RESPALDO y no lo decía
