@@ -2,6 +2,41 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-26 (batch 8: 🚨 HALLAZGO — 2 días sin respaldo + aviso en el home)
+
+## 2026-07-26 (batch 8): la app dejaba trabajar SIN RESPALDO y no lo decía
+Roberto pidió diagnóstico completo porque ya tiene clientes reales y le está subiendo el flujo.
+**La app en sí está sana** (ver abajo), pero el diagnóstico destapó algo peor que un bug de código:
+🔴 **HALLAZGO: desde el 2026-07-24 4:15pm NADA ha llegado a la nube.**
+- Supabase `public.shops`: **rev 8, 0 órdenes, 0 clientes**, último update 07-24 16:15 (equipo `disp-p14y`).
+- Bucket `fotos`: **0 archivos, 0 bytes.**
+- `auth.users`: 1 usuario (rjohn7148@gmail.com), **último sign-in 07-24 03:07 — nunca más**.
+- Respaldo GitHub (`Robert30z/shopflow-backup`): último commit 07-24 16:16, archivo de **330 bytes con
+  `"ordenes":[]`** = vacío. El token del respaldo SÍ sirve (probado, HTTP 200 lectura y escritura),
+  o sea que el fallo es del lado del equipo, no de GitHub.
+⇒ Todo el trabajo con clientes de estos días vive SOLO en el localStorage/IndexedDB de su equipo.
+**Causa de que no se enterara:** el estado del respaldo solo se veía entrando a Ajustes, y
+`cloudBackup()` fallaba **callado** (solo alertaba con `manual=true`). El mensaje de "orden guardada"
+podía decir "Subiendo respaldo a la nube..." aunque el push fallara.
+✅ **ARREGLO (batch 8):** `renderProtect()` pinta una banda en el HOME — **ROJA** si ni la nube ni
+GitHub están protegiendo ("TUS DATOS SOLO ESTÁN EN ESTE EQUIPO" + cuántas órdenes hay en riesgo),
+**ÁMBAR** si solo una vía funciona, y nada si las dos están sanas. `protectState()` NO se fía de
+"configurado": si el último intento falló, esa vía cuenta como caída y enseña el error.
+`updBackupStatus`/`updSyncStatus` la refrescan; se calla en demo. **SW v5→v6.**
+- **Test nuevo `test/protect-banner.js` (8 checks verde)**, incluido el caso "configurado pero
+  fallando". diag (153 handlers) + smoke (87) verdes local Y live, 0 page errors. **live==repo.**
+📌 **PENDIENTE ROBERTO (en este orden, no lo cambies):** (1) abrir ShopFlow en el equipo donde están
+las órdenes → Ajustes → **"Exportar respaldo"** y guardar el .json (esa es la copia de seguridad real);
+(2) **NO tocar "Restaurar"** — la nube está vacía y borraría el equipo; (3) recargar 2 veces (SW v6) →
+entrar con rjohn7148@gmail.com en Ajustes→Sincronización → confirmar "última sync" con hora; (4) tocar
+"Respaldar ahora" y verificar que el commit nuevo en shopflow-backup ya NO pese 330 bytes.
+
+## Estado verificado 2026-07-26 (todo lo demás VERDE)
+diag.js 153 handlers / 10 pantallas / PDF válido / cámara / RO en vivo / respaldo · smoke.js 87 checks
+(local **y** contra el sitio en vivo) · photos-idb 13 · parts-edit 6 · protect-banner 8 · 0 errores de
+página en todas. **live == repo** (blob idéntico). Los 4 CDN (jsPDF, ZXing, Tabler, Supabase) responden
+200. Supabase vivo, RLS aislando bien (lectura anónima = 0 filas).
+
 ## Last updated: 2026-07-24 (batch 7: firma visible en dark mode + EDITAR pieza ingresada)
 
 ## 2026-07-24 (batch 7): 2 arreglos que pidió Roberto en el campo
