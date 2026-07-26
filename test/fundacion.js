@@ -289,6 +289,52 @@ const ok = (c, n, d) => { console.log(`[${c?'PASS':'FAIL'}] ${n}${d?' — '+d:''
   ok(m1.ordenes===2 && m1.pap==='P1,P2', '⭐ al sincronizar, la papelera de los dos equipos se une', JSON.stringify(m1));
   ok(m1.sinDuplicados && m1.bita==='e1,e2', 'la bitácora se une por fecha y sin duplicados', m1.bita);
 
+  // ================= CONFLICTO: nube atrasada vs edicion fresca =================
+  // Este era un hueco de perdida SILENCIOSA: mergeDB salia de `remote`, asi que para una orden
+  // presente en los dos lados la nube ganaba siempre, incluso si estaba mas vieja.
+  const k1 = await page.evaluate(() => {
+    const local  = { ordenes:[{id:'RO-1',total:500,_editedAt:'2026-07-26T18:00:00Z',fotos:[]}], settings:{} };
+    const remoto = { ordenes:[{id:'RO-1',total:100,_editedAt:'2026-07-26T10:00:00Z',fotos:[]}], settings:{} };
+    const out = mergeDB(local, remoto);
+    return { total:out.ordenes[0].total, conflictos:_ultimosConflictos.slice() };
+  });
+  ok(k1.total===500, '⭐ una nube ATRASADA ya no pisa la edicion fresca del equipo', 'gano total $'+k1.total);
+  ok(k1.conflictos.length===1 && /este equipo/.test(k1.conflictos[0]), 'y el conflicto queda anotado', k1.conflictos[0]||'');
+
+  const k2 = await page.evaluate(() => {
+    const local  = { ordenes:[{id:'RO-1',total:100,_editedAt:'2026-07-26T10:00:00Z',fotos:[]}], settings:{} };
+    const remoto = { ordenes:[{id:'RO-1',total:500,_editedAt:'2026-07-26T18:00:00Z',fotos:[]}], settings:{} };
+    return { total:mergeDB(local,remoto).ordenes[0].total };
+  });
+  ok(k2.total===500, 'y si la nube es la mas nueva, gana la nube (como debe ser)', '$'+k2.total);
+
+  const k3 = await page.evaluate(() => {
+    // orden que solo este equipo ha tocado (la nube tiene una copia sin marca, mas vieja)
+    const local  = { ordenes:[{id:'RO-1',total:500,_editedAt:'2026-07-26T18:00:00Z',fotos:[]}], settings:{} };
+    const remoto = { ordenes:[{id:'RO-1',total:100,fotos:[]}], settings:{} };
+    return { total:mergeDB(local,remoto).ordenes[0].total };
+  });
+  ok(k3.total===500, 'si solo este equipo la edito, gana este equipo', '$'+k3.total);
+
+  // saveDB sella la hora en la orden que cambio, sin tener que acordarse en cada funcion
+  const k4 = await page.evaluate(() => {
+    DB.ordenes=[{id:'RO-500',fotos:[],servicios:[],denegados:[],insp:{},total:10,estado:'pagado',fecha:new Date().toISOString(),cliente:'Sello'}];
+    DB.papelera=[]; saveDB({force:true});
+    const sinSello = !DB.ordenes[0]._editedAt;
+    DB.ordenes[0].total = 99;             // un cambio cualquiera, sin llamar a ninguna funcion especial
+    saveDB();
+    return { sinSello, sello:!!DB.ordenes[0]._editedAt, quien:DB.ordenes[0]._editedBy };
+  });
+  ok(k4.sinSello && k4.sello && !!k4.quien, '⭐ saveDB sella solo la orden que cambio (ninguna se queda sin marcar)', 'equipo '+k4.quien);
+
+  const k5 = await page.evaluate(() => {
+    const antes = DB.ordenes[0]._editedAt;
+    DB.clientes.push({id:'C-777',nombre:'Otro cliente'});   // cambio que NO toca la orden
+    saveDB();
+    return { igual: DB.ordenes[0]._editedAt===antes };
+  });
+  ok(k5.igual, 'y no re-sella las ordenes que no cambiaron', 'sello intacto');
+
   // ================= la verificación de verdad =================
   const v1 = await page.evaluate(() => {
     DB.ordenes=[{id:'RO-400',fotos:[{id:'ph-x',t:'now'},{id:'ph-y',t:'now',sp:'uid/ph-y.jpg'}],sigData:{},servicios:[],denegados:[],insp:{},total:0,estado:'pagado',fecha:new Date().toISOString()}];

@@ -525,6 +525,7 @@ var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'servicios',l:'
       propio equipo, sin señal y sin depender de la nube.
    ========================================================================== */
 var BITA_MAX=4000;                 // la bitácora vive en localStorage: se le pone techo
+var _ultimosConflictos=[];         // ids cuya version se descarto al sincronizar (para anotarlo)
 var _lastGood=null;                // censo del último estado bueno guardado
 var _autorizado={fotos:{}};        // bajas declaradas por el usuario (ej: borró una foto a mano)
 
@@ -569,20 +570,35 @@ function autorizarBajaFoto(roId){
    como "se perdió una firma" y el guard bloquearía el borrado más normal del mundo. La regla real
    es "el expediente sigue existiendo EN ALGÚN SITIO", y la papelera es un sitio válido.
    `n` y `fotos` son de las activas (para mostrar); `ids` y `firmas` son de la unión (para vigilar). */
+function hash32(s){var h=5381,i=s.length;while(i)h=(h*33^s.charCodeAt(--i))>>>0;return h.toString(36);}
 function censo(db){
   db=db||DB;
-  var ids={},firmas=0,fotosAct=0;
+  var ids={},fp={},firmas=0,fotosAct=0;
   function contar(o,activa){
     if(!o||!o.id)return;
     var nf=(o.fotos||[]).length;
     ids[o.id]=nf;
+    try{fp[o.id]=hash32(JSON.stringify(o));}catch(e){}
     if(activa)fotosAct+=nf;
     if(o.sigData&&(o.sigData.sig1||o.sigData.sig2||o.sigData.sigDen))firmas++;
   }
   (db.ordenes||[]).forEach(function(o){contar(o,true);});
   (db.papelera||[]).forEach(function(o){contar(o,false);});
-  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,
+  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,fp:fp,
           pap:(db.papelera||[]).length,ts:Date.now()};
+}
+/* Marca con la hora cuál orden cambió de verdad, comparando su huella con la del último estado
+   bueno. Se hace en saveDB (el único camino de escritura) en vez de en cada función que edita una
+   orden: así ninguna se queda sin marcar por olvido. La marca es la que decide quién gana al
+   sincronizar — sin ella, la nube ganaba siempre y una nube atrasada pisaba una edición fresca. */
+function marcarEditadas(){
+  var prevFp=(_lastGood&&_lastGood.fp)||{},ahora=new Date().toISOString(),dev=deviceLabel(),n=0;
+  (DB.ordenes||[]).forEach(function(o){
+    if(!o||!o.id)return;
+    var f;try{f=hash32(JSON.stringify(o));}catch(e){return;}
+    if(prevFp[o.id]!==f){o._editedAt=ahora;o._editedBy=dev;n++;}
+  });
+  return n;
 }
 
 // ---- EL GUARD. Devuelve null si el guardado es sano, o el texto de la violación ----
@@ -707,6 +723,9 @@ function saveDB(opts){
       return false;
     }
   }
+  // Sella la hora en las órdenes que cambiaron ANTES de escribir. No en los reemplazos en bloque
+  // (importar/restaurar): ahí los datos traen su propia historia y no hay que fingir que es de ahora.
+  if(!opts.force&&!DB._demo){try{marcarEditadas();}catch(e){}}
   try{
     localStorage.setItem('sf_v1',JSON.stringify(DB));
     _autorizado.fotos={};
@@ -1021,6 +1040,11 @@ function aplicarRemoto(remota,rev){
   _lastGood=censo(DB);
   _syncApplying=false;
   if(_lastGood.n!==antes)bita('sync-bajada','',antes+' → '+_lastGood.n+' órdenes desde la nube');
+  if(_ultimosConflictos.length){
+    bita('conflicto-resuelto','',_ultimosConflictos.slice(0,6).join(' · '));
+    _ultimosConflictos=[];
+    saveLocalOnly();
+  }
   rerenderCurrent();
   try{schedulePhotoUpload();}catch(e){}
   try{scheduleSnapshot();}catch(e){}
@@ -1033,7 +1057,31 @@ function mergeDB(local,remote){
   // `papelera` va en la lista: un borrado hecho en un equipo tiene que llegar a los demás, y el
   // expediente borrado viaja COMPLETO (con sus fotos y su firma) para poder restaurarlo desde
   // cualquier aparato. `bitacora` se une aparte porque solo crece y se ordena por fecha.
-  ['ordenes','clientes','citas','garage','gastos','inventario','tecnicos','asesores','svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS','papelera'].forEach(function(k){
+  /* ORDENES: por id gana la EDICIÓN MÁS RECIENTE, no la nube por defecto. Antes `out` salía de
+     `remote` y para un id presente en los dos la nube ganaba siempre — así que bajar datos podía
+     pisar en silencio una orden que acababas de editar en este equipo (el caso iPad + iPhone).
+     Cuando hay que descartar una versión queda anotado en `_ultimosConflictos`. */
+  _ultimosConflictos=[];
+  var remOrd={},salida=[];
+  (remote.ordenes||[]).forEach(function(o){if(o&&o.id)remOrd[o.id]=o;});
+  (local.ordenes||[]).forEach(function(lo){
+    if(!lo||!lo.id)return;
+    var ro=remOrd[lo.id];
+    if(!ro){salida.push(lo);return;}                       // solo aquí: se conserva
+    delete remOrd[lo.id];
+    var tl=lo._editedAt||'',tr=ro._editedAt||'';
+    if(tl&&tr&&tl!==tr){
+      salida.push(tl>tr?lo:ro);
+      _ultimosConflictos.push(lo.id+(tl>tr?' (ganó la de este equipo)':' (ganó la de la nube)'));
+    }else if(tl&&!tr){                                     // solo este equipo la ha tocado
+      salida.push(lo);
+    }else{
+      salida.push(ro);                                     // empate o sin marcas: como antes
+    }
+  });
+  Object.keys(remOrd).forEach(function(id){salida.push(remOrd[id]);});
+  out.ordenes=salida;
+  ['clientes','citas','garage','gastos','inventario','tecnicos','asesores','svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS','papelera'].forEach(function(k){
     var rIds={};(out[k]||[]).forEach(function(it){if(it&&it.id)rIds[it.id]=1;});
     (local[k]||[]).forEach(function(it){if(it&&it.id&&!rIds[it.id])(out[k]=out[k]||[]).push(it);});
   });
