@@ -2,6 +2,96 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## Last updated: 2026-07-26 (batch 12: FUNDACION DE INTEGRIDAD + cobrar y cerrar)
+
+## 2026-07-26 (batch 12): FUNDACION DE INTEGRIDAD - "no puedo perder info de un cliente"
+Roberto: *"me estoy arriesgando a una demanda... realiza una inspeccion bien carbona, compara con otras
+companias, que yo pueda dormir en paz"* + *"no quiero un patch, quiero una fundacion"*.
+**Diagnostico de raiz:** el problema nunca fueron 4 bugs sueltos, era que **ningun sitio garantizaba la
+integridad**. Todo pasa por `saveDB()`, que serializaba y empujaba sin preguntarse jamas "acabo de
+perder algo?". Por eso cada bug nuevo costaba datos. **Ahora hay UN camino de escritura con garantias.**
+
+### Las 4 reglas de la casa (`index.html`, bloque FUNDACION DE INTEGRIDAD)
+1. **NADA SE DESTRUYE.** `deleteRO` borraba la orden + sus fotos de IndexedDB **Y DE LA NUBE** + el
+   garage con UN `confirm()`, y sincronizaba el borron a Supabase y GitHub. **Un mis-tap destruia un
+   expediente legal con firma y 35 fotos en todos los sitios a la vez.** Ahora va completo a
+   `DB.papelera` (con su entrada de garage para devolverlo) y se restaura desde cualquier equipo; las
+   fotos **se quedan**. Destruir de verdad (`purgarDePapelera`) exige **30 dias + doble confirmacion**
+   y es el UNICO sitio de la app que borra bytes. `deletePhoto` tambien destruia la foto de la nube
+   ANTES de guardar (si te arrepentias y cerrabas, la orden nombraba una foto inexistente); ya solo
+   quita la referencia. `reconciliarPapelera()` evita que un borrado revida por `mergeDB` (une por id).
+2. **TODO QUEDA ESCRITO.** `DB.bitacora` append-only (id, fecha, equipo, tipo, detalle), techo 4000.
+   Rastro legal + herramienta de diagnostico. `bita()` NO guarda (evita recursion); el que llama guarda.
+3. **`saveDB` VERIFICA ANTES DE ESCRIBIR.** `verificaIntegridad()` rechaza el guardado si: (1) un
+   expediente desapareceria de la union activas+papelera, (2) una orden perderia fotos sin baja
+   declarada, (3) bajarian las firmas, (4) **una factura sellada se estaria alterando**. Ataja bugs
+   FUTUROS, que es lo que lo hace fundacion y no parche.
+4. **COPIAS LOCALES.** Ultimas `SNAP_MAX=20` en IndexedDB **propia** (`shopflow_snaps`, aparte de la de
+   fotos para no arriesgar lo que ya funciona), sin fotos ni secretos. Volver atras **sin red** - lo que
+   no existia el 24-jul cuando localStorage quedo vacio. `restaurarSnapshot` guarda copia del estado
+   actual ANTES de cambiar (deshacer el deshacer).
+
+### DOS FALLOS DE DISENO PROPIOS que las pruebas encontraron (importantes)
+- **(a) El guard bricheaba la app.** Al bloquear, la memoria se quedaba con el cambio malo -> memoria !=
+  disco -> **TODOS los guardados siguientes se bloqueaban tambien.** Arreglado con
+  `revertirAlUltimoBueno()`: rechaza Y deshace en el sitio. Probado explicitamente.
+- **(b) Borrar una orden firmada era IMPOSIBLE.** El censo contaba firmas solo en `ordenes`, asi que
+  mandar a la papelera una orden firmada se leia como "se perdio una firma". **El censo mide sobre la
+  UNION `ordenes`+`papelera`** - eso es lo que significa "nada se destruye".
+
+### CANDADO DE FACTURA (comparacion con la competencia)
+Tekmetric documenta *Unpost Repair Order* y *How to Find and Restore a Deleted Repair Order* => el
+estandar de la industria es **borrado recuperable + orden cerrada con candado**. ShopFlow ya tenia lo
+primero; lo segundo faltaba y **era el punto debil legal**: una orden PAGADA se podia editar en
+silencio. Ahora al cobrar se **sella** con la huella (`fpFactura` = cliente, vehiculo, servicios,
+denegados, total, descuento, cortesia, pago, abonado) y **el guard hace cumplir el sello**.
+`reabrirOrden` pide motivo, **congela la version cerrada completa en `o._versiones`** y lo anota. La
+factura original nunca se pierde, solo se supera. Las pagadas de ANTES no se sellan solas (seria fingir
+una garantia): boton `sellarAhora` para que Roberto las revise y las selle.
+
+### PERDIDA SILENCIOSA CERRADA: la nube atrasada ya no pisa lo fresco
+`mergeDB` construia el resultado desde `remote`, asi que para un id en los dos lados **la nube ganaba
+SIEMPRE, incluso mas vieja** -> bajar datos podia borrar sin avisar una orden recien editada (caso iPad +
+iPhone). Ahora gana la **edicion mas reciente**, y descartar una version queda en la bitacora
+(`conflicto-resuelto`). Para eso hacia falta saber cuando cambio cada orden: en vez de sellar la hora en
+las ~15 funciones que editan una orden (donde se te olvida una), **`marcarEditadas()` lo hace en
+`saveDB`** comparando la huella de cada orden con la del ultimo estado bueno. Un solo sitio, ninguna sin
+marcar. `aplicarRemoto()` unifica los 2 sitios que aplicaban data remota (unir -> reconciliar ->
+refrescar censo): si el censo no se refresca, el guard compara contra un conteo viejo y **bloquea
+trabajo bueno**.
+
+### LO QUE PIDIO: "cobrar y cerrar" (y un bug de DINERO)
+Una orden `abierta` solo ofrecia "Continuar orden" (reabrir el wizard de 9 pasos). Y **`abierta` se
+excluye de TODAS las finanzas** (`o.estado!=='abierta'` en ventas, IVU, tecnico, asesor, por cobrar) =>
+**trabajo cobrado que no aparecia en ningun numero.** `cobrarYCerrar()`: boton verde con el total, pago
+completo o **abono parcial** (-> `pendiente` con balance), mueve el carro en el garage
+(entregado/listo), sella la factura. Aviso en el home (`renderAbiertas`) con las abiertas, su **edad** y
+el total sin cobrar.
+
+### Ajustes -> Seguridad de datos
+`verificarTodo()` **le pregunta a Supabase y a GitHub cuantas ordenes tienen y compara con el equipo**
+(la pregunta que nadie hacia el 24-jul, cuando la app decia que todo bien y la nube llevaba 2 dias en 0),
++ fotos que viven solo en este equipo (`fotosSinSubir` + `subirFotosYa`), + estado de
+`navigator.storage.persisted()` (Safari eviciona a los ~7 dias), + papelera / copias / bitacora.
+
+### Verificacion
+`test/fundacion.js` NUEVO (**54 checks**). Suites: smoke 89, diag 24, protect-banner 10, photos-idb 14,
+parts-edit 7, import-fotos 21, fundacion 54 = **219 verdes, 0 fallos**. `smoke` actualizado: su fixture
+ahora usa `saveDB({force:true})` (quitar una orden a pelo ya se bloquea, y hace bien) + 2 checks nuevos
+de papelera/restaurar. **E2E EN VIVO contra los datos REALES de Migdalia (taller de prueba temporal,
+borrado despues): sellar su factura y luego intentar cambiarle el total = BLOQUEADO; borrarla la manda
+completa a la papelera con sus 35 fotos y se restaura con las fotos viendose.** SW v7->**v9**,
+live==repo. Commits `21d245e` (fundacion) . `46b8e32` (conflictos) . `9ace184` (candado).
+
+### LO QUE SIGUE ABIERTO (dicho claro, no maquillado)
+- **Permisos/roles**: cualquiera con el equipo puede borrar o reabrir. Irrelevante hoy (trabaja solo),
+  necesario cuando emplee o venda. Los grandes tienen "solo el dueno despostea".
+- **Respaldo del lado del servidor**: los grandes corren en su nube con respaldos del vendedor.
+  ShopFlow depende de que ESTE equipo empuje. Mitigado (verificacion real + snapshots + 2 destinos)
+  pero es estructuralmente distinto.
+- **IndexedDB no disponible** (navegacion privada): las fotos caen a inline y vuelve el riesgo de cuota.
+- **Los clientes del 25-26 siguen sin rescate** (ningun respaldo los capturo).
+
 ## Last updated: 2026-07-26 (batch 11: la orden de Migdalia YA ESTÁ EN LA NUBE — recuperada sin Roberto)
 
 ## 2026-07-26 (batch 11): Roberto dijo "hazlo tú" — el rescate se subió a la nube por API
