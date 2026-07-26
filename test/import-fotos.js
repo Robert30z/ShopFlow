@@ -18,12 +18,14 @@ function makeHeavyBackup(nFotos){
   return {
     ordenes: [{
       id:'RO-2', fecha:'2026-07-24T13:50:06.825Z', cliente:'Migdalia Cotto', tel:'782334043', email:'',
-      vehiculo:{ anio:'2020', marca:'Kia', modelo:'Forte', tablilla:'JLJ712', vin:'', color:'', millaje:'' },
+      // schema real del vehiculo (igual que la orden rescatada): year/make/model/tag/vin/odoIn/odoOut/color
+      vehiculo:{ year:'2020', make:'Kia', model:'Forte', tag:'JLJ712', color:'Gris',
+                 odoIn:'17166', odoOut:'17166', vin:'3KPF34AD5LE199083' },
       queja:'ACEITE BASICO', fotos:fotos, sig1:false, sig2:true, sigDen:false,
       sigData:{ sig2:'data:image/png;base64,'+Buffer.from('S'.repeat(400)).toString('base64') },
       sigTimes:{ sig2:'2026-07-24T14:00:00.000Z' }, terms:{v:3,fecha:'2026-07-03',text:'...'},
-      auth1:null, insp:{}, servicios:[{nombre:'Cambio de aceite',precio:88.2,laborHours:0.5,parts:[]}],
-      denegados:[{nombre:'Goma 1',precio:100},{nombre:'Goma 2',precio:100},{nombre:'Goma 3',precio:100},{nombre:'Goma 4',precio:100}],
+      auth1:null, insp:{}, servicios:[{id:'a1',uid:'svc-1',n:'Mantenimiento Básico de Aceite y Filtro',p:45,qty:1,ep:45,parts:[{name:'ACEITE VALVOLINE 5w-20',partNum:'881162',supplier:'Autozone',cost:20.81,qty:1,sellPrice:35.38}]}],
+      denegados:[{n:'Goma 1',p:100,u:'urgente'},{n:'Goma 2',p:100,u:'urgente'},{n:'Goma 3',p:100,u:'urgente'},{n:'Goma 4',p:100,u:'urgente'}],
       descuento:11, descTipo:'%', descMotivo:'', cortesia:false, cortesiaMotivo:'', empresa:'',
       pago:'ATH Móvil', estado:'pagado', nextDate:'2026-12-24', techNotes:'', total:88.2,
       descValor:9.78, cortesiaValor:0, inspGeneral:'UNIDAD REQUIERE 4 GOMAS', abonado:88.2,
@@ -77,7 +79,7 @@ function makeHeavyBackup(nFotos){
     return {
       nOrdenes:(DB.ordenes||[]).length, nClientes:(DB.clientes||[]).length,
       cliente:o&&o.cliente, total:o&&o.total, estado:o&&o.estado, pago:o&&o.pago, abonado:o&&o.abonado,
-      tablilla:o&&o.vehiculo&&o.vehiculo.tablilla, nFotos:o?(o.fotos||[]).length:0,
+      tag:o&&o.vehiculo&&o.vehiculo.tag, vin:o&&o.vehiculo&&o.vehiculo.vin, nFotos:o?(o.fotos||[]).length:0,
       denegados:o?(o.denegados||[]).length:0, firma:!!(o&&o.sigData&&o.sigData.sig2),
       garage:(DB.garage||[]).length, garageEstado:(DB.garage||[])[0]&&DB.garage[0].estado,
       // ¿quedaron refs (bien) o base64 inline (mal)?
@@ -91,7 +93,7 @@ function makeHeavyBackup(nFotos){
   ok(st.nOrdenes===1 && st.cliente==='Migdalia Cotto', 'la orden de Migdalia entró', st.cliente+' / '+st.nOrdenes+' orden');
   ok(st.total===88.2 && st.estado==='pagado' && st.abonado===88.2, 'cobrada completa y marcada pagada', '$'+st.total+' abonado $'+st.abonado);
   ok(/ATH/.test(st.pago||''), 'método de pago = ATH Móvil', st.pago);
-  ok(st.tablilla==='JLJ712', 'el vehículo/tablilla sobrevive', st.tablilla);
+  ok(st.tag==='JLJ712' && st.vin==='3KPF34AD5LE199083', 'la tablilla y el VIN sobreviven', st.tag+' / '+st.vin);
   ok(st.garage===1 && st.garageEstado==='ready', 'el carro queda en el garage como listo', st.garageEstado);
   ok(st.denegados===4 && st.firma, 'denegados + firma del cliente intactos', st.denegados+' denegados, firma sí');
   ok(st.nFotos===35, 'las 35 fotos siguen en la orden', st.nFotos+' fotos');
