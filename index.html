@@ -571,6 +571,53 @@ function autorizarBajaFoto(roId){
    es "el expediente sigue existiendo EN ALGÚN SITIO", y la papelera es un sitio válido.
    `n` y `fotos` son de las activas (para mostrar); `ids` y `firmas` son de la unión (para vigilar). */
 function hash32(s){var h=5381,i=s.length;while(i)h=(h*33^s.charCodeAt(--i))>>>0;return h.toString(36);}
+/* ---- CANDADO DE FACTURA CERRADA ----
+   Una factura que se puede alterar en silencio después de cobrada no defiende a nadie en una
+   disputa. Al cobrar, la orden queda SELLADA con la huella de su contenido facturable. Si algo
+   cambia ese contenido sin reabrirla a propósito, el guard lo rechaza. Reabrir es legal, pero
+   guarda la versión tal como se cerró: la factura original nunca se pierde, solo se supera.
+   (Es el equivalente de "postear / despostear" de los sistemas grandes.) */
+function fpFactura(o){
+  try{
+    return hash32(JSON.stringify([o.cliente||'',o.tel||'',o.vehiculo||{},o.servicios||[],o.denegados||[],
+      o.total||0,o.descuento||0,o.descTipo||'',o.descValor||0,!!o.cortesia,o.pago||'',o.abonado||0]));
+  }catch(e){return '';}
+}
+function sellarFactura(o){
+  if(!o)return;
+  o._cerrada={ts:new Date().toISOString(),dev:deviceLabel(),fp:fpFactura(o),total:o.total||0};
+}
+function facturaSellada(o){return !!(o&&o._cerrada&&o._cerrada.fp);}
+// Sellar a mano una factura ya cobrada (las de antes del candado).
+function sellarAhora(roId){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return false;
+  if(facturaSellada(o))return false;
+  if(!confirm('¿Sellar la factura '+roId+' por $'+((o.total||0).toFixed(2))+'?\n\nDespués no se puede cambiar sin reabrirla a propósito, y eso queda escrito.\nAsegúrate de que el total, los servicios y el pago están correctos.'))return false;
+  sellarFactura(o);
+  bita('factura-sellada',roId,'sellada a mano · $'+((o.total||0).toFixed(2)));
+  if(!saveDB())return false;
+  openRODetail(roId);
+  return true;
+}
+// Reabrir para corregir: pide motivo, congela la versión cerrada y la guarda para siempre.
+function reabrirOrden(roId){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return false;
+  if(!facturaSellada(o)){alert('Esta orden no está cerrada — la puedes editar directamente.');return false;}
+  var m=prompt('Reabrir la factura '+roId+' para corregirla.\n\n¿Por qué? — queda escrito en la bitácora y la\nversión actual se guarda tal como está, sin borrarse.','error en el total');
+  if(m===null)return false;
+  var congelada;
+  try{congelada=JSON.parse(JSON.stringify(o));}catch(e){alert('No pude congelar la versión actual — no reabrí nada.');return false;}
+  delete congelada._versiones;
+  o._versiones=o._versiones||[];
+  o._versiones.push({ts:new Date().toISOString(),dev:deviceLabel(),motivo:(m||'').trim(),
+                     cerradaEl:(o._cerrada||{}).ts,version:congelada});
+  delete o._cerrada;
+  bita('factura-reabierta',roId,'motivo: '+((m||'').trim()||'(sin motivo)')+' · se guardó la versión de $'+((congelada.total||0).toFixed(2)));
+  if(!saveDB())return false;
+  alert('Factura reabierta.\n\nLa versión cerrada quedó guardada (v'+o._versiones.length+'). Corrige lo que\nnecesites y vuelve a darle "cobrar y cerrar" para sellarla otra vez.');
+  openRODetail(roId);
+  return true;
+}
 function censo(db){
   db=db||DB;
   var ids={},fp={},firmas=0,fotosAct=0;
@@ -621,6 +668,12 @@ function verificaIntegridad(prev,next){
   if(sinFotos.length)return 'se perderían fotos en '+sinFotos.slice(0,4).join(', ');
   // (3) las firmas de clientes son el respaldo legal: no pueden bajar nunca
   if(c.firmas<prev.firmas)return 'se perdería la firma de un cliente ('+prev.firmas+'→'+c.firmas+')';
+  // (4) una factura CERRADA no se puede alterar sin reabrirla a propósito
+  var alteradas=[];
+  (next.ordenes||[]).forEach(function(o){
+    if(facturaSellada(o)&&fpFactura(o)!==o._cerrada.fp)alteradas.push(o.id);
+  });
+  if(alteradas.length)return 'la factura CERRADA '+alteradas.slice(0,3).join(', ')+' se estaría cambiando sin reabrirla (usa “Reabrir para corregir”)';
   return null;
 }
 
@@ -3339,6 +3392,24 @@ function openRODetail(roId){
   if(o.nextDate){
     html+='<div style="background:var(--green-light);border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px"><i class="ti ti-bell" style="color:var(--green);font-size:20px"></i><div><div style="font-size:11px;color:var(--gray-500);font-weight:600">Próximo mantenimiento</div><div style="font-size:13px;font-weight:700;color:var(--green)">'+new Date(o.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'})+'</div></div></div>';
   }
+  // Candado de la factura cerrada: se ve, se explica, y se puede reabrir dejando rastro.
+  if(facturaSellada(o)){
+    html+='<div style="background:var(--green-light);border:1.5px solid var(--green);border-radius:var(--r-md);padding:11px 13px;margin-bottom:10px">'
+      +'<div style="font-size:12.5px;font-weight:800;color:var(--green);margin-bottom:3px"><i class="ti ti-lock"></i> FACTURA CERRADA Y SELLADA</div>'
+      +'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5">Sellada el '+fechaCorta(o._cerrada.ts)+' por $'+((o._cerrada.total||0).toFixed(2))+'. Ya no se puede cambiar sin dejar rastro — eso es lo que la hace valer si un cliente reclama.</div>'
+      +(o._versiones&&o._versiones.length?'<div style="font-size:11px;color:var(--gray-400);margin-top:5px">Corregida '+o._versiones.length+' vez(ces); las versiones anteriores están guardadas.</div>':'')
+      +'<button class="btn sm full" onclick="reabrirOrden(\''+o.id+'\')" style="margin-top:8px"><i class="ti ti-lock-open"></i> Reabrir para corregir</button>'
+      +'</div>';
+  }
+  // Órdenes ya pagadas de ANTES del candado: no se sellan solas (no puedo saber si se alteraron
+  // antes de existir el candado, y sellar algo sin saberlo seria fingir una garantia). Se ofrece.
+  if(o.estado==='pagado'&&!facturaSellada(o)){
+    html+='<div style="background:var(--gray-50);border:1px dashed var(--gray-300);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px"><i class="ti ti-lock-open"></i> Factura sin sellar</div>'
+      +'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5">Está cobrada pero se puede editar. Séllala para que quede fija y valga como evidencia. Revisa que los datos estén correctos antes.</div>'
+      +'<button class="btn sm full" onclick="sellarAhora(\''+o.id+'\')" style="margin-top:8px"><i class="ti ti-lock"></i> Revisé — sellar esta factura</button>'
+      +'</div>';
+  }
   // Actions
   if(o.estado==='abierta'){
     html+='<button class="btn full" onclick="cobrarYCerrar(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green);font-weight:700"><i class="ti ti-cash"></i> Terminé — cobrar y cerrar ($'+(o.total||0).toFixed(2)+')</button>';
@@ -3416,7 +3487,8 @@ function cobrarYCerrar(roId){
     if(!g.readyTime)g.readyTime=new Date().toISOString();
     g.log=g.log||[];g.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Trabajo terminado y cobrado. Listo para recoger.');
   }
-  bita('orden-cerrada',roId,antes+' → '+o.estado+' · '+o.pago+' · recibido $'+o.abonado.toFixed(2)+' de $'+total.toFixed(2));
+  if(o.estado==='pagado')sellarFactura(o);   // cobrada del todo = factura sellada
+  bita('orden-cerrada',roId,antes+' → '+o.estado+' · '+o.pago+' · recibido $'+o.abonado.toFixed(2)+' de $'+total.toFixed(2)+(o.estado==='pagado'?' · SELLADA':''));
   if(!saveDB())return;
   var falta=Math.max(0,total-o.abonado);
   alert(o.estado==='pagado'
@@ -3430,6 +3502,8 @@ function markPaid(roId){
   if(m===null)return;
   o.pago=(m||o.pago||'ATH Móvil').trim();
   o.estado='pagado';o.abonado=o.total||0;o.pagadoFecha=new Date().toISOString();
+  sellarFactura(o);
+  bita('orden-cerrada',roId,'pendiente → pagado · '+o.pago+' · $'+(o.total||0).toFixed(2)+' · SELLADA');
   saveDB();openRODetail(roId);
 }
 

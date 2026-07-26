@@ -1,7 +1,7 @@
 // ShopFlow service worker — la app abre SIN internet (mecánico móvil = señal mala).
 // Estrategia: index.html va red-primero (siempre fresco online, cache offline);
 // CDN y assets van cache-primero. Sube CACHE_V cuando cambie la estrategia.
-var CACHE_V='shopflow-v8';
+var CACHE_V='shopflow-v9';
 
 self.addEventListener('install',function(e){
   e.waitUntil(

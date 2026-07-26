@@ -289,6 +289,70 @@ const ok = (c, n, d) => { console.log(`[${c?'PASS':'FAIL'}] ${n}${d?' — '+d:''
   ok(m1.ordenes===2 && m1.pap==='P1,P2', '⭐ al sincronizar, la papelera de los dos equipos se une', JSON.stringify(m1));
   ok(m1.sinDuplicados && m1.bita==='e1,e2', 'la bitácora se une por fecha y sin duplicados', m1.bita);
 
+  // ================= CANDADO DE FACTURA CERRADA =================
+  // El punto debil legal que quedaba: una orden PAGADA se podia editar en silencio.
+  await page.evaluate(() => {
+    DB.ordenes=[{id:'RO-600',fecha:new Date().toISOString(),cliente:'Sellado',tel:'',vehiculo:{},fotos:[],
+      servicios:[{id:'a1',n:'Frenos',p:300,qty:1,ep:300,parts:[]}],denegados:[],insp:{},total:300,estado:'abierta'}];
+    DB.garage=[]; DB.papelera=[]; saveDB({force:true});
+  });
+  respuestas = ['Cash','300'];
+  await page.evaluate(() => { cobrarYCerrar('RO-600'); });
+  await page.waitForTimeout(700);
+  const q1 = await page.evaluate(() => {
+    const o = DB.ordenes.find(x=>x.id==='RO-600');
+    return { sellada:facturaSellada(o), total:(o._cerrada||{}).total, tieneHuella:!!(o._cerrada||{}).fp };
+  });
+  ok(q1.sellada && q1.total===300 && q1.tieneHuella, '⭐ al cobrar, la factura queda SELLADA', '$'+q1.total);
+
+  // cambiar el total de una factura sellada = BLOQUEADO
+  const q2 = await page.evaluate(() => {
+    const o = DB.ordenes.find(x=>x.id==='RO-600');
+    o.total = 50;                       // "que no me cobraste 300, me cobraste 50"
+    const r = saveDB();
+    const disco = JSON.parse(localStorage.getItem('sf_v1')).ordenes.find(x=>x.id==='RO-600');
+    return { devolvio:r, disco:disco.total, memoria:DB.ordenes.find(x=>x.id==='RO-600').total };
+  });
+  ok(q2.devolvio===false && q2.disco===300 && q2.memoria===300, '⭐ alterar una factura sellada esta BLOQUEADO', JSON.stringify(q2));
+
+  // cambiar los servicios tambien
+  const q3 = await page.evaluate(() => {
+    const o = DB.ordenes.find(x=>x.id==='RO-600');
+    o.servicios.push({id:'z',n:'Servicio inventado',p:0,qty:1,ep:0,parts:[]});
+    const r = saveDB();
+    return { devolvio:r, disco:JSON.parse(localStorage.getItem('sf_v1')).ordenes.find(x=>x.id==='RO-600').servicios.length };
+  });
+  ok(q3.devolvio===false && q3.disco===1, 'meterle un servicio a una factura sellada tambien esta bloqueado', JSON.stringify(q3));
+
+  // reabrir a proposito SI se permite, y guarda la version cerrada
+  respuestas = ['me equivoque en el total'];
+  await page.evaluate(() => { reabrirOrden('RO-600'); });
+  await page.waitForTimeout(700);
+  const q4 = await page.evaluate(() => {
+    const o = DB.ordenes.find(x=>x.id==='RO-600');
+    const v = (o._versiones||[])[0]||{};
+    return { sellada:facturaSellada(o), versiones:(o._versiones||[]).length, motivo:v.motivo,
+             totalGuardado:(v.version||{}).total, cerradaEl:!!v.cerradaEl };
+  });
+  ok(!q4.sellada && q4.versiones===1, '⭐ reabrir a proposito SI se permite', q4.versiones+' version guardada');
+  ok(q4.totalGuardado===300 && q4.motivo==='me equivoque en el total' && q4.cerradaEl,
+     '⭐ y la factura original queda guardada COMPLETA (no se pierde nunca)', '$'+q4.totalGuardado+' · '+q4.motivo);
+
+  // ahora si se puede corregir, y volver a sellar
+  const q5 = await page.evaluate(() => {
+    const o = DB.ordenes.find(x=>x.id==='RO-600');
+    o.total = 250;
+    const r = saveDB();
+    sellarFactura(o); saveDB();
+    const o2 = JSON.parse(localStorage.getItem('sf_v1')).ordenes.find(x=>x.id==='RO-600');
+    return { guardo:r, total:o2.total, reSellada:!!(o2._cerrada||{}).fp, versiones:(o2._versiones||[]).length };
+  });
+  ok(q5.guardo===true && q5.total===250 && q5.reSellada, '⭐ reabierta se corrige y se vuelve a sellar', '$'+q5.total);
+  ok(q5.versiones===1, 'y la version anterior sigue guardada', q5.versiones+' version');
+
+  const q6 = await page.evaluate(() => (DB.bitacora||[]).map(e=>e.tipo).includes('factura-reabierta'));
+  ok(q6, 'la reapertura queda escrita en la bitacora');
+
   // ================= CONFLICTO: nube atrasada vs edicion fresca =================
   // Este era un hueco de perdida SILENCIOSA: mergeDB salia de `remote`, asi que para una orden
   // presente en los dos lados la nube ganaba siempre, incluso si estaba mas vieja.
