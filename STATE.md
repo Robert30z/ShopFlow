@@ -2,7 +2,33 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-26 (batch 9: 🛟 RESCATE de la orden perdida + guards que faltaban)
+## Last updated: 2026-07-26 (batch 10: importar el rescate ya no revienta el almacenamiento)
+
+## 2026-07-26 (batch 10): el paso del rescate estaba MINADO — importar habría fallado igual
+Al verificar si Roberto ya había importado (no lo había hecho: nube en 0 órdenes, respaldo GitHub en
+345 bytes, bucket `fotos` vacío, último sign-in 07-24 03:07) se midió el archivo del rescate:
+**`RESCATE-shopflow-2026-07-24.json` pesa 4.59 MB** porque las 35 fotos van **base64 inline** (4.57 MB
+de fotos). Y `importBackup` hacía `DB=imported` → **`saveDB()` con las fotos inline puestas**.
+🚨 **Eso mete 4.59 MB en `localStorage`, cuyo techo en Safari es ~5 MB** ⇒ el import revienta con
+"ALMACENAMIENTO LLENO" (el bug del 07-24) o entra sin margen y muere en la próxima orden. **El paso que
+le estábamos pidiendo dar para recuperar sus datos era el que iba a fallar.** La migración a IndexedDB
+solo corría en el boot (línea 4381), nunca después de importar.
+✅ **ARREGLADO:** `importBackup` ahora corre `migratePhotosToIDB()` **ANTES del primer `saveDB()`**
+(medido: **4.59 MB → 4.1 KB** en localStorage), avisa si alguna foto no se pudo mover (sin borrar nada),
+y dispara `schedulePhotoUpload()` para que las 35 fotos suban a Supabase Storage.
+✅ **BONUS (misma clase de bug):** `importBackup` asignaba `DB=imported` **saltándose todos los guards
+de `loadDB`** — un respaldo con un campo del tipo equivocado (objeto donde va lista) tumbaba la app al
+renderizar. Ahora normaliza las 14 listas + `serviceParts` + los 3 counters + `laborRate`. Se descubrió
+porque el fixture de la prueba usó `svcsCustom:{}` y la app tiró `.map is not a function`.
+🧪 **`test/import-fotos.js` NUEVO (21 checks):** importa un respaldo pesado de verdad (4.37 MB) y
+verifica que la orden entra completa (total $88.20, ATH, garage `ready`, 4 denegados, firma, 35 fotos),
+que las fotos quedan como **ref** (0 inline) y se vuelven a ver desde IDB **tras recargar**, que el
+token de respaldo y la key de IA **sobreviven** al import, y que un respaldo malformado no tumba nada.
+Suites verdes: smoke, diag, protect-banner, photos-idb, parts-edit. **SW v6 → v7.** Commit `2140900`.
+⚠️ **LECCIÓN:** cuando se entrega un archivo de recuperación, **probar el camino de recuperación
+completo con ese archivo**, no solo generarlo. El rescate estaba correcto y el import estaba roto.
+
+## 2026-07-26 (batch 9): la app estaba VACÍA — se rescató una orden real del historial de respaldos
 
 ## 2026-07-26 (batch 9): la app estaba VACÍA — se rescató una orden real del historial de respaldos
 Roberto: *"shopflow is empty even if i respaldar ahora nothing is going to show up"* (y aclaró que el
