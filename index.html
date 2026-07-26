@@ -3281,9 +3281,36 @@ function importBackup(e){
       if(keep.aiKey)DB.settings.aiKey=keep.aiKey;
       if(keep.backup&&keep.backup.token&&keep.backup.repo)DB.settings.backup=keep.backup;
       if(!DB.serviceParts)DB.serviceParts={};
-      saveDB();
-      alert('Respaldo importado correctamente.');
-      initAjustes();
+      // Un respaldo con un campo del tipo equivocado (objeto donde va lista) tumbaba la app entera
+      // al renderizar. Importar viene de un archivo de afuera: normalizar antes de usarlo.
+      ['ordenes','clientes','garage','gastos','suplidores','ordenesS','inventario','citas',
+       'svcsCustom','catsCustom','tecnicos','asesores','jobsCustom','promos'].forEach(function(k){
+        if(!Array.isArray(DB[k]))DB[k]=[];
+      });
+      if(!DB.serviceParts||typeof DB.serviceParts!=='object'||Array.isArray(DB.serviceParts))DB.serviceParts={};
+      ['roCounter','tecCounter','aseCounter'].forEach(function(k){
+        if(typeof DB[k]!=='number')DB[k]=0;
+      });
+      if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;
+      // Los respaldos viejos traen las fotos base64 INLINE. Guardar eso directo en localStorage
+      // revienta la cuota (~5MB en Safari) y el import falla con "ALMACENAMIENTO LLENO" — el mismo
+      // bug del 07-24. Moverlas a IndexedDB ANTES del primer saveDB.
+      migratePhotosToIDB().then(function(){
+        var inline=0;
+        (DB.ordenes||[]).forEach(function(o){
+          if(!Array.isArray(o.fotos))return;
+          o.fotos.forEach(function(f){
+            var u=(typeof f==='string')?f:(f&&f.d);
+            if(u&&!(f&&f.id))inline++;
+          });
+        });
+        var ok=saveDB();
+        if(!ok)return; // saveDB ya avisó a gritos
+        if(inline)alert('Respaldo importado, pero '+inline+' fotos no se pudieron mover al almacén local.\n\nSi ves errores de almacenamiento, libera espacio y vuelve a importar.');
+        else alert('Respaldo importado correctamente.');
+        try{schedulePhotoUpload();}catch(e){} // que las fotos suban a la nube
+        initAjustes();
+      });
     }catch(err){alert('Error al leer el archivo. Asegúrate que sea un respaldo válido de ShopFlow.');}
   };
   r.readAsText(f);
