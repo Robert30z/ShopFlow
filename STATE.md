@@ -2,7 +2,36 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-26 (batch 10: importar el rescate ya no revienta el almacenamiento)
+## Last updated: 2026-07-26 (batch 11: la orden de Migdalia YA ESTÁ EN LA NUBE — recuperada sin Roberto)
+
+## 2026-07-26 (batch 11): Roberto dijo "hazlo tú" — el rescate se subió a la nube por API
+No hacía falta que él importara nada. Se restauró **directo a su nube** con la llave de servicio,
+en el formato exacto que la app espera:
+- **35 fotos → Supabase Storage**, bucket `fotos`, ruta `<uid>/<fotoId>.jpg` (idéntico a lo que hace
+  `photoUploadPending`). Verificadas **byte-idénticas** (sha256) contra el rescate: 35/35.
+- **Orden RO-2 Migdalia Cotto → `public.shops.data`** con las fotos como **ref `{id,t,sp}`** (cero
+  base64 en el jsonb: la fila pesa **17.7 KB**). rev 10 → **rev 11**, `updated_by='rescate-migdalia'`.
+- **RO-1 "PRUEBA" se descartó** (era basura, era un pendiente de Roberto). `roCounter=2` ⇒ la próxima
+  orden real será RO-3. Secretos (aiKey/backup) fuera del payload, como manda `cloudDataPayload`.
+- **Respaldo GitHub reescrito: 345 bytes → 23,465 bytes** (commit `916765d`), con guard propio en el
+  script: aborta si el respaldo nuevo trae MENOS órdenes que el viejo.
+- ⚠️ Guard respetado: el script **aborta si la nube ya tiene órdenes** (no pisa nada a ciegas).
+🧪 **VERIFICACIÓN E2E EN VIVO CON SESIÓN REAL (32/32 verde).** Se creó un taller de prueba temporal
+(usuario nuevo + copia server-side de las 35 fotos a su propia carpeta, porque la RLS exige
+`foldername[1] = auth.uid()`), se manejó **https://robert30z.github.io/ShopFlow** con Playwright y se
+comprobó: la orden **baja sola** al entrar · $88.20/PAGADO/ATH · tag JLJ712 + VIN + 17,166 mi ·
+35 fotos · 4 denegados · firma · inspección de 35 puntos · Kia `ready` en el garage · las **fotos
+bajan de Storage y se PINTAN** (36/36 imágenes con `naturalWidth>0`) · recibo PDF 550 KB con imágenes
+dentro · guardar vuelve a subir sin error · **el aviso rojo del home desaparece** · 0 errores de página.
+**Taller de prueba y sus 35 fotos borrados después**; verificado estado final: 1 usuario, 1 taller,
+35 fotos (todas de Roberto).
+🐛 **Bug de fidelidad de prueba corregido:** el fixture de `import-fotos.js` usaba `vehiculo.tablilla`
+y `servicios[].nombre/precio` — **campos que la app no lee** (el schema real es
+`year/make/model/tag/vin/odoIn/odoOut/color` y `servicios[] = {id,uid,n,p,qty,ep,parts}`). La prueba se
+validaba contra sí misma. Alineado al schema real y sigue verde.
+✅ Suites: smoke, diag, protect-banner, photos-idb, parts-edit, import-fotos — **0 fallos**.
+
+## 2026-07-26 (batch 10): importar el rescate ya no revienta el almacenamiento
 
 ## 2026-07-26 (batch 10): el paso del rescate estaba MINADO — importar habría fallado igual
 Al verificar si Roberto ya había importado (no lo había hecho: nube en 0 órdenes, respaldo GitHub en
