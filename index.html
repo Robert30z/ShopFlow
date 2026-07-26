@@ -167,6 +167,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
     <div style="display:flex;align-items:center;gap:10px"><div id="hdate" style="font-size:11px;color:rgba(255,255,255,.5)"></div><button onclick="go('ajustes')" style="background:rgba(255,255,255,.12);border:none;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="ti ti-settings" style="color:#fff;font-size:17px"></i></button></div>
   </div>
   <div class="sb">
+    <div id="home-protect" style="display:none"></div>
     <div class="sec">
       <div class="sg sg4">
         <div class="sc"><div class="sl">Hoy</div><div class="sv g" id="h-hoy">$0</div></div>
@@ -868,6 +869,7 @@ function syncBoot(){
   });
 }
 function updSyncStatus(state){
+  try{renderProtect();}catch(e){}   // el aviso del home sigue el estado real de la sesión
   var out=document.getElementById('sync-logged-out'),inn=document.getElementById('sync-logged-in'),st=document.getElementById('set-sync-status'),st2=document.getElementById('sync-status2');
   sbSession(function(sess){
     var on=!!sess;
@@ -966,6 +968,9 @@ function restoreFromCloud(){
     .catch(function(e){alert('No se pudo restaurar: '+e.message);});
 }
 function updBackupStatus(err){
+  _bkLastErr=err||'';                 // recordado para el aviso del home (los fallos automáticos eran invisibles)
+  if(!err&&backupCfg())_bkOkAt=Date.now();
+  try{renderProtect();}catch(e){}
   var st=document.getElementById('set-bk-status');if(!st)return;
   var cfg=backupCfg();
   if(!cfg){st.textContent='Sin configurar — los datos solo viven en este dispositivo.';st.style.color='var(--red)';return;}
@@ -992,8 +997,47 @@ function go(p){
   if(p==='citas'){renderCitas();}
 }
 
+// ===== PROTECCIÓN DE DATOS: aviso en el home cuando el trabajo NO está saliendo del equipo =====
+// Nació de un caso real (07-26): 2 días de clientes guardados solo en el iPad porque la sesión de
+// sync estaba apagada y el respaldo sin configurar — la app nunca lo dijo. Ahora lo grita.
+var _bkLastErr='',_bkOkAt=0;
+function protectState(cb){
+  sbSession(function(sess){
+    var nube=!!sess, git=!!backupCfg();
+    var last=(DB.settings&&DB.settings.backup&&DB.settings.backup.last)||null;
+    // "configurado" no basta: si el último intento falló, esa vía NO está protegiendo nada
+    var gitOk=git&&!_bkLastErr, nubeOk=nube&&!_lastSyncErr;
+    var nivel=(!gitOk&&!nubeOk)?'rojo':((gitOk&&nubeOk)?'verde':'ambar');
+    cb({nube:nube,git:git,gitOk:gitOk,nubeOk:nubeOk,last:last,nivel:nivel,err:(_bkLastErr||_lastSyncErr||'')});
+  });
+}
+function renderProtect(){
+  var el=document.getElementById('home-protect');if(!el)return;
+  if(DB._demo){el.style.display='none';el.innerHTML='';return;}
+  protectState(function(p){
+    if(p.nivel==='verde'){el.style.display='none';el.innerHTML='';return;}
+    var rojo=p.nivel==='rojo';
+    var col=rojo?'var(--red)':'var(--amber)';
+    var titulo=rojo?'⚠️ TUS DATOS SOLO ESTÁN EN ESTE EQUIPO':'⚠️ Respaldo a medias';
+    var cuerpo=rojo
+      ? 'Las órdenes, fotos y firmas que estás haciendo NO se están copiando a ningún lado. Si este equipo se pierde, se borra o Safari limpia la memoria, se pierde TODO.'
+      : (p.nubeOk?'Estás sincronizando a la nube, pero el respaldo a GitHub no está funcionando.':'Tienes respaldo a GitHub, pero NO estás conectado a la nube — las fotos y los otros equipos no se sincronizan.');
+    if(p.err)cuerpo+=' <span style="color:'+col+'">(último error: '+p.err+')</span>';
+    var n=DB.ordenes.length;
+    if(rojo&&n>0)cuerpo+=' Ahora mismo tienes <strong>'+n+' '+(n===1?'orden':'órdenes')+'</strong> en riesgo.';
+    el.style.display='block';
+    el.innerHTML='<div style="margin:10px 12px 0;padding:13px 14px;border-radius:var(--r-md);background:'+(rojo?'rgba(255,59,48,.12)':'rgba(255,159,10,.12)')+';border:2px solid '+col+'">'
+      +'<div style="font-size:14px;font-weight:800;color:'+col+';margin-bottom:5px">'+titulo+'</div>'
+      +'<div style="font-size:12px;line-height:1.45;color:var(--ink);margin-bottom:10px">'+cuerpo+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button onclick="exportBackup()" style="background:'+col+';border:none;color:#fff;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-download"></i> Bajar copia AHORA</button>'
+      +'<button onclick="go(\'ajustes\')" style="background:var(--white);border:1.5px solid '+col+';color:'+col+';border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-cloud-up"></i> Encender respaldo</button>'
+      +'</div></div>';
+  });
+}
 function renderHome(){
   var now=new Date();
+  renderProtect();
   var dd=document.getElementById('hdate');if(dd)dd.textContent=MESES[now.getMonth()]+' '+now.getDate();
   var today=now.toDateString();
   var to=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;});
