@@ -168,6 +168,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
   </div>
   <div class="sb">
     <div id="home-protect" style="display:none"></div>
+    <div id="home-abiertas" style="display:none"></div>
     <div class="sec">
       <div class="sg sg4">
         <div class="sc"><div class="sl">Hoy</div><div class="sv g" id="h-hoy">$0</div></div>
@@ -445,6 +446,16 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(event)">
         <div style="font-size:11px;color:var(--gray-400);margin-top:8px;line-height:1.5">Exporta tus datos regularmente. Si reseteas el iPad o borras Safari, esto te permite recuperar todo.</div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-shield-check"></i> Seguridad de datos</div><div class="cb">
+        <div id="seg-estado" style="font-size:12px;line-height:1.7;margin-bottom:10px">Verificando…</div>
+        <button class="btn full" onclick="verificarTodo(true)" style="margin-bottom:8px"><i class="ti ti-checkup-list"></i> Verificar ahora (pregunta a la nube)</button>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn full" onclick="abrirSeg('pap')" style="flex:1"><i class="ti ti-trash"></i> Papelera (<span id="seg-npap">0</span>)</button>
+          <button class="btn full" onclick="abrirSeg('snap')" style="flex:1"><i class="ti ti-history"></i> Copias locales</button>
+        </div>
+        <button class="btn full" onclick="abrirSeg('bita')"><i class="ti ti-list-details"></i> Bitácora (historial de todo)</button>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:9px;line-height:1.5">Nada se borra de verdad: lo que eliminas va a la papelera. Cada guardado deja una copia en este equipo, y todo movimiento queda escrito en la bitácora.</div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-database-cog"></i> Almacenamiento</div><div class="cb">
         <div class="tip-box" style="background:var(--green-light);color:var(--green)"><i class="ti ti-photo" style="font-size:16px;flex-shrink:0"></i><span>Las fotos ahora se guardan en el almacén grande del iPad (IndexedDB), no en la memoria chica. Aguanta cientos de carros con fotos sin llenarse.</span></div>
         <div id="set-storage-info" style="font-size:12px;line-height:1.7;margin:4px 0 10px">Calculando...</div>
@@ -501,11 +512,208 @@ function getSvcs(cat){return (MS[cat]||[]).concat((DB.svcsCustom||[]).filter(fun
 
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'servicios',l:'Servicios'},{id:'estimado',l:'Estimado'},{id:'firma1',l:'Autorización'},{id:'inspeccion',l:'Inspección'},{id:'denegados',l:'Denegados'},{id:'firma2',l:'Firma Final'},{id:'cierre',l:'Cierre'}];
 
-function saveDB(){
+/* ============================================================================
+   FUNDACIÓN DE INTEGRIDAD — las 4 reglas de la casa
+   1. NADA SE DESTRUYE. Lo que se borra va a la papelera; las fotos nunca se
+      borran de la nube automáticamente (el byte sobrevive al arrepentimiento).
+   2. TODO MOVIMIENTO QUEDA ESCRITO. La bitácora solo crece: es el rastro legal
+      ante una disputa y la herramienta de diagnóstico cuando algo se pierda.
+   3. saveDB ES EL ÚNICO CAMINO DE ESCRITURA Y VERIFICA ANTES DE ESCRIBIR. Si un
+      guardado haría desaparecer órdenes, fotos o firmas sin explicación, se
+      RECHAZA. Esto ataja bugs que todavía no existen, no solo los conocidos.
+   4. CADA ESTADO BUENO DEJA UN SNAPSHOT LOCAL. Se puede volver atrás en el
+      propio equipo, sin señal y sin depender de la nube.
+   ========================================================================== */
+var BITA_MAX=4000;                 // la bitácora vive en localStorage: se le pone techo
+var _lastGood=null;                // censo del último estado bueno guardado
+var _autorizado={fotos:{}};        // bajas declaradas por el usuario (ej: borró una foto a mano)
+
+// ---- BITÁCORA (append-only; no guarda, solo anota — el que llama hace saveDB) ----
+function bita(tipo,roId,det){
+  try{
+    if(DB._demo)return;
+    if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+    DB.bitacora.push({id:'ev-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      ts:new Date().toISOString(),dev:deviceLabel(),tipo:tipo,roId:roId||'',det:det||''});
+    if(DB.bitacora.length>BITA_MAX)DB.bitacora=DB.bitacora.slice(-BITA_MAX);
+  }catch(e){}
+}
+// Gaveta aparte para avisos que NO pueden viajar en sf_v1 (porque sf_v1 es justo lo que no
+// queremos escribir cuando el guard bloquea). loadDB los recoge y los pasa a la bitácora.
+var ALERTA_KEY='sf_alertas';
+function apuntarAlerta(det){
+  try{
+    var a=JSON.parse(localStorage.getItem(ALERTA_KEY)||'[]');
+    a.push({ts:new Date().toISOString(),dev:deviceLabel(),det:det});
+    localStorage.setItem(ALERTA_KEY,JSON.stringify(a.slice(-50)));
+  }catch(e){}
+}
+function recogerAlertas(){
+  try{
+    var a=JSON.parse(localStorage.getItem(ALERTA_KEY)||'[]');
+    if(!a.length)return 0;
+    a.forEach(function(x){bita('guardado-bloqueado','',x.det+' (al arrancar)');});
+    localStorage.removeItem(ALERTA_KEY);
+    return a.length;
+  }catch(e){return 0;}
+}
+// Declara una baja legítima para que el guard no la confunda con una pérdida.
+function autorizarBajaFoto(roId){
+  if(!roId)return;
+  _autorizado.fotos[roId]=(_autorizado.fotos[roId]||0)+1;
+}
+
+/* ---- CENSO: la huella de lo que hay ----
+   OJO con esto: los invariantes se miden sobre la UNIÓN de `ordenes` + `papelera`, no solo sobre
+   las activas. Si se contaran solo las activas, mandar a la papelera una orden firmada se leería
+   como "se perdió una firma" y el guard bloquearía el borrado más normal del mundo. La regla real
+   es "el expediente sigue existiendo EN ALGÚN SITIO", y la papelera es un sitio válido.
+   `n` y `fotos` son de las activas (para mostrar); `ids` y `firmas` son de la unión (para vigilar). */
+function censo(db){
+  db=db||DB;
+  var ids={},firmas=0,fotosAct=0;
+  function contar(o,activa){
+    if(!o||!o.id)return;
+    var nf=(o.fotos||[]).length;
+    ids[o.id]=nf;
+    if(activa)fotosAct+=nf;
+    if(o.sigData&&(o.sigData.sig1||o.sigData.sig2||o.sigData.sigDen))firmas++;
+  }
+  (db.ordenes||[]).forEach(function(o){contar(o,true);});
+  (db.papelera||[]).forEach(function(o){contar(o,false);});
+  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,
+          pap:(db.papelera||[]).length,ts:Date.now()};
+}
+
+// ---- EL GUARD. Devuelve null si el guardado es sano, o el texto de la violación ----
+// Solo aplica al camino normal de la app. Importar / restaurar / sincronizar reemplazan el DB
+// completo y pasan {force:true} — esos ya traen su propio guard y su propia confirmación.
+function verificaIntegridad(prev,next){
+  if(!prev)return null;
+  var c=censo(next);
+  // (1) un expediente no puede desaparecer de los DOS sitios a la vez (activas + papelera).
+  // Mandarlo a la papelera es legal; que se evapore, no.
+  var perdidas=Object.keys(prev.ids||{}).filter(function(id){return !(id in c.ids);});
+  if(perdidas.length)return perdidas.length+' orden(es) desaparecerían sin pasar por la papelera: '+perdidas.slice(0,4).join(', ');
+  // (2) una orden guardada no puede perder fotos salvo que se haya borrado a mano
+  var sinFotos=[];
+  Object.keys(prev.ids||{}).forEach(function(id){
+    if(!(id in c.ids))return;
+    var perdio=prev.ids[id]-c.ids[id];
+    if(perdio>0&&perdio>(_autorizado.fotos[id]||0))sinFotos.push(id+' ('+prev.ids[id]+'→'+c.ids[id]+')');
+  });
+  if(sinFotos.length)return 'se perderían fotos en '+sinFotos.slice(0,4).join(', ');
+  // (3) las firmas de clientes son el respaldo legal: no pueden bajar nunca
+  if(c.firmas<prev.firmas)return 'se perdería la firma de un cliente ('+prev.firmas+'→'+c.firmas+')';
+  return null;
+}
+
+/* ---- SNAPSHOTS LOCALES (la red debajo de la red) ----
+   Base de datos IndexedDB PROPIA (`shopflow_snaps`), aparte de la de fotos: si algo sale mal aquí,
+   la tubería de fotos que ya funciona no se toca. Guarda los últimos SNAP_MAX estados buenos SIN
+   las fotos (solo las referencias), así cada snapshot pesa decenas de KB y no megas. Sirve para
+   volver atrás EN EL EQUIPO, sin señal: es lo que hoy no existía cuando localStorage quedó vacío. */
+var SNAP_MAX=20,_snapDB=null,_snapFail=false,_snapPromise=null,_snapTimer=null,_snapLastAt=0;
+function snapDBOpen(){
+  if(_snapDB)return Promise.resolve(_snapDB);
+  if(_snapFail)return Promise.reject(new Error('snaps-no'));
+  if(_snapPromise)return _snapPromise;
+  _snapPromise=new Promise(function(res,rej){
+    try{
+      if(!window.indexedDB){_snapFail=true;return rej(new Error('no-idb'));}
+      var rq=indexedDB.open('shopflow_snaps',1);
+      rq.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('snaps'))db.createObjectStore('snaps',{keyPath:'id'});};
+      rq.onsuccess=function(e){_snapDB=e.target.result;res(_snapDB);};
+      rq.onerror=function(){_snapFail=true;rej(rq.error||new Error('snap-open'));};
+      rq.onblocked=function(){_snapFail=true;rej(new Error('snap-blocked'));};
+    }catch(e){_snapFail=true;rej(e);}
+  });
+  return _snapPromise;
+}
+function snapTx(modo){return snapDBOpen().then(function(db){return db.transaction('snaps',modo).objectStore('snaps');});}
+function snapList(){
+  return snapTx('readonly').then(function(st){return new Promise(function(res){
+    var rq=st.getAll();
+    rq.onsuccess=function(){res((rq.result||[]).sort(function(a,b){return b.id-a.id;}));};
+    rq.onerror=function(){res([]);};
+  });}).catch(function(){return [];});
+}
+function snapGuardar(){
+  if(DB._demo||_snapFail)return Promise.resolve(false);
+  var c=censo(DB);
+  if(!c.n&&!c.pap)return Promise.resolve(false);            // no guardar snapshots vacíos
+  var payload;
+  try{payload=JSON.parse(JSON.stringify(DB));}catch(e){return Promise.resolve(false);}
+  if(payload.settings){delete payload.settings.aiKey;delete payload.settings.backup;}
+  var snap={id:Date.now(),ts:new Date().toISOString(),dev:deviceLabel(),
+            n:c.n,fotos:c.fotos,firmas:c.firmas,pap:c.pap,data:payload};
+  return snapTx('readwrite').then(function(st){
+    st.put(snap);
+    return snapList();
+  }).then(function(all){
+    var sobran=all.slice(SNAP_MAX);
+    if(!sobran.length)return true;
+    return snapTx('readwrite').then(function(st){sobran.forEach(function(s){st.delete(s.id);});return true;});
+  }).catch(function(){return false;});
+}
+// Un snapshot cada 90s como máximo (no en cada tecla), pero el primero del arranque va enseguida.
+function scheduleSnapshot(){
+  if(DB._demo||_snapFail)return;
+  var ahora=Date.now();
+  clearTimeout(_snapTimer);
+  var espera=(ahora-_snapLastAt>90000)?600:90000;
+  _snapTimer=setTimeout(function(){_snapLastAt=Date.now();snapGuardar();},espera);
+}
+
+/* Deshace en memoria un cambio que el guard rechazó, releyendo el último estado bueno del disco.
+   Sin esto, un bloqueo dejaría la app sin poder guardar nada más (memoria ≠ disco para siempre). */
+function revertirAlUltimoBueno(){
+  try{
+    var s=localStorage.getItem('sf_v1');
+    if(!s)return false;
+    var d=JSON.parse(s);
+    if(!d||!Array.isArray(d.ordenes))return false;
+    var secretos={aiKey:(DB.settings||{}).aiKey,backup:(DB.settings||{}).backup};
+    DB=d;
+    DB.settings=DB.settings||{};
+    if(secretos.aiKey)DB.settings.aiKey=secretos.aiKey;
+    if(secretos.backup)DB.settings.backup=secretos.backup;
+    if(!Array.isArray(DB.papelera))DB.papelera=[];
+    if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+    if(!DB.serviceParts)DB.serviceParts={};
+    _lastGood=censo(DB);
+    _autorizado.fotos={};
+    try{rerenderCurrent();}catch(e){}
+    return true;
+  }catch(e){return false;}
+}
+
+// ---- EL ÚNICO CAMINO DE ESCRITURA ----
+function saveDB(opts){
+  opts=opts||{};
+  if(!opts.force&&!DB._demo){
+    var mal=verificaIntegridad(_lastGood,DB);
+    if(mal){
+      // El evento tiene que quedar escrito, pero NO se puede persistir el DB malo: va a una
+      // gaveta aparte que loadDB recoge al arrancar (así el aviso sobrevive a la recarga).
+      apuntarAlerta(mal);
+      // CRÍTICO: rechazar no basta. Si la memoria se queda con el cambio malo, el disco y la
+      // memoria quedan diferentes y TODOS los guardados siguientes se bloquean también — la app
+      // se vuelve inservible hasta recargar. Así que se deshace el cambio en el sitio.
+      var revertido=revertirAlUltimoBueno();
+      alert('🛑 GUARDADO BLOQUEADO — se detectó una pérdida de datos.\n\n'+mal+
+            '\n\nNo se guardó nada'+(revertido?' y ya volví a tu último estado bueno.':'. Recarga la app.')+
+            '\nTus órdenes están intactas.\n\nSi esto sale sin que tú hayas borrado nada, avísale a Claude: quedó anotado en la bitácora.');
+      return false;
+    }
+  }
   try{
     localStorage.setItem('sf_v1',JSON.stringify(DB));
+    _autorizado.fotos={};
+    if(!DB._demo)_lastGood=censo(DB);
     scheduleCloudBackup();
     scheduleSyncPush();
+    scheduleSnapshot();
     return true;
   }
   catch(e){
@@ -513,7 +721,27 @@ function saveDB(){
     return false;
   }
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';}catch(e){}}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';if(!Array.isArray(DB.papelera))DB.papelera=[];if(!Array.isArray(DB.bitacora))DB.bitacora=[];}catch(e){}
+  // Una orden que está en la papelera no puede seguir viva en la lista activa: si dos equipos
+  // se sincronizan, mergeDB la resucitaría (une por id) y reaparecería un expediente borrado.
+  reconciliarPapelera();
+  // Avisos que quedaron en la gaveta aparte porque el guard bloqueó un guardado.
+  recogerAlertas();
+  // El censo de arranque es la referencia contra la que se compara el primer guardado.
+  _lastGood=censo(DB);
+}
+// Quita de `ordenes` lo que ya está en la papelera (la papelera manda).
+function reconciliarPapelera(){
+  try{
+    if(!(DB.papelera||[]).length||!(DB.ordenes||[]).length)return 0;
+    var pap={};DB.papelera.forEach(function(p){if(p&&p.id)pap[p.id]=p;});
+    var antes=DB.ordenes.length;
+    DB.ordenes=DB.ordenes.filter(function(o){return !(o&&o.id&&pap[o.id]);});
+    var quitadas=antes-DB.ordenes.length;
+    if(quitadas)bita('papelera-reconciliada','',quitadas+' orden(es) borradas que habían vuelto por sincronización');
+    return quitadas;
+  }catch(e){return 0;}
+}
 function nextRONum(){DB.roCounter=(DB.roCounter||0)+1;return 'RO-'+DB.roCounter;}
 function previewRONum(){return 'RO-'+((DB.roCounter||0)+1);}
 
@@ -780,15 +1008,40 @@ var _sb=null,_sbChan=null,_syncTimer=null,_syncBusy=false,_syncOn=false,_syncApp
 function deviceLabel(){var d=localStorage.getItem('sf_device');if(!d){d='disp-'+Math.random().toString(36).slice(2,6);try{localStorage.setItem('sf_device',d);}catch(e){}}return d;}
 function sbReady(){if(_sb)return _sb;if(typeof supabase==='undefined'||!supabase.createClient)return null;_sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sf_auth'}});return _sb;}
 function saveLocalOnly(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}}
+/* Aplica lo que vino de la nube. ÚNICO sitio donde entra data remota, para que nunca se olvide
+   ninguno de los tres pasos: unir, reconciliar la papelera y refrescar el censo. Si el censo no se
+   refresca, el guard compara el próximo guardado contra un conteo viejo y bloquea trabajo bueno. */
+function aplicarRemoto(remota,rev){
+  _syncApplying=true;
+  var antes=censo(DB).n;
+  DB=mergeDB(DB,remota||{});
+  reconciliarPapelera();
+  _lastPushRev=rev||0;
+  saveLocalOnly();
+  _lastGood=censo(DB);
+  _syncApplying=false;
+  if(_lastGood.n!==antes)bita('sync-bajada','',antes+' → '+_lastGood.n+' órdenes desde la nube');
+  rerenderCurrent();
+  try{schedulePhotoUpload();}catch(e){}
+  try{scheduleSnapshot();}catch(e){}
+}
 function cloudDataPayload(){var c=JSON.parse(JSON.stringify(DB));if(c.settings){delete c.settings.aiKey;delete c.settings.backup;}delete c._demo;delete c._demoAt;delete c._snapshot;return c;}
 // Une los datos de dos equipos: por id, sobreviven las órdenes/clientes de AMBOS (anti-clobber).
 function mergeDB(local,remote){
   if(!remote)return local;
   var out=JSON.parse(JSON.stringify(remote));
-  ['ordenes','clientes','citas','garage','gastos','inventario','tecnicos','asesores','svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS'].forEach(function(k){
+  // `papelera` va en la lista: un borrado hecho en un equipo tiene que llegar a los demás, y el
+  // expediente borrado viaja COMPLETO (con sus fotos y su firma) para poder restaurarlo desde
+  // cualquier aparato. `bitacora` se une aparte porque solo crece y se ordena por fecha.
+  ['ordenes','clientes','citas','garage','gastos','inventario','tecnicos','asesores','svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS','papelera'].forEach(function(k){
     var rIds={};(out[k]||[]).forEach(function(it){if(it&&it.id)rIds[it.id]=1;});
     (local[k]||[]).forEach(function(it){if(it&&it.id&&!rIds[it.id])(out[k]=out[k]||[]).push(it);});
   });
+  var vistos={},bit=[];
+  (remote.bitacora||[]).concat(local.bitacora||[]).forEach(function(e){
+    if(!e||!e.id||vistos[e.id])return;vistos[e.id]=1;bit.push(e);
+  });
+  out.bitacora=bit.sort(function(a,b){return (a.ts||'')<(b.ts||'')?-1:1;}).slice(-BITA_MAX);
   ['roCounter','tecCounter','aseCounter'].forEach(function(k){out[k]=Math.max(local[k]||0,remote[k]||0);});
   out.settings=out.settings||{};local.settings=local.settings||{};
   out.settings.aiKey=local.settings.aiKey;out.settings.backup=local.settings.backup; // secretos por-dispositivo, no viajan
@@ -806,7 +1059,7 @@ async function syncPull(){
     if(ins&&ins.error){_lastSyncErr=ins.error.message;updSyncStatus('error');return;}
     _lastPushRev=1;_lastPullAt=Date.now();_lastSyncErr='';schedulePhotoUpload();updSyncStatus('ok');return;
   }
-  _syncApplying=true;DB=mergeDB(DB,res.data.data||{});_lastPushRev=res.data.rev||0;saveLocalOnly();_syncApplying=false;rerenderCurrent();
+  aplicarRemoto(res.data.data||{},res.data.rev||0);
   _lastPullAt=Date.now();_lastSyncErr='';schedulePhotoUpload();updSyncStatus('ok');
 }
 function scheduleSyncPush(){if(!_syncOn||_syncApplying||DB._demo)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(syncPush,1500);}
@@ -840,7 +1093,7 @@ function subscribeRealtime(){
     _sbChan=c.channel('shop-'+uid)
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'shops',filter:'owner=eq.'+uid},function(p){
         var row=p.new;if(!row||row.updated_by===self)return;if((row.rev||0)<=_lastPushRev)return;
-        _syncApplying=true;DB=mergeDB(DB,row.data||{});_lastPushRev=row.rev||0;saveLocalOnly();_syncApplying=false;rerenderCurrent();syncToast('Datos actualizados desde otro equipo ✓');
+        aplicarRemoto(row.data||{},row.rev||0);syncToast('Datos actualizados desde otro equipo ✓');
       }).subscribe();
   });
 }
@@ -970,9 +1223,18 @@ function restoreFromCloud(){
         if(!confirm('⚠️ CUIDADO — este dispositivo tiene '+curN+' órdenes y el respaldo de la nube solo '+inN+'.\n\nRestaurar BORRA las '+curN+' de aquí y las deja en '+inN+'. Si ESTE es tu equipo con los datos buenos, cancela y dale RESPALDAR (sube), no Restaurar.\n\n¿Restaurar de todos modos?'))return;
       }
       var keep={aiKey:DB.settings.aiKey,backup:DB.settings.backup};
+      // Antes de reemplazar: deja un snapshot de lo que hay AHORA, para poder deshacer la
+      // restauración desde el propio equipo si trajo menos de lo que había.
+      var previo=censo(DB);
+      snapGuardar();
       DB=data;DB.settings=DB.settings||{};DB.settings.aiKey=keep.aiKey;DB.settings.backup=keep.backup;
       if(!DB.serviceParts)DB.serviceParts={};
-      saveDB();
+      if(!Array.isArray(DB.papelera))DB.papelera=[];
+      if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+      reconciliarPapelera();
+      bita('restaurado-de-github','',previo.n+' → '+(DB.ordenes||[]).length+' órdenes');
+      _lastGood=censo(DB);          // el reemplazo es intencional: la referencia se mueve con él
+      saveDB({force:true});         // force: reemplazo en bloque, ya tiene su propio guard arriba
       alert('Datos restaurados desde la nube ✓ ('+DB.ordenes.length+' órdenes)');
       go('home');
     })
@@ -1046,9 +1308,40 @@ function renderProtect(){
       +'</div></div>';
   });
 }
+/* Aviso de órdenes abiertas. Una orden abierta es trabajo hecho que todavía no es dinero: no
+   aparece en ventas, ni en IVU, ni en "por cobrar". Si se queda abierta, se te olvida y no la
+   cobras. Aquí salen con su edad, para que ninguna pase de un día sin que la veas. */
+function renderAbiertas(){
+  var el=document.getElementById('home-abiertas');if(!el)return;
+  if(DB._demo){el.style.display='none';el.innerHTML='';return;}
+  var ab=(DB.ordenes||[]).filter(function(o){return o.estado==='abierta';});
+  if(!ab.length){el.style.display='none';el.innerHTML='';return;}
+  ab.sort(function(a,b){return new Date(a.fecha)-new Date(b.fecha);});
+  var suma=ab.reduce(function(s,o){return s+(o.total||0);},0);
+  var viejas=ab.filter(function(o){return (Date.now()-new Date(o.fecha).getTime())>86400000;}).length;
+  var col=viejas?'var(--amber)':'var(--blue)';
+  el.style.display='block';
+  el.innerHTML='<div style="margin:10px 12px 0;padding:13px 14px;border-radius:var(--r-md);background:'+(viejas?'rgba(255,159,10,.12)':'rgba(0,122,255,.10)')+';border:2px solid '+col+'">'
+    +'<div style="font-size:14px;font-weight:800;color:'+col+';margin-bottom:5px">'
+      +(viejas?'⏳ ':'📋 ')+ab.length+' '+(ab.length===1?'orden abierta':'órdenes abiertas')+' — $'+suma.toFixed(2)+' sin cobrar</div>'
+    +'<div style="font-size:12px;line-height:1.45;color:var(--ink);margin-bottom:9px">'
+      +(viejas?'<strong>'+viejas+'</strong> lleva'+(viejas===1?'':'n')+' más de un día abierta. ':'')
+      +'Mientras estén abiertas no cuentan en tus ventas ni en el IVU. Ábrela y dale <strong>“Terminé — cobrar y cerrar”</strong>.</div>'
+    +ab.slice(0,4).map(function(o){
+      var h=Math.floor((Date.now()-new Date(o.fecha).getTime())/3600000);
+      var edad=h<1?'hace un rato':(h<24?('hace '+h+'h'):('hace '+Math.floor(h/24)+'d'));
+      return '<div onclick="openRODetail(\''+o.id+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--white);border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer">'
+        +'<div style="min-width:0"><div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+o.id+' · '+(o.cliente||'(sin nombre)')+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-400)">'+edad+'</div></div>'
+        +'<div style="font-size:13px;font-weight:800;white-space:nowrap">$'+((o.total||0).toFixed(2))+'</div></div>';
+    }).join('')
+    +(ab.length>4?'<div style="font-size:11px;color:var(--gray-400);margin-top:2px">y '+(ab.length-4)+' más en Órdenes.</div>':'')
+    +'</div>';
+}
 function renderHome(){
   var now=new Date();
   renderProtect();
+  try{renderAbiertas();}catch(e){}
   var dd=document.getElementById('hdate');if(dd)dd.textContent=MESES[now.getMonth()]+' '+now.getDate();
   var today=now.toDateString();
   var to=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;});
@@ -1285,11 +1578,16 @@ function renderPhotosGrid(){
   }).join('');
   fillPhotoImgs(grid);
 }
+/* Quitar una foto suelta SOLO le quita la referencia a la orden. Los bytes se quedan en IndexedDB
+   y en la nube: antes se destruían al instante, así que si te equivocabas y cerrabas la app sin
+   guardar, la orden seguía nombrando una foto que ya no existía en ningún sitio. Los huérfanos se
+   limpian aparte, a mano, desde Ajustes → Liberar espacio. */
 function deletePhoto(i){
-  if(!confirm('¿Eliminar esta foto?'))return;
+  if(!confirm('¿Quitar esta foto de la orden?\n\nSe queda respaldada; si te equivocas se puede recuperar.'))return;
   var f=(RO.fotos||[])[i];
   RO.fotos.splice(i,1);
-  if(fotoIsRef(f)){photoDel(f.id);photoDelCloud(f);} // libera la foto de IndexedDB y de la nube
+  if(RO.id)autorizarBajaFoto(RO.id); // baja declarada: el guard no la confunde con una pérdida
+  bita('foto-quitada',RO.id||'(sin guardar)',fotoIsRef(f)?f.id:'foto inline');
   renderPhotosGrid();
 }
 
@@ -1783,6 +2081,7 @@ function saveOpenRO(){
   RO.estado='abierta';
   calcEst();RO.total=Math.round(RO.total*100)/100;
   upsertRO();autoSaveCli();
+  bita('orden-guardada',RO.id,'ABIERTA · '+(RO.cliente||'')+' · $'+(RO.total||0).toFixed(2)+' · '+((RO.fotos||[]).length)+' fotos');
   if(!saveDB())return;
   // Respaldo a la nube AHORA (no esperar los 45s) — la orden ABIERTA queda segura al instante
   var bkO=backupCfg();
@@ -1803,6 +2102,7 @@ function saveRO(){
   if(!DB.garage.find(function(g){return g.roId===RO.id;})){
     DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
   }
+  bita('orden-guardada',RO.id,RO.estado+' · '+(RO.cliente||'')+' · $'+(RO.total||0).toFixed(2)+' · '+((RO.fotos||[]).length)+' fotos'+(((RO.sigData||{}).sig2)?' · firmada':''));
   if(!saveDB())return;
   clearDraft();_roWizardOpen=false;
   // Respaldo a la nube AHORA (no esperar los 45s) para que la reparación quede segura al instante
@@ -2993,7 +3293,9 @@ function openRODetail(roId){
   }
   // Actions
   if(o.estado==='abierta'){
-    html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px;background:var(--blue);color:#fff;border-color:var(--blue)"><i class="ti ti-player-play"></i> Continuar orden (ABIERTA)</button>';
+    html+='<button class="btn full" onclick="cobrarYCerrar(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green);font-weight:700"><i class="ti ti-cash"></i> Terminé — cobrar y cerrar ($'+(o.total||0).toFixed(2)+')</button>';
+    html+='<div style="font-size:11px;color:var(--gray-400);margin:-4px 0 10px;line-height:1.5">Mientras esté abierta no cuenta en tus ventas ni en el IVU. Al cobrarla entra en los números del día.</div>';
+    html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px;background:var(--blue);color:#fff;border-color:var(--blue)"><i class="ti ti-player-play"></i> Seguir editando la orden</button>';
     html+='<button class="btn full" onclick="printWorkOrder(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-printer"></i> Imprimir orden de trabajo</button>';
   }
   if(o.estado==='pendiente'){
@@ -3015,7 +3317,7 @@ function openRODetail(roId){
   html+='<button class="btn full" onclick="showVideoScript(\''+o.id+'\')" style="margin-bottom:8px;background:#7C3AED;color:#fff;border-color:#7C3AED"><i class="ti ti-video"></i> Guión de video para el cliente</button>';
   html+='<button class="btn full" onclick="shareStatus(\''+o.id+'\')" style="margin-bottom:8px;background:#0E1116;color:#fff;border-color:#0E1116"><i class="ti ti-link"></i> Compartir estado con cliente</button>';
   html+='<button class="btn p full" onclick="reExportPDF(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-file-type-pdf"></i> Generar / Ver PDF</button>';
-  html+='<button class="btn full" onclick="if(confirm(\'¿Eliminar esta orden permanentemente?\'))deleteRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Eliminar orden</button>';
+  html+='<button class="btn full" onclick="pedirBorrarRO(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Mover a la papelera</button>';
   html+='</div>';
   document.getElementById('ro-detail-body').innerHTML=html;
   fillPhotoImgs(document.getElementById('ro-detail-body'));
@@ -3031,6 +3333,48 @@ function registrarAbono(roId){
   o.abonado=Math.round(((o.abonado||0)+amt)*100)/100;
   if(o.abonado>=(o.total||0)-0.01){o.estado='pagado';o.pagadoFecha=new Date().toISOString();alert('Balance saldado — orden PAGADA ✓');}
   saveDB();openRODetail(roId);
+}
+/* COBRAR Y CERRAR — para la orden que quedó ABIERTA cuando el carro entró y ya terminaste el
+   trabajo. Antes la única salida era reabrir el wizard de 9 pasos, así que las órdenes se quedaban
+   abiertas... y una orden abierta NO cuenta en ninguna finanza (ni ventas, ni IVU, ni técnico, ni
+   por cobrar). O sea: trabajo cobrado que no aparecía en ningún número. */
+function cobrarYCerrar(roId){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return;
+  var total=o.total||0;
+  if(total<=0&&!confirm('Esta orden tiene total $0.00.\n\n¿Cerrarla así de todos modos?'))return;
+  var m=prompt('Cerrar '+o.id+' — '+(o.cliente||'')+'\nTotal: $'+total.toFixed(2)+
+               '\n\n¿Cómo pagó? (ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
+  if(m===null)return;
+  var recStr=prompt('¿Cuánto recibiste?\n\nDéjalo como está si pagó todo ($'+total.toFixed(2)+').\n'+
+                    'Si abonó una parte, escribe lo que te dio.',total.toFixed(2));
+  if(recStr===null)return;
+  var rec=parseFloat(String(recStr).replace(/[^0-9.]/g,''));
+  if(isNaN(rec)||rec<0){alert('No entendí ese monto — no cambié nada.');return;}
+  var antes=o.estado;
+  o.pago=(m||o.pago||'ATH Móvil').trim();
+  o.abonado=Math.round(Math.min(rec,total)*100)/100;
+  if(rec>=total-0.005){
+    o.estado='pagado';o.abonado=total;o.pagadoFecha=new Date().toISOString();
+  }else{
+    o.estado='pendiente';
+  }
+  // El carro sale del garage si ya se lo llevaron.
+  var g=(DB.garage||[]).find(function(x){return x.roId===roId;});
+  if(g&&g.estado!=='entregado'&&confirm('¿El cliente ya se llevó el carro?\n\nSí = sale del garage como ENTREGADO.\nNo = se queda como listo, esperando que lo recojan.')){
+    g.estado='entregado';
+    g.log=g.log||[];g.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Entregado y cobrado.');
+  }else if(g&&g.estado==='working'){
+    g.estado='ready';
+    if(!g.readyTime)g.readyTime=new Date().toISOString();
+    g.log=g.log||[];g.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Trabajo terminado y cobrado. Listo para recoger.');
+  }
+  bita('orden-cerrada',roId,antes+' → '+o.estado+' · '+o.pago+' · recibido $'+o.abonado.toFixed(2)+' de $'+total.toFixed(2));
+  if(!saveDB())return;
+  var falta=Math.max(0,total-o.abonado);
+  alert(o.estado==='pagado'
+    ? '✓ '+o.id+' cobrada y cerrada.\n\n$'+total.toFixed(2)+' por '+o.pago+'.\nYa cuenta en tus ventas del día.'
+    : '✓ '+o.id+' cerrada con abono.\n\nRecibido $'+o.abonado.toFixed(2)+' — queda un balance de $'+falta.toFixed(2)+'.\nAparece en "por cobrar" hasta que la completes.');
+  openRODetail(roId);
 }
 function markPaid(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
@@ -3098,15 +3442,261 @@ function reExportPDF(roId){
   RO=savedRO;
 }
 
-function deleteRO(roId){
+/* ============ VERIFICACIÓN DE VERDAD ============
+   No basta con "está configurado". Esto le PREGUNTA a cada sitio cuántas órdenes tiene y compara
+   con lo que hay en el equipo. Si no cuadran, lo dice con números — es la pregunta que nadie hacía
+   el 24 de julio, cuando la app decía que todo estaba bien y la nube llevaba dos días en cero. */
+function contarNube(){
+  return new Promise(function(res){
+    var c=(typeof sbReady==='function')?sbReady():null;
+    if(!c)return res({ok:false,msg:'no cargó'});
+    c.auth.getSession().then(function(r){
+      var sess=r&&r.data&&r.data.session;
+      if(!sess)return res({ok:false,msg:'sin sesión'});
+      c.from('shops').select('data,rev,updated_at').eq('owner',sess.user.id).maybeSingle()
+        .then(function(q){
+          if(q.error)return res({ok:false,msg:q.error.message});
+          if(!q.data)return res({ok:false,msg:'no hay taller'});
+          var d=q.data.data||{};
+          res({ok:true,n:(d.ordenes||[]).length,pap:(d.papelera||[]).length,rev:q.data.rev,
+               fecha:q.data.updated_at,fotos:(d.ordenes||[]).reduce(function(s,o){return s+(o.fotos||[]).length;},0)});
+        }).catch(function(e){res({ok:false,msg:String(e.message||e)});});
+    }).catch(function(e){res({ok:false,msg:String(e.message||e)});});
+  });
+}
+function contarGitHub(){
+  return new Promise(function(res){
+    var cfg=backupCfg();
+    if(!cfg)return res({ok:false,msg:'no configurado'});
+    fetch('https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json',{headers:ghHeaders(cfg.token),cache:'no-store'})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(function(j){
+        var d=JSON.parse(decodeURIComponent(escape(atob((j.content||'').replace(/\n/g,'')))));
+        res({ok:true,n:(d.ordenes||[]).length,pap:(d.papelera||[]).length,bytes:j.size});
+      }).catch(function(e){res({ok:false,msg:String(e.message||e)});});
+  });
+}
+// Cuántas fotos viven SOLO en este equipo (sin copia en la nube).
+function fotosSinSubir(){
+  var n=0;
+  (DB.ordenes||[]).concat(DB.papelera||[]).forEach(function(o){
+    (o.fotos||[]).forEach(function(f){if(fotoIsRef(f)&&!f.sp)n++;});
+  });
+  return n;
+}
+function persistenciaTxt(){
+  return new Promise(function(res){
+    if(!navigator.storage||!navigator.storage.persisted)return res(null);
+    navigator.storage.persisted().then(function(p){res(!!p);}).catch(function(){res(null);});
+  });
+}
+function verificarTodo(preguntarNube){
+  var el=document.getElementById('seg-estado');
+  var c=censo(DB),sinSubir=fotosSinSubir();
+  var np=document.getElementById('seg-npap');if(np)np.textContent=String(c.pap);
+  function fila(icono,txt,color){return '<div style="display:flex;gap:7px;align-items:flex-start"><span style="flex-shrink:0">'+icono+'</span><span style="color:'+(color||'var(--ink)')+'">'+txt+'</span></div>';}
+  var html=fila('📋','<strong>'+c.n+'</strong> '+(c.n===1?'orden':'órdenes')+' · <strong>'+c.fotos+'</strong> fotos · <strong>'+c.firmas+'</strong> con firma'+(c.pap?' · '+c.pap+' en papelera':''));
+  if(el)el.innerHTML=html+fila('⏳','Consultando…','var(--gray-400)');
+  Promise.all([persistenciaTxt(),preguntarNube?contarNube():Promise.resolve(null),preguntarNube?contarGitHub():Promise.resolve(null)])
+  .then(function(r){
+    var persist=r[0],nube=r[1],git=r[2],problemas=0;
+    if(persist===true)html+=fila('🔒','Almacenamiento <strong>persistente</strong>: el navegador no puede borrar tus datos por falta de uso.','var(--green)');
+    else if(persist===false){html+=fila('⚠️','Almacenamiento <strong>no persistente</strong>: si no abres la app en ~7 días, Safari puede limpiar la memoria del equipo. La nube te cubre, pero mantén el respaldo encendido.','var(--amber)');problemas++;}
+    if(sinSubir>0){html+=fila('📤','<strong>'+sinSubir+'</strong> foto(s) viven SOLO en este equipo, sin copia en la nube. <a href="#" onclick="subirFotosYa();return false" style="color:var(--blue);font-weight:700">Subirlas ahora</a>','var(--amber)');problemas++;}
+    else if(c.fotos)html+=fila('✅','Todas las fotos tienen copia en la nube.','var(--green)');
+    if(nube){
+      if(!nube.ok){html+=fila('❌','Nube: '+nube.msg,'var(--red)');problemas++;}
+      else if(nube.n===c.n)html+=fila('✅','Nube al día: '+nube.n+' órdenes, igual que aquí (rev '+nube.rev+').','var(--green)');
+      else{html+=fila(nube.n<c.n?'❌':'⚠️','Nube tiene <strong>'+nube.n+'</strong> órdenes y este equipo <strong>'+c.n+'</strong>'+(nube.n<c.n?' — falta subir.':' — falta bajar: recarga la app.'),nube.n<c.n?'var(--red)':'var(--amber)');problemas++;}
+    }
+    if(git){
+      if(!git.ok){html+=fila('❌','Respaldo GitHub: '+git.msg,'var(--red)');problemas++;}
+      else if(git.n===c.n)html+=fila('✅','Respaldo GitHub al día: '+git.n+' órdenes ('+Math.round((git.bytes||0)/1024)+' KB).','var(--green)');
+      else{html+=fila('⚠️','Respaldo GitHub tiene <strong>'+git.n+'</strong> órdenes y este equipo <strong>'+c.n+'</strong>. Dale “Respaldar ahora”.','var(--amber)');problemas++;}
+    }
+    if(preguntarNube)html+=fila(problemas?'🟠':'🟢','<strong>'+(problemas?problemas+' cosa(s) que atender.':'Todo cuadra. Puedes dormir tranquilo.')+'</strong>',problemas?'var(--amber)':'var(--green)');
+    if(el)el.innerHTML=html;
+  });
+}
+function subirFotosYa(){
+  if(!_syncOn){alert('Primero entra a la nube en Ajustes → Sincronización.');return;}
+  alert('Subiendo las fotos que faltan… puede tardar según tu señal. Te aviso al terminar.');
+  var antes=fotosSinSubir();
+  photoUploadPending();
+  setTimeout(function(){
+    var ahora=fotosSinSubir();
+    alert(ahora===0?'✓ Listo: todas las fotos están en la nube.'
+                   :'Subieron '+(antes-ahora)+'. Faltan '+ahora+' — vuelve a intentar con mejor señal.');
+    verificarTodo(false);
+  },12000);
+}
+
+/* ============ VENTANA: papelera / copias locales / bitácora ============ */
+function cerrarSeg(){var o=document.getElementById('seg-ov');if(o)o.style.display='none';}
+function abrirSeg(cual){
+  var o=document.getElementById('seg-ov');if(!o)return;
+  o.style.display='flex';
+  if(cual==='pap')renderPapelera();
+  else if(cual==='snap')renderSnapshots();
+  else renderBitacora();
+}
+function fechaCorta(iso){
+  try{return new Date(iso).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
+  catch(e){return iso||'';}
+}
+function renderPapelera(){
+  document.getElementById('seg-titulo').innerHTML='<i class="ti ti-trash"></i> Papelera';
+  var b=document.getElementById('seg-body');if(!b)return;
+  var p=(DB.papelera||[]).slice().sort(function(a,c){return (c._delAt||'')<(a._delAt||'')?-1:1;});
+  if(!p.length){b.innerHTML='<div style="font-size:13px;color:var(--gray-400);text-align:center;padding:24px 0">La papelera está vacía.<br><br>Cuando eliminas una orden, viene aquí completa — con fotos y firma — y se puede restaurar.</div>';return;}
+  b.innerHTML='<div style="font-size:12px;color:var(--gray-500);margin-bottom:11px;line-height:1.5">Estos expedientes NO están borrados: siguen completos con sus fotos y su firma. Restaura el que quieras.</div>'+
+  p.map(function(o){
+    var dias=Math.floor((Date.now()-new Date(o._delAt||0).getTime())/86400000);
+    return '<div style="border:1px solid var(--gray-100);border-radius:10px;padding:11px 12px;margin-bottom:9px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:5px">'
+        +'<div style="min-width:0"><div style="font-size:13px;font-weight:800">'+o.id+' · '+(o.cliente||'(sin nombre)')+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-400)">'+[(o.vehiculo&&[o.vehiculo.year,o.vehiculo.make,o.vehiculo.model].filter(Boolean).join(' ')),(o.vehiculo&&o.vehiculo.tag)].filter(Boolean).join(' · ')+'</div></div>'
+        +'<div style="font-size:13px;font-weight:800;white-space:nowrap">$'+((o.total||0).toFixed(2))+'</div></div>'
+      +'<div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">'
+        +(o.fotos||[]).length+' fotos'+((o.sigData&&(o.sigData.sig1||o.sigData.sig2))?' · con firma':'')
+        +' · borrada '+fechaCorta(o._delAt)+' ('+dias+'d)'+(o._delMotivo?' · motivo: '+o._delMotivo:'')+'</div>'
+      +'<div style="display:flex;gap:7px">'
+        +'<button class="btn sm g" onclick="restaurarDePapelera(\''+o.id+'\')" style="flex:1"><i class="ti ti-arrow-back-up"></i> Restaurar</button>'
+        +'<button class="btn sm" onclick="purgarDePapelera(\''+o.id+'\')" style="color:var(--red);border-color:var(--red-light)"'+(dias<30?' title="Disponible a los 30 días"':'')+'><i class="ti ti-flame"></i> Borrar para siempre</button>'
+      +'</div></div>';
+  }).join('');
+}
+function renderSnapshots(){
+  document.getElementById('seg-titulo').innerHTML='<i class="ti ti-history"></i> Copias locales';
+  var b=document.getElementById('seg-body');if(!b)return;
+  b.innerHTML='<div style="font-size:13px;color:var(--gray-400);padding:16px 0;text-align:center">Cargando…</div>';
+  snapList().then(function(all){
+    if(!all.length){b.innerHTML='<div style="font-size:13px;color:var(--gray-400);text-align:center;padding:24px 0">Todavía no hay copias locales.<br><br>Se guarda una automáticamente cada vez que trabajas. Viven en este equipo, así que sirven aunque no tengas señal.</div>';return;}
+    b.innerHTML='<div style="font-size:12px;color:var(--gray-500);margin-bottom:11px;line-height:1.5">Copias guardadas <strong>en este equipo</strong> (sirven sin internet). Si algo se ve mal, vuelve a una de antes. Se guardan las últimas '+SNAP_MAX+'.</div>'+
+    all.map(function(s){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:9px;border:1px solid var(--gray-100);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="min-width:0"><div style="font-size:13px;font-weight:700">'+fechaCorta(s.ts)+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-400)">'+s.n+' órdenes · '+s.fotos+' fotos · '+s.firmas+' firmas'+(s.pap?' · '+s.pap+' en papelera':'')+'</div></div>'
+        +'<button class="btn sm" onclick="restaurarSnapshot('+s.id+')" style="white-space:nowrap"><i class="ti ti-arrow-back-up"></i> Volver aquí</button>'
+      +'</div>';
+    }).join('');
+  });
+}
+function restaurarSnapshot(id){
+  snapList().then(function(all){
+    var s=all.find(function(x){return x.id===id;});
+    if(!s){alert('No encontré esa copia.');return;}
+    var c=censo(DB);
+    if(!confirm('¿Volver al estado del '+fechaCorta(s.ts)+'?\n\nEsa copia tiene '+s.n+' órdenes y '+s.fotos+' fotos.\nAhora mismo tienes '+c.n+' órdenes y '+c.fotos+' fotos.\n\n'+
+      (s.n<c.n?'⚠️ OJO: la copia tiene MENOS órdenes que ahora. Volverías atrás y perderías las más nuevas.\n\n':'')+
+      'Antes de cambiar nada guardo una copia de lo que hay ahora, así que esto también se puede deshacer.'))return;
+    snapGuardar().then(function(){
+      var keep={aiKey:(DB.settings||{}).aiKey,backup:(DB.settings||{}).backup};
+      var previo=c.n;
+      DB=JSON.parse(JSON.stringify(s.data));
+      DB.settings=DB.settings||{};
+      if(keep.aiKey)DB.settings.aiKey=keep.aiKey;
+      if(keep.backup)DB.settings.backup=keep.backup;
+      if(!Array.isArray(DB.papelera))DB.papelera=[];
+      if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+      if(!DB.serviceParts)DB.serviceParts={};
+      bita('copia-local-restaurada','',previo+' → '+(DB.ordenes||[]).length+' órdenes (copia del '+fechaCorta(s.ts)+')');
+      _lastGood=censo(DB);
+      saveDB({force:true});
+      alert('Listo: volviste al estado del '+fechaCorta(s.ts)+'.');
+      cerrarSeg();go('home');
+    });
+  });
+}
+function renderBitacora(){
+  document.getElementById('seg-titulo').innerHTML='<i class="ti ti-list-details"></i> Bitácora';
+  var b=document.getElementById('seg-body');if(!b)return;
+  var ev=(DB.bitacora||[]).slice().reverse();
+  if(!ev.length){b.innerHTML='<div style="font-size:13px;color:var(--gray-400);text-align:center;padding:24px 0">Todavía no hay nada anotado.<br><br>De aquí en adelante, cada orden creada, cobrada, editada o eliminada queda escrita con fecha y equipo.</div>';return;}
+  var ICON={'orden-guardada':'📝','orden-cerrada':'💵','orden-a-papelera':'🗑','orden-restaurada':'♻️','orden-destruida':'🔥',
+    'foto-quitada':'📷','respaldo-importado':'📥','restaurado-de-github':'☁️','copia-local-restaurada':'🕘',
+    'guardado-bloqueado':'🛑','sync-bajada':'🔄','papelera-reconciliada':'🧹','respaldo-subido':'✅'};
+  b.innerHTML='<div style="font-size:12px;color:var(--gray-500);margin-bottom:11px;line-height:1.5">Todo lo importante que ha pasado, en orden. Esto no se puede editar ni borrar: es tu respaldo si un cliente reclama algo.</div>'+
+  ev.slice(0,300).map(function(e){
+    return '<div style="display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--gray-100)">'
+      +'<div style="flex-shrink:0;font-size:15px">'+(ICON[e.tipo]||'•')+'</div>'
+      +'<div style="min-width:0"><div style="font-size:12.5px;font-weight:700">'+(e.tipo||'')+(e.roId?' · '+e.roId:'')+'</div>'
+      +(e.det?'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.45">'+e.det+'</div>':'')
+      +'<div style="font-size:10.5px;color:var(--gray-400)">'+fechaCorta(e.ts)+' · '+(e.dev||'')+'</div></div></div>';
+  }).join('')
+  +(ev.length>300?'<div style="font-size:11px;color:var(--gray-400);padding:9px 0">Mostrando los 300 más recientes de '+ev.length+'.</div>':'');
+}
+
+// Pide el motivo (queda en la bitácora) y manda a la papelera.
+function pedirBorrarRO(roId){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return;
+  var m=prompt('Mover '+roId+' ('+(o.cliente||'')+') a la papelera.\n\n¿Por qué? — queda anotado en la bitácora.\nSe puede restaurar completa en cualquier momento.','duplicada');
+  if(m===null)return;
+  deleteRO(roId,(m||'').trim());
+}
+/* Eliminar una orden NO destruye nada: el expediente completo (fotos, firma, piezas, inspección)
+   se mueve a la papelera y se puede restaurar desde cualquier equipo. Las fotos se quedan donde
+   están, en IndexedDB y en la nube — un mis-tap no puede costar un expediente legal. */
+function deleteRO(roId,motivo){
   var idx=DB.ordenes.findIndex(function(x){return x.id===roId;});
-  if(idx>-1){
-    var o=DB.ordenes[idx];
-    (o.fotos||[]).forEach(function(f){if(fotoIsRef(f)){photoDel(f.id);photoDelCloud(f);}}); // libera las fotos de IndexedDB y la nube
-    DB.ordenes.splice(idx,1);
-    DB.garage=DB.garage.filter(function(g){return g.roId!==roId;});
-    saveDB();alert('Orden eliminada.');go('historial');
+  if(idx<0)return false;
+  var o=DB.ordenes[idx];
+  if(!Array.isArray(DB.papelera))DB.papelera=[];
+  var copia;
+  try{copia=JSON.parse(JSON.stringify(o));}catch(e){alert('No pude copiar la orden a la papelera — no se borró nada.');return false;}
+  copia._delAt=new Date().toISOString();
+  copia._delBy=deviceLabel();
+  copia._delMotivo=motivo||'';
+  copia._garage=(DB.garage||[]).filter(function(g){return g.roId===roId;}); // para devolver el carro al garage
+  DB.papelera.push(copia);
+  DB.ordenes.splice(idx,1);
+  DB.garage=(DB.garage||[]).filter(function(g){return g.roId!==roId;});
+  bita('orden-a-papelera',roId,(o.cliente||'')+' · $'+((o.total||0).toFixed(2))+' · '+((o.fotos||[]).length)+' fotos');
+  if(!saveDB())return false;
+  alert('Orden movida a la PAPELERA.\n\nNo se borró nada: está en Ajustes → Papelera y la puedes restaurar completa, con fotos y firma.');
+  go('historial');
+  return true;
+}
+// Devuelve un expediente de la papelera a la lista activa (y el carro al garage).
+function restaurarDePapelera(roId){
+  var idx=(DB.papelera||[]).findIndex(function(x){return x.id===roId;});
+  if(idx<0){alert('Ya no está en la papelera.');return false;}
+  var p=DB.papelera[idx];
+  if((DB.ordenes||[]).some(function(o){return o.id===roId;})){
+    alert('Ya existe una orden activa con el número '+roId+'. No la piso.');return false;
   }
+  var o;try{o=JSON.parse(JSON.stringify(p));}catch(e){return false;}
+  var gar=o._garage||[];
+  delete o._delAt;delete o._delBy;delete o._delMotivo;delete o._garage;
+  DB.ordenes.push(o);
+  gar.forEach(function(g){if(!(DB.garage||[]).some(function(x){return x.id===g.id;}))(DB.garage=DB.garage||[]).push(g);});
+  DB.papelera.splice(idx,1);
+  bita('orden-restaurada',roId,(o.cliente||'')+' · '+((o.fotos||[]).length)+' fotos');
+  if(!saveDB())return false;
+  alert('Orden '+roId+' restaurada completa.');
+  openRODetail(roId);
+  return true;
+}
+/* Vaciar de verdad. Es el ÚNICO sitio de la app que destruye bytes, y a propósito cuesta trabajo:
+   solo expedientes con más de 30 días en la papelera, con doble confirmación y anotado. */
+function purgarDePapelera(roId){
+  var idx=(DB.papelera||[]).findIndex(function(x){return x.id===roId;});
+  if(idx<0)return false;
+  var p=DB.papelera[idx];
+  var dias=(Date.now()-new Date(p._delAt||0).getTime())/86400000;
+  if(dias<30){alert('Todavía no.\n\nEste expediente lleva '+Math.floor(dias)+' día(s) en la papelera. Se puede borrar para siempre a partir de los 30 días.\n\nMientras tanto no ocupa casi nada y te protege.');return false;}
+  if(!confirm('¿BORRAR PARA SIEMPRE la orden '+roId+' de '+(p.cliente||'')+'?\n\nSe destruyen también sus '+((p.fotos||[]).length)+' fotos, en este equipo y en la nube. NO hay vuelta atrás.'))return false;
+  if(!confirm('Última confirmación: esto es irreversible.\n\n'+roId+' · '+(p.cliente||'')+' · $'+((p.total||0).toFixed(2))))return false;
+  (p.fotos||[]).forEach(function(f){if(fotoIsRef(f)){photoDel(f.id);photoDelCloud(f);}});
+  DB.papelera.splice(idx,1);
+  bita('orden-destruida',roId,(p.cliente||'')+' — borrada para siempre tras '+Math.floor(dias)+' días en papelera');
+  // force: este es el ÚNICO sitio autorizado a que un expediente desaparezca de la unión
+  // activas+papelera. Ya pasó las dos confirmaciones y la espera de 30 días.
+  _lastGood=censo(DB);
+  saveDB({force:true});
+  alert('Borrada para siempre.');
+  renderPapelera();
+  return true;
 }
 
 
@@ -3142,6 +3732,7 @@ function liberarEspacio(){
 // ============ AJUSTES / SETTINGS ============
 function initAjustes(){
   renderStorageInfo();
+  try{verificarTodo(false);}catch(e){}   // el resumen sale al instante; la consulta a la nube va a botón
   var sd=document.getElementById('set-dark');if(sd)sd.checked=(DB.settings.theme==='dark');
   var sbt=document.getElementById('set-bigtext');if(sbt)sbt.checked=!!DB.settings.bigText;
   document.getElementById('set-labor').value=DB.settings.laborRate||103;
@@ -3292,6 +3883,10 @@ function importBackup(e){
         if(typeof DB[k]!=='number')DB[k]=0;
       });
       if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;
+      if(!Array.isArray(DB.papelera))DB.papelera=[];
+      if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+      reconciliarPapelera();
+      bita('respaldo-importado','',nNow+' → '+nIn+' órdenes (archivo)');
       // Los respaldos viejos traen las fotos base64 INLINE. Guardar eso directo en localStorage
       // revienta la cuota (~5MB en Safari) y el import falla con "ALMACENAMIENTO LLENO" — el mismo
       // bug del 07-24. Moverlas a IndexedDB ANTES del primer saveDB.
@@ -3304,7 +3899,8 @@ function importBackup(e){
             if(u&&!(f&&f.id))inline++;
           });
         });
-        var ok=saveDB();
+        _lastGood=censo(DB);          // el reemplazo es intencional: la referencia se mueve con él
+        var ok=saveDB({force:true});  // force: reemplazo en bloque, ya confirmado arriba con conteos
         if(!ok)return; // saveDB ya avisó a gritos
         if(inline)alert('Respaldo importado, pero '+inline+' fotos no se pudieron mover al almacén local.\n\nSi ves errores de almacenamiento, libera espacio y vuelve a importar.');
         else alert('Respaldo importado correctamente.');
@@ -4507,6 +5103,15 @@ document.addEventListener('click',hideSplash,{once:true});
 </div>
 
 <!-- REPORTE SEMANAL -->
+<div id="seg-ov" style="display:none;position:fixed;inset:0;z-index:460;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between">
+      <div id="seg-titulo" style="font-size:16px;font-weight:800;color:var(--ink)"></div>
+      <button onclick="cerrarSeg()" style="background:var(--gray-100);border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;color:var(--gray-500)"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="seg-body" style="flex:1;overflow-y:auto;padding:14px 16px"></div>
+  </div>
+</div>
 <div id="rep-ov" style="display:none;position:fixed;inset:0;z-index:450;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--white);border-radius:16px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="padding:14px 18px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between">

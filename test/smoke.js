@@ -347,17 +347,30 @@ function check(ok, name, detail) {
   check(vin.y === '2003' && vin.ma === 'Honda' && vin.mo === 'Accord' && vin.info, 'VIN decode (NHTSA) autofills año/marca/modelo', JSON.stringify(vin));
 
   // cleanup v1.4 seeds so the delete-RO check below still sees exactly one RO
-  await page.evaluate(`(function(){DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-SM1';});DB.citas=[];saveDB();})()`);
+  // force: es una manipulacion deliberada del fixture. Sin force el guard de integridad la bloquea
+  // (y hace bien: quitar una orden sin pasar por la papelera es exactamente lo que vigila).
+  await page.evaluate(`(function(){DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-SM1';});DB.citas=[];saveDB({force:true});})()`);
 
-  // Delete RO removes garage entry (no orphans)
+  // Borrar una RO la manda a la PAPELERA (no la destruye) y limpia el garage sin dejar huerfanos
   await page.evaluate(`go('historial')`);
   await page.waitForTimeout(400);
   await page.locator(`#historial [onclick^="openRODetail"]`).first().click();
   await page.waitForTimeout(400);
-  await vclick(`[onclick*="deleteRO"]`);
-  await page.waitForTimeout(500);
-  const after = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, g: d.garage.length, orphans: d.garage.filter(g => !d.ordenes.find(o => o.id === g.roId)).length }; });
-  check(after.o === 1 && after.orphans === 0, 'deleteRO cleans garage entry (no orphans)', JSON.stringify(after));
+  await vclick(`[onclick*="pedirBorrarRO"]`);
+  await page.waitForTimeout(600);
+  // el id lo da la PAPELERA: el boton borra la orden que este abierta, no la ultima del array
+  const roBorrada = await page.evaluate(`(function(){var d=JSON.parse(localStorage.getItem('sf_v1'));return ((d.papelera||[])[0]||{}).id||'';})()`);
+  const after = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('sf_v1')); return { o: d.ordenes.length, g: d.garage.length, orphans: d.garage.filter(g => !d.ordenes.find(o => o.id === g.roId)).length, pap: (d.papelera||[]).length }; });
+  check(after.o === 1 && after.orphans === 0, 'borrar RO limpia el garage (sin huerfanos)', JSON.stringify(after));
+  check(after.pap === 1, 'la RO borrada quedo en la PAPELERA (no destruida)', JSON.stringify(after));
+  // y se puede restaurar completa
+  const rest = await page.evaluate(`(function(id){restaurarDePapelera(id);var d=JSON.parse(localStorage.getItem('sf_v1'));
+    var o=(d.ordenes||[]).find(function(x){return x.id===id;});
+    return {ordenes:d.ordenes.length,pap:(d.papelera||[]).length,volvio:!!o,fotos:o?(o.fotos||[]).length:-1,garage:d.garage.filter(function(g){return g.roId===id;}).length};})('${roBorrada}')`);
+  check(rest.volvio && rest.pap === 0 && rest.garage === 1, 'restaurar desde la papelera devuelve la orden y su carro', JSON.stringify(rest));
+  // volver a dejarla borrada para que el resto del suite vea el mismo conteo que antes
+  await page.evaluate(`deleteRO('${roBorrada}','limpieza de prueba')`);
+  await page.waitForTimeout(300);
 
   // ===== Técnicos: usernames automáticos TEC-n + asignación + reloj =====
   const tec = await page.evaluate(`(function(){
