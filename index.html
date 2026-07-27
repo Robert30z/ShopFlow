@@ -1038,6 +1038,77 @@ function checkDraft(){
     clearDraft();
   }
 }
+// ============ CAMPOS A MEDIAS: nada de lo tecleado se pierde ============
+// Caso real (2026-07-27): llenando una cita nueva, salió a WhatsApp a buscar los datos
+// del cliente y al volver el formulario estaba EN BLANCO. Eran dos causas distintas:
+//   1. Al volver a la app corre syncPull() -> rerenderCurrent() -> innerHTML nuevo.
+//      Eso borraba lo tecleado AUNQUE la página nunca se hubiera muerto.
+//   2. iOS mata Safari en segundo plano y recarga la página desde cero.
+// saveDraft solo cubría el wizard de la orden; cualquier otro formulario quedaba a la
+// intemperie. Esto cubre todo campo con id dentro de una página, en los dos casos.
+var FIELDS_KEY='sf_fields';
+// Los buscadores NO se guardan entre sesiones: volver mañana y encontrar un filtro
+// viejo puesto hace que la lista se vea vacía y parezca que se perdieron datos.
+// Los de ajustes tampoco: initAjustes los llena desde DB y un borrador viejo los pisaría.
+function _fieldSkip(id){return !id||/-q$/.test(id)||id.indexOf('set-')===0;}
+function _pageFields(){
+  var v=document.querySelector('.pg.v');if(!v)return [];
+  return [].slice.call(v.querySelectorAll('input[id],textarea[id],select[id]')).filter(function(el){
+    return el.type!=='file'&&el.type!=='checkbox'&&el.type!=='radio';
+  });
+}
+// Foto de lo que hay escrito ahora mismo
+function snapFields(){
+  var out={};
+  try{_pageFields().forEach(function(el){if(el.value)out[el.id]=el.value;});}catch(e){}
+  return out;
+}
+// Devuelve los valores a su sitio (después de que el render creó los campos de nuevo)
+function putFields(vals){
+  if(!vals)return;
+  try{
+    Object.keys(vals).forEach(function(id){
+      var el=document.getElementById(id);
+      if(el&&el.value!==vals[id])el.value=vals[id];
+    });
+  }catch(e){}
+}
+function saveFields(){
+  try{
+    var all=snapFields(),keep={};
+    Object.keys(all).forEach(function(id){if(!_fieldSkip(id))keep[id]=all[id];});
+    if(Object.keys(keep).length)localStorage.setItem(FIELDS_KEY,JSON.stringify({v:keep,ts:Date.now()}));
+  }catch(e){}
+}
+function restoreFields(){
+  try{
+    var s=localStorage.getItem(FIELDS_KEY);if(!s)return;
+    var d=JSON.parse(s);
+    // Un borrador de hace días ya no es "lo que estaba haciendo": se descarta.
+    if(!d||!d.v||!d.ts||Date.now()-d.ts>12*3600*1000){localStorage.removeItem(FIELDS_KEY);return;}
+    // Una fecha YA PASADA nunca es lo que se quiere en un formulario nuevo: al renderizar,
+    // los campos de fecha se re-guardan solos con su valor por defecto, y sin este filtro
+    // el día siguiente la cita abriría con la fecha de ayer puesta.
+    var hoy=localDateStr(),v={};
+    Object.keys(d.v).forEach(function(id){
+      var el=document.getElementById(id);
+      if(el&&el.type==='date'&&d.v[id]<hoy)return;
+      v[id]=d.v[id];
+    });
+    putFields(v);
+  }catch(e){}
+}
+// Al guardar de verdad, el borrador de ESE formulario ya no hace falta
+function clearFields(ids){
+  try{
+    ids.forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+    var s=localStorage.getItem(FIELDS_KEY);if(!s)return;
+    var d=JSON.parse(s);if(!d||!d.v)return;
+    ids.forEach(function(id){delete d.v[id];});
+    if(Object.keys(d.v).length)localStorage.setItem(FIELDS_KEY,JSON.stringify(d));
+    else localStorage.removeItem(FIELDS_KEY);
+  }catch(e){}
+}
 // ============ APARIENCIA: modo oscuro + texto grande ============
 function applyTheme(){
   var t=(DB.settings&&DB.settings.theme)==='dark'?'dark':'light';
@@ -1149,7 +1220,9 @@ function mergeDB(local,remote){
   out.serviceParts=Object.assign({},remote.serviceParts||{},local.serviceParts||{});
   return out;
 }
-function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes}[v.id];if(f)try{f();}catch(e){}}
+// Re-render por sincronización. Guarda lo que el usuario tiene a medias ANTES de
+// reconstruir el HTML y lo devuelve después: la nube ya no le borra lo que escribe.
+function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes}[v.id];if(!f)return;var keep=snapFields();try{f();}catch(e){}putFields(keep);}
 function sbSession(cb){var c=sbReady();if(!c){cb(null);return;}c.auth.getSession().then(function(r){cb(r&&r.data&&r.data.session||null);}).catch(function(){cb(null);});}
 async function syncPull(){
   var c=sbReady();if(!c)return;var sess=(await c.auth.getSession()).data.session;if(!sess){_lastSyncErr='sin sesión';updSyncStatus();return;}var uid=sess.user.id;
@@ -1369,6 +1442,9 @@ function go(p){
   if(p==='ajustes'){initAjustes();}
   if(p==='inventario'){renderInventario();}
   if(p==='citas'){renderCitas();}
+  // Si la app se recargó (iOS la mató en segundo plano) con un formulario a medias,
+  // los campos vuelven llenos al entrar a la página.
+  restoreFields();
 }
 
 // ===== PROTECCIÓN DE DATOS: aviso en el home cuando el trabajo NO está saliendo del equipo =====
@@ -4232,6 +4308,10 @@ function saveCita(){
     servicio:(document.getElementById('ct-s')||{value:''}).value.trim(),
     direccion:(document.getElementById('ct-d')||{value:''}).value.trim(),
     estado:'agendada',creado:new Date().toISOString()});
+  // La cita ya está en DB: el borrador de estos campos cumplió y se retira. La fecha y la
+  // hora van incluidas a propósito — si se quedaran guardadas, mañana el formulario abriría
+  // con la fecha de la cita vieja en vez de hoy y se agendaría en el día equivocado.
+  clearFields(['ct-n','ct-t','ct-v','ct-s','ct-d','ct-f','ct-h']);
   saveDB();renderCitas();
 }
 function citaEstado(id,st){var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;c.estado=st;saveDB();renderCitas();}
@@ -5141,15 +5221,16 @@ demoBanner();
 // Safari al bloquear/cambiar de app) y cada 5s como red de seguridad. checkDraft
 // ofrece recuperar una orden que quedó sin guardar la última vez.
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='hidden'){saveDraft();}
+  if(document.visibilityState==='hidden'){saveDraft();saveFields();}
   else if(_syncOn){ // al volver a la app (iOS suspende la conexión en segundo plano): baja lo nuevo y reconecta
     syncPull().catch(function(){});subscribeRealtime();
   }
 });
-window.addEventListener('pagehide',saveDraft);
+window.addEventListener('pagehide',function(){saveDraft();saveFields();});
 window.addEventListener('online',function(){if(_syncOn){syncPull().catch(function(){});subscribeRealtime();}});
-setInterval(saveDraft,5000);
+setInterval(function(){saveDraft();saveFields();},5000);
 setTimeout(checkDraft,1400);
+setTimeout(restoreFields,1500);
 
 // Sincronización multi-dispositivo: reanuda sesión y baja datos al abrir.
 try{syncBoot();}catch(e){}
