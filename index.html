@@ -3365,14 +3365,20 @@ function openRODetail(roId){
   var reds=[];var ambers=[];
   IZ.forEach(function(z){z.items.forEach(function(it){if((o.insp||{})[it.id]==='rojo')reds.push(it.l);if((o.insp||{})[it.id]==='amarillo')ambers.push(it.l);});});
   var denConf=(o.denegados||[]).filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
-  var sub=(o.servicios||[]).reduce(function(s,sv){return s+((sv.ep||sv.precio||0)*(sv.qty||1));},0);
-  var ivu=sub*0.115;
   // Gather all parts + labor for this RO's services (new per-job structure)
   var rate=DB.settings.laborRate||103;
   var allParts=[];var laborTotal=0;
   (o.servicios||[]).forEach(function(sv){(sv.parts||[]).forEach(function(p){allParts.push(p);});laborTotal+=(sv.laborHours||0)*rate;});
   var partsCost=allParts.reduce(function(s,p){return s+p.cost*p.qty;},0);
   var partsSell=allParts.reduce(function(s,p){return s+p.sellPrice*p.qty;},0);
+  // El subtotal y el IVU tienen que salir de la MISMA base que cobró calcEst() y que
+  // imprime el PDF: servicios + mano de obra + piezas, menos el descuento. Antes esta
+  // pantalla sumaba solo los servicios, así que en cualquier orden con labor o piezas
+  // el "Subtotal" y el "IVU" salían por debajo y no cuadraban con el Total de al lado.
+  var svcOnly=(o.servicios||[]).reduce(function(s,sv){return s+((sv.ep||sv.precio||0)*(sv.qty||1));},0);
+  var sub=svcOnly+laborTotal+partsSell;
+  var descAmt=o.cortesia?0:(o.descValor||0);
+  var ivu=o.cortesia?0:(sub-descAmt)*0.115;
 
   var html='<div style="padding:14px 16px">';
   // Status banner
