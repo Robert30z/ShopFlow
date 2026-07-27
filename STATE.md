@@ -2,7 +2,48 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-26 (batch 12: FUNDACION DE INTEGRIDAD + cobrar y cerrar)
+## Last updated: 2026-07-27 (batch 14: auditoria parte 2 - dinero entre pantallas + candado usable)
+
+## 2026-07-27 (batch 14): AUDITORIA PARTE 2 - 5 bugs nuevos (SW v13, 290 pruebas verdes, live==repo)
+Continuacion de la auditoria de la manana. Metodo: sonda en navegador contra la app REAL (no
+repasar lo ya arreglado). Los 5 salieron de dos ejes del estandar: **que los numeros cuadren entre
+superficies** y **datos en vuelo**.
+
+1. **El P&L no cuadraba con el CSV del contable.** `renderPL` era la UNICA superficie que contaba
+   las ordenes ABIERTAS (el CSV, el reporte semanal, Equipo, el home y la linea de IVU si las
+   excluyen). Medido: una orden abierta de $557.50 => "Ingresos brutos" $1,115.00 vs CSV $557.50, y
+   la linea "de esto, IVU cobrado" justo debajo contradecia al numero de encima **en la misma
+   tarjeta**. Arrastraba tambien margen, ticket promedio, conteo de ordenes y costo de piezas.
+   Fix de clase: `esContable(o)` decide en un sitio.
+2. **El "Por cobrar" del home cobraba de mas.** Sumaba el TOTAL de las pendientes ignorando los
+   abonos. Cliente que abono $200 de $446: home $446, Cierre de hoy $246, detalle $246. Fix de
+   clase: `balanceRO(o)` + `porCobrarTotal(lista)`, usados por home, Equipo, reporte semanal,
+   flotas y el detalle. **Raiz: no existia UNA definicion de "lo que deben"; cada pantalla la
+   reimplementaba.**
+3. **El candado paralizaba la venta.** Con la factura sellada, "Cliente aprobo - mover a servicios"
+   (el upsell de los denegados) mutaba la orden, el guard rechazaba y salia *"GUARDADO BLOQUEADO -
+   se detecto una perdida de datos"*: aviso FALSO (no se perdio nada) y sin salida. Fix:
+   `conFacturaEditable(roId,queHace,fn)` ofrece reabrir en el sitio (version congelada + motivo en
+   bitacora) y sigue; `reabrirOrden` acepta `{motivo,callado}`. Ademas reabrir ya lleva a algun
+   sitio: boton **"Corregir la orden en el asistente"** en toda orden no sellada (antes reabrir una
+   pagada quitaba el sello y te dejaba mirando la misma pantalla).
+4. **El candado casi nunca se enganchaba.** De los 4 caminos a PAGADO solo sellaban `markPaid` y
+   `cobrarYCerrar`. El PRINCIPAL - terminar el asistente con estado Pagado - NO sellaba, ni
+   `registrarAbono` al saldar. O sea: la proteccion legal del batch 12 no cubria el uso normal.
+   Ahora sellan los cuatro.
+5. **Los campos a medias de los MODALES seguian a la intemperie.** El arreglo de la manana cubre
+   `.pg.v`; los dos formularios mas largos de la app (piezas de la orden - 8 campos - e inventario
+   - 11) son modales fuera de `.pg`. Medido: 19 campos sin red. Escribir una pieza en el mostrador
+   del suplidor + iOS mata Safari = todo en blanco. Fix: borrador de modal **con contexto**
+   (`pp:ro:<orden>:<svcIdx>`, `pp:cat:<svcId>`, `inv:<id|nuevo>`) que solo se repone si se abre el
+   MISMO formulario - reponer una pieza en el servicio equivocado seria peor que perderla. El
+   contexto lo declara quien abre el modal (`abrirModalCtx`), no se adivina mirando overlays.
+
+**Pruebas nuevas:** `test/dinero-cuadra.js` (10), `test/factura-editable.js` (19),
+`test/campos-modal.js` (9) - incluye un check que falla si aparece cualquier campo de formulario
+fuera de la red. **Suite: 15 archivos, 290 verdes, 0 fallos**, local y contra el sitio en vivo.
+
+## Last updated antes: 2026-07-26 (batch 12: FUNDACION DE INTEGRIDAD + cobrar y cerrar)
 
 ## 2026-07-26 (batch 12): FUNDACION DE INTEGRIDAD - "no puedo perder info de un cliente"
 Roberto: *"me estoy arriesgando a una demanda... realiza una inspeccion bien carbona, compara con otras
