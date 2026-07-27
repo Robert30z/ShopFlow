@@ -600,10 +600,12 @@ function sellarAhora(roId){
   return true;
 }
 // Reabrir para corregir: pide motivo, congela la versión cerrada y la guarda para siempre.
-function reabrirOrden(roId){
+function reabrirOrden(roId,opts){
+  opts=opts||{};
   var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return false;
-  if(!facturaSellada(o)){alert('Esta orden no está cerrada — la puedes editar directamente.');return false;}
-  var m=prompt('Reabrir la factura '+roId+' para corregirla.\n\n¿Por qué? — queda escrito en la bitácora y la\nversión actual se guarda tal como está, sin borrarse.','error en el total');
+  if(!facturaSellada(o)){if(!opts.callado)alert('Esta orden no está cerrada — la puedes editar directamente.');return false;}
+  var m=opts.motivo!==undefined?opts.motivo
+        :prompt('Reabrir la factura '+roId+' para corregirla.\n\n¿Por qué? — queda escrito en la bitácora y la\nversión actual se guarda tal como está, sin borrarse.','error en el total');
   if(m===null)return false;
   var congelada;
   try{congelada=JSON.parse(JSON.stringify(o));}catch(e){alert('No pude congelar la versión actual — no reabrí nada.');return false;}
@@ -614,10 +616,40 @@ function reabrirOrden(roId){
   delete o._cerrada;
   bita('factura-reabierta',roId,'motivo: '+((m||'').trim()||'(sin motivo)')+' · se guardó la versión de $'+((congelada.total||0).toFixed(2)));
   if(!saveDB())return false;
+  if(opts.callado)return true;
   alert('Factura reabierta.\n\nLa versión cerrada quedó guardada (v'+o._versiones.length+'). Corrige lo que\nnecesites y vuelve a darle "cobrar y cerrar" para sellarla otra vez.');
   openRODetail(roId);
   return true;
 }
+/* ---- EDITAR ALGO QUE YA ESTÁ SELLADO ----
+   El candado protege la factura, pero hay cambios legítimos: el caso real es el cliente que
+   DESPUÉS aprueba un trabajo que había denegado (las gomas). Antes ese botón mutaba la orden,
+   el guard rechazaba el guardado y salía "🛑 GUARDADO BLOQUEADO — se detectó una pérdida de
+   datos" — un aviso falso (no se perdió nada) y sin salida: el upsell quedaba imposible.
+   Ahora toda acción que toque el contenido facturable entra por aquí: si está sellada, se
+   ofrece reabrirla en el sitio (versión congelada + motivo en la bitácora) y se sigue. */
+function conFacturaEditable(roId,queHace,fn){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return false;
+  if(facturaSellada(o)){
+    if(!confirm('La factura '+roId+' está CERRADA Y SELLADA.\n\nPara '+queHace+' hay que reabrirla.\nLa versión cerrada se guarda completa y queda escrito el motivo.\n\n¿Reabrir y seguir?'))return false;
+    if(!reabrirOrden(roId,{motivo:queHace,callado:true}))return false;
+  }
+  return fn(o)!==false;
+}
+/* ---- LO QUE UNA ORDEN VALE Y LO QUE TODAVÍA DEBEN (definido UNA sola vez) ----
+   Cada pantalla calculaba el balance a su manera y por eso no cuadraban entre sí: el home
+   sumaba el TOTAL de las pendientes (ignorando los abonos) mientras el detalle de la orden
+   y "Cierre de hoy" sí restaban lo abonado. Con un cliente que abonó $200, el home decía
+   $446 por cobrar y la otra pantalla $246. Un solo sitio, un solo número. */
+function balanceRO(o){return Math.max(0,((o&&o.total)||0)-((o&&o.abonado)||0));}
+function porCobrarTotal(lista){
+  return (lista||DB.ordenes||[]).filter(function(o){return o.estado==='pendiente';})
+    .reduce(function(s,o){return s+balanceRO(o);},0);
+}
+/* Una orden ABIERTA es trabajo que todavía no es dinero: no cuenta en ventas, ni en IVU, ni
+   en el CSV del contable. Se decide aquí para que ninguna pantalla se quede fuera del acuerdo
+   (el P&L contaba las abiertas y por eso no cuadraba con el CSV que él le manda al contable). */
+function esContable(o){return !!o&&o.estado!=='abierta';}
 function censo(db){
   db=db||DB;
   var ids={},fp={},firmas=0,fotosAct=0;
@@ -1066,6 +1098,25 @@ function _pageFields(){
     return el.type!=='file'&&el.type!=='checkbox'&&el.type!=='radio';
   });
 }
+/* Los dos formularios más largos de la app NO viven dentro de una página: el de piezas
+   (nombre, # parte, suplidor, costo, cantidad, venta, recibo, fecha) y el de inventario son
+   modales al final del body. `_pageFields` solo mira dentro de `.pg.v`, así que el arreglo del
+   27-jul los dejó fuera: escribir una pieza parado en el mostrador, salir a WhatsApp, y volver
+   con todo en blanco. Se guardan aparte y CON CONTEXTO — reponer una pieza a medias en el
+   servicio equivocado sería peor que perderla. */
+// El contexto lo declara el que ABRE el modal (que es quien lo sabe), no se adivina mirando
+// qué overlay está visible: adivinar falla en cuanto haya dos modales abiertos a la vez.
+var _modalCtxActual=null;
+function _modalCtx(){return _modalCtxActual;}
+function abrirModalCtx(ctx){_modalCtxActual=ctx;restoreModalFields(ctx);}
+function _modalFields(ctx){
+  var host=document.getElementById(ctx&&ctx.indexOf('inv:')===0?'inv-modal':'parts-modal');
+  if(!host)return [];
+  return [].slice.call(host.querySelectorAll('input[id],textarea[id],select[id]')).filter(function(el){
+    return el.type!=='file'&&el.type!=='checkbox'&&el.type!=='radio';
+  });
+}
+var _modalDraft=null;  // lo que quedó a medias en un modal, esperando que se abra el mismo
 // Foto de lo que hay escrito ahora mismo
 function snapFields(){
   var out={};
@@ -1086,7 +1137,37 @@ function saveFields(){
   try{
     var all=snapFields(),keep={};
     Object.keys(all).forEach(function(id){if(!_fieldSkip(id))keep[id]=all[id];});
-    if(Object.keys(keep).length)localStorage.setItem(FIELDS_KEY,JSON.stringify({v:keep,ts:Date.now()}));
+    var m=null,ctx=_modalCtx();
+    if(ctx){
+      var mv={};
+      _modalFields(ctx).forEach(function(el){if(el.value)mv[el.id]=el.value;});
+      if(Object.keys(mv).length)m={ctx:ctx,v:mv};
+    }
+    // Un borrador de modal que todavía no se ha repuesto sobrevive a los autoguardados de la
+    // página: si no, el setInterval lo borraba del disco antes de que él volviera a abrirlo.
+    if(!m&&_modalDraft)m=_modalDraft;
+    if(Object.keys(keep).length||m)localStorage.setItem(FIELDS_KEY,JSON.stringify({v:keep,m:m,ts:Date.now()}));
+  }catch(e){}
+}
+// Repone un formulario de modal SOLO si se vuelve a abrir el mismo (misma orden, mismo
+// servicio, misma pieza). Si no coincide, el borrador se queda quieto: nunca se mete una
+// pieza a medias en el servicio de otro cliente.
+function restoreModalFields(ctx){
+  try{
+    if(!_modalDraft||_modalDraft.ctx!==ctx)return;
+    putFields(_modalDraft.v);
+    if(typeof calcPartProfit==='function'&&ctx.indexOf('pp:')===0)calcPartProfit();
+    if(typeof calcInvMargin==='function'&&ctx.indexOf('inv:')===0)calcInvMargin();
+  }catch(e){}
+}
+function clearModalFields(){
+  _modalDraft=null;
+  try{
+    var s=localStorage.getItem(FIELDS_KEY);if(!s)return;
+    var d=JSON.parse(s);if(!d||!d.m)return;
+    d.m=null;
+    if(d.v&&Object.keys(d.v).length)localStorage.setItem(FIELDS_KEY,JSON.stringify(d));
+    else localStorage.removeItem(FIELDS_KEY);
   }catch(e){}
 }
 function restoreFields(){
@@ -1094,7 +1175,9 @@ function restoreFields(){
     var s=localStorage.getItem(FIELDS_KEY);if(!s)return;
     var d=JSON.parse(s);
     // Un borrador de hace días ya no es "lo que estaba haciendo": se descarta.
-    if(!d||!d.v||!d.ts||Date.now()-d.ts>12*3600*1000){localStorage.removeItem(FIELDS_KEY);return;}
+    if(!d||!d.ts||Date.now()-d.ts>12*3600*1000){localStorage.removeItem(FIELDS_KEY);return;}
+    _modalDraft=d.m||null;   // espera a que se abra el MISMO modal (ver restoreModalFields)
+    if(!d.v)return;
     // Una fecha YA PASADA nunca es lo que se quiere en un formulario nuevo: al renderizar,
     // los campos de fecha se re-guardan solos con su valor por defecto, y sin este filtro
     // el día siguiente la cita abriría con la fecha de ayer puesta.
@@ -1114,7 +1197,8 @@ function clearFields(ids){
     var s=localStorage.getItem(FIELDS_KEY);if(!s)return;
     var d=JSON.parse(s);if(!d||!d.v)return;
     ids.forEach(function(id){delete d.v[id];});
-    if(Object.keys(d.v).length)localStorage.setItem(FIELDS_KEY,JSON.stringify(d));
+    // Ojo: guardar una cita no puede llevarse por delante una pieza a medias que espera en `m`.
+    if(Object.keys(d.v).length||d.m)localStorage.setItem(FIELDS_KEY,JSON.stringify(d));
     else localStorage.removeItem(FIELDS_KEY);
   }catch(e){}
 }
@@ -1533,7 +1617,7 @@ function renderHome(){
   var to=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;});
   var hoy=to.reduce(function(s,o){return s+(o.estado==='abierta'?0:(o.total||0));},0);
   var active=DB.garage.filter(function(c){return c.estado!=='entregado';}).length;
-  var pend=DB.ordenes.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+(o.total||0);},0);
+  var pend=porCobrarTotal();   // balance real: el total MENOS lo que ya abonó
   document.getElementById('h-hoy').textContent='$'+hoy.toFixed(0);
   document.getElementById('h-taller').textContent=active;
   document.getElementById('h-cobrar').textContent='$'+pend.toFixed(0);
@@ -2284,6 +2368,14 @@ function saveRO(){
   if(sel)RO.estado=sel.value;else if(RO.estado==='abierta')RO.estado='pagado';
   if(RO.cortesia){RO.estado='pagado';RO.pago='Cortesía';}
   upsertRO();
+  // El candado tiene que engancharse en el camino PRINCIPAL, no solo en "cobrar y cerrar" y
+  // "marcar pagado": la mayoría de sus órdenes se cierran aquí mismo, al final del asistente.
+  // Antes salían PAGADAS pero SIN SELLAR, o sea sin la protección legal del batch 12.
+  // (Se sella la copia guardada en DB, no el RO en memoria.)
+  if(RO.estado==='pagado'){
+    var _gRO=DB.ordenes.find(function(x){return x.id===RO.id;});
+    if(_gRO&&!facturaSellada(_gRO))sellarFactura(_gRO);
+  }
   autoSaveCli();
   if(!DB.garage.find(function(g){return g.roId===RO.id;})){
     DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
@@ -2548,7 +2640,7 @@ function reporteSemana(){
   var ingresos=ords.reduce(function(s,o){return s+(o.total||0);},0);
   var cobrado=0,porCobrar=0;
   ords.forEach(function(o){var ab=o.estado==='pagado'?(o.total||0):(o.abonado||0);cobrado+=ab;porCobrar+=Math.max(0,(o.total||0)-ab);});
-  var pendTotal=(DB.ordenes||[]).filter(function(o){return o.estado!=='abierta'&&o.estado!=='pagado';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  var pendTotal=porCobrarTotal();
   var ticket=carros?ingresos/carros:0;
   var freq={};ords.forEach(function(o){(o.servicios||[]).forEach(function(sv){var n=sv.n||sv.nombre||'—';freq[n]=(freq[n]||0)+1;});});
   var top=Object.keys(freq).map(function(k){return{n:k,c:freq[k]};}).sort(function(x,y){return y.c-x.c;}).slice(0,3);
@@ -2736,7 +2828,7 @@ function flotaStats(emp){
   cls.forEach(function(c){(c.vehiculos||[]).forEach(function(v){tags[v.tag||v.desc]=1;});});
   ords.forEach(function(o){if(o.vehiculo&&(o.vehiculo.tag||o.vehiculo.model))tags[o.vehiculo.tag||((o.vehiculo.year||'')+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim()]=1;});
   var fact=ords.reduce(function(s,o){return s+(o.total||0);},0);
-  var pend=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  var pend=porCobrarTotal(ords);
   return {ords:ords,clientes:cls,vehiculos:Object.keys(tags).length,facturado:fact,pendiente:pend};
 }
 function flotasHTML(q){
@@ -2757,10 +2849,10 @@ function buildFlotaStmt(emp,ym){
     var svcs=(o.servicios||[]).map(function(s){return s.n||s.nombre;}).join(', ');
     var tot=o.total||0;fact+=tot;
     var abo=o.abonado||0;
-    if(o.estado==='pagado')pagado+=tot;else{pagado+=abo;pendMes+=Math.max(0,tot-abo);}
+    if(o.estado==='pagado')pagado+=tot;else{pagado+=abo;pendMes+=balanceRO(o);}
     rows.push({fecha:d.toLocaleDateString('es-PR'),id:o.id,cliente:o.cliente,veh:veh,svcs:svcs,total:tot,estado:o.estado,cortesia:!!o.cortesia});
   });
-  var pendTotal=DB.ordenes.filter(function(o){return o.empresa===emp&&o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  var pendTotal=porCobrarTotal(DB.ordenes.filter(function(o){return o.empresa===emp;}));
   return {rows:rows,facturado:fact,pagado:pagado,pendMes:pendMes,pendTotal:pendTotal};
 }
 function flotaPDF(emp){
@@ -2869,7 +2961,11 @@ function finTab(id){document.querySelectorAll('#finanzas .tp').forEach(function(
 function renderPL(){
   var now=new Date();var m=now.getMonth();var a=now.getFullYear();
   var rate=DB.settings.laborRate||103;
-  var ords=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d.getMonth()===m&&d.getFullYear()===a;});
+  // Las ABIERTAS quedan fuera igual que en el CSV del contable, en el reporte de la semana y en
+  // Equipo. Antes entraban SOLO aquí: una orden abierta de $557 inflaba "Ingresos brutos" del mes
+  // mientras el CSV que va para el contable no la traía, y la línea de IVU de este mismo bloque
+  // (que sí las excluía) contradecía al número de arriba.
+  var ords=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d.getMonth()===m&&d.getFullYear()===a&&esContable(o);});
   var gas=DB.gastos.filter(function(g){var d=dDia(g.fecha);return d.getMonth()===m&&d.getFullYear()===a;});
   var ing=ords.reduce(function(s,o){return s+(o.total||0);},0);
   var gastos=gas.reduce(function(s,g){return s+g.monto;},0);
@@ -2884,12 +2980,12 @@ function renderPL(){
   var ganBruta=ing-partsCost;
   var neta=ganBruta-gastos;
   // IVU cobrado este mes (11.5% incluido en cada total) — para la planilla
-  var ivuMes=ords.reduce(function(s,o){return o.estado==='abierta'?s:s+((o.total||0)-(o.total||0)/1.115);},0);
+  var ivuMes=ords.reduce(function(s,o){return s+((o.total||0)-(o.total||0)/1.115);},0);
   // Resumen por técnico del mes
   var tecCard='';
   if((DB.tecnicos||[]).length){
     tecCard='<div class="card" style="margin-top:10px"><div class="ch"><i class="ti ti-users"></i> Técnicos — '+MESES[m]+'</div><div class="cb">'+DB.tecnicos.map(function(t){
-      var tor=ords.filter(function(o){return o.tecnico===t.id&&o.estado!=='abierta';});
+      var tor=ords.filter(function(o){return o.tecnico===t.id;});
       var ting=tor.reduce(function(s,o){return s+(o.total||0);},0);
       var tsecs=0;ords.forEach(function(o){(o.relojLog||[]).forEach(function(r){if(r.tec===t.id)tsecs+=(r.secs||0);});});
       var com=t.com?(ting/1.115)*t.com/100:0;
@@ -3056,6 +3152,7 @@ function openPartsModalRO(svcIdx){
   calcPartProfit();
   renderPartsListRO();
   document.getElementById('parts-modal').style.display='block';
+  abrirModalCtx('pp:ro:'+((RO&&RO.id)||'')+':'+svcIdx);
 }
 function renderPartsListRO(){
   var svc=RO.servicios[currentROPartIdx];
@@ -3159,8 +3256,10 @@ function openPartsModal(svcId,svcName){
   calcPartProfit();
   renderPartsList();
   document.getElementById('parts-modal').style.display='block';
+  abrirModalCtx('pp:cat:'+svcId);
 }
 function closePartsModal(){
+  clearModalFields();_modalCtxActual=null;
   document.getElementById('parts-modal').style.display='none';
   var menuEl=document.getElementById('menu');
   if(menuEl&&menuEl.classList.contains('v')){partsContext='menu';renderMenuSvcs();}
@@ -3224,6 +3323,7 @@ function savePart(){
   // Clear form
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
+  clearModalFields();
   calcPartProfit();
   renderPartsList();
 }
@@ -3250,6 +3350,7 @@ function savePartRO(){
   _editPartIdx=-1;setPartBtnLabel();
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
+  clearModalFields();   // la pieza ya está guardada en la orden: el borrador sobra
   calcPartProfit();
   renderPartsListRO();
 }
@@ -3548,8 +3649,13 @@ function openRODetail(roId){
     html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px;background:var(--blue);color:#fff;border-color:var(--blue)"><i class="ti ti-player-play"></i> Seguir editando la orden</button>';
     html+='<button class="btn full" onclick="printWorkOrder(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-printer"></i> Imprimir orden de trabajo</button>';
   }
+  // Reabrir una factura tiene que llevar a algún sitio: sin esto, "Reabrir para corregir" quitaba
+  // el sello y dejaba al usuario mirando la misma pantalla sin forma de corregir nada.
+  if(o.estado!=='abierta'&&!facturaSellada(o)){
+    html+='<button class="btn full" onclick="continueRO(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-edit"></i> Corregir la orden en el asistente</button>';
+  }
   if(o.estado==='pendiente'){
-    var _ab=o.abonado||0, _bal=Math.max(0,(o.total||0)-_ab);
+    var _ab=o.abonado||0, _bal=balanceRO(o);
     if(_ab>0)html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:8px 11px;margin-bottom:8px;font-size:13px;display:flex;justify-content:space-between"><span>Abonado: <b>$'+_ab.toFixed(2)+'</b></span><span style="color:var(--red)">Balance: <b>$'+_bal.toFixed(2)+'</b></span></div>';
     html+='<button class="btn full" onclick="markPaid(\''+o.id+'\')" style="margin-bottom:8px;background:var(--green);color:#fff;border-color:var(--green)"><i class="ti ti-cash"></i> Marcar PAGADO — $'+_bal.toFixed(2)+'</button>';
     html+='<button class="btn full" onclick="registrarAbono(\''+o.id+'\')" style="margin-bottom:8px"><i class="ti ti-plus"></i> Registrar abono (pago parcial)</button>';
@@ -3580,9 +3686,18 @@ function registrarAbono(roId){
   var v=prompt('Balance pendiente: $'+bal.toFixed(2)+'\n¿Cuánto abonó el cliente ahora? ($)');
   if(v===null)return;
   var amt=parseFloat(v);if(isNaN(amt)||amt<=0){alert('Monto inválido.');return;}
-  o.abonado=Math.round(((o.abonado||0)+amt)*100)/100;
-  if(o.abonado>=(o.total||0)-0.01){o.estado='pagado';o.pagadoFecha=new Date().toISOString();alert('Balance saldado — orden PAGADA ✓');}
-  saveDB();openRODetail(roId);
+  conFacturaEditable(roId,'registrar un abono de $'+amt.toFixed(2),function(o){
+    o.abonado=Math.round(((o.abonado||0)+amt)*100)/100;
+    var saldada=o.abonado>=(o.total||0)-0.01;
+    if(saldada){
+      o.estado='pagado';o.pagadoFecha=new Date().toISOString();
+      sellarFactura(o);   // saldada = cobrada del todo = factura sellada, igual que markPaid
+    }
+    bita('abono',roId,'+$'+amt.toFixed(2)+' · abonado $'+o.abonado.toFixed(2)+' de $'+((o.total||0).toFixed(2))+(saldada?' · SALDADA y SELLADA':''));
+    if(!saveDB())return false;
+    if(saldada)alert('Balance saldado — orden PAGADA ✓\n\nLa factura quedó sellada.');
+    openRODetail(roId);
+  });
 }
 /* COBRAR Y CERRAR — para la orden que quedó ABIERTA cuando el carro entró y ya terminaste el
    trabajo. Antes la única salida era reabrir el wizard de 9 pasos, así que las órdenes se quedaban
@@ -4231,6 +4346,7 @@ function openAddInv(){
   document.getElementById('inv-modal-title').textContent='Agregar pieza';
   document.getElementById('inv-delete-btn').style.display='none';
   document.getElementById('inv-modal').style.display='flex';
+  abrirModalCtx('inv:nuevo');
 }
 function editInvItem(id){
   var it=DB.inventario.find(function(x){return x.id===id;});if(!it)return;
@@ -4249,6 +4365,7 @@ function editInvItem(id){
   document.getElementById('inv-modal-title').textContent='Editar pieza';
   document.getElementById('inv-delete-btn').style.display='block';
   document.getElementById('inv-modal').style.display='flex';
+  abrirModalCtx('inv:'+id);
 }
 function saveInvItem(){
   var name=document.getElementById('inv-fn').value.trim();
@@ -4272,7 +4389,7 @@ function saveInvItem(){
     item.id='INV-'+Date.now();
     DB.inventario.push(item);
   }
-  saveDB();closeInvModal();renderInventario();
+  saveDB();clearModalFields();closeInvModal();renderInventario();
 }
 function deleteInvItem(){
   if(!_invEditId)return;
@@ -4280,7 +4397,7 @@ function deleteInvItem(){
   DB.inventario=DB.inventario.filter(function(x){return x.id!==_invEditId;});
   saveDB();closeInvModal();renderInventario();
 }
-function closeInvModal(){document.getElementById('inv-modal').style.display='none';_invEditId=null;}
+function closeInvModal(){clearModalFields();_modalCtxActual=null;document.getElementById('inv-modal').style.display='none';_invEditId=null;}
 function autoInvMarkup(force){
   var costEl=document.getElementById('inv-cost');
   var priceEl=document.getElementById('inv-price');
@@ -4931,7 +5048,7 @@ function buildEquipoStats(){
   var h0=new Date();h0=new Date(h0.getFullYear(),h0.getMonth(),h0.getDate());var h1=new Date(h0.getFullYear(),h0.getMonth(),h0.getDate()+1);
   var oHoy=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d>=h0&&d<h1&&o.estado!=='abierta';});
   var cobrado=DB.ordenes.filter(function(o){if(o.estado!=='pagado')return false;var d=new Date(o.pagadoFecha||o.fecha);return d>=h0&&d<h1;}).reduce(function(s,o){return s+(o.total||0);},0);
-  var pend=DB.ordenes.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
+  var pend=porCobrarTotal();
   // $ por hora del período (métrica Tekmetric): ventas sin IVU y ganancia (sin costo de piezas) ÷ horas facturadas
   var pHoras=0,pSub=0,pPartsCost=0;
   ords.forEach(function(o){
@@ -5050,12 +5167,16 @@ function apruebaDen(roId,di){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var d=(o.denegados||[])[di];if(!d)return;
   if(!confirm('¿El cliente aprobó "'+d.nombre+'" ($'+(d.precio||0).toFixed(2)+')?\n\nSe mueve a servicios y el total se recalcula.'))return;
-  if(o.estado==='pagado'){o.abonado=o.total||0;o.estado='pendiente';} // ya pagó el total viejo — queda como abono del nuevo
-  o.denegados.splice(di,1);
-  o.servicios=o.servicios||[];
-  o.servicios.push({id:'den-'+Date.now(),uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:d.nombre,p:d.precio||0,ep:d.precio||0,qty:1,parts:[],laborHours:0});
-  recalcROTotal(o);
-  saveDB();openRODetail(roId);
+  conFacturaEditable(roId,'mover “'+d.nombre+'” a servicios',function(o){
+    if(o.estado==='pagado'){o.abonado=o.total||0;o.estado='pendiente';} // ya pagó el total viejo — queda como abono del nuevo
+    o.denegados.splice(di,1);
+    o.servicios=o.servicios||[];
+    o.servicios.push({id:'den-'+Date.now(),uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:d.nombre,p:d.precio||0,ep:d.precio||0,qty:1,parts:[],laborHours:0});
+    recalcROTotal(o);
+    bita('denegado-aprobado',roId,d.nombre+' · $'+((d.precio||0).toFixed(2))+' → total $'+((o.total||0).toFixed(2)));
+    if(!saveDB())return false;
+    openRODetail(roId);
+  });
 }
 
 // ============ CONTABLE: IVU + export CSV ============
