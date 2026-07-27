@@ -789,7 +789,16 @@ function saveDB(opts){
     return true;
   }
   catch(e){
-    alert('⚠️ ALMACENAMIENTO LLENO — LOS DATOS NO SE GUARDARON.\n\nExporta un respaldo en Ajustes AHORA y elimina órdenes viejas con muchas fotos para liberar espacio.');
+    // El disco de este equipo se llenó. Antes, como scheduleCloudBackup y scheduleSyncPush
+    // vivían DENTRO del try después del setItem, esta excepción los saltaba: fallaba el disco
+    // Y la nube a la vez, justo cuando el trabajo solo existe en memoria. Ahora se intenta
+    // sacar la copia fuera del equipo de todas formas — la nube no tiene el límite del iPad.
+    var fuera=false;
+    try{scheduleSyncPush();scheduleCloudBackup();fuera=true;}catch(e2){}
+    alert('⚠️ ALMACENAMIENTO LLENO — NO SE PUDO GUARDAR EN ESTE EQUIPO.\n\n'+
+          (fuera?'Estoy intentando subirlo a la nube ahora mismo. NO cierres la app hasta que el aviso del home esté en verde.'
+                :'Y tampoco se pudo sacar a la nube.')+
+          '\n\nExporta un respaldo en Ajustes AHORA y borra órdenes viejas con muchas fotos para liberar espacio.');
     return false;
   }
 }
@@ -2922,8 +2931,48 @@ function markSP(id){var o=DB.ordenesS.find(function(x){return x.id===id;});if(o)
 function renderInv(){var el=document.getElementById('f-inv');if(!el)return;el.innerHTML='<div style="padding:14px 16px"><button class="btn p full" onclick="addInvItem()" style="margin-bottom:12px"><i class="ti ti-plus"></i> Agregar pieza al inventario</button>'+(DB.inventario.length?DB.inventario.map(function(it,i){var low=it.qty<=it.min;var m=it.precio>0?((it.precio-it.costo)/it.precio*100):100;return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--white);border-bottom:1px solid var(--gray-100)"><div style="flex:1"><div style="font-size:12px;font-weight:700;color:'+(low?'var(--red)':'var(--gray-900)')+'">'+it.nombre+'</div><div style="font-size:10px;color:var(--gray-400)">'+it.cat+(it.loc?' · '+it.loc:'')+'</div><div style="font-size:10px;margin-top:2px">$'+it.costo+' → $'+it.precio+' · <strong style="color:var(--green)">'+m.toFixed(0)+'%</strong></div></div><div style="text-align:center;margin:0 10px"><div style="font-size:18px;font-weight:700;color:'+(low?'var(--red)':'var(--green)')+'">'+it.qty+'</div><div style="font-size:9px;color:var(--gray-400)">min '+it.min+'</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn sm g" onclick="adjI(\''+it.id+'\',1)" style="padding:5px 8px"><i class="ti ti-plus"></i></button><button class="btn sm" onclick="adjI(\''+it.id+'\',-1)" style="padding:5px 8px"><i class="ti ti-minus"></i></button></div></div>';}).join(''):'<div style="text-align:center;padding:24px;font-size:13px;color:var(--gray-400)">Sin inventario.</div>')+'</div>';}
 function addInvItem(){var n=prompt('Nombre de la pieza:');if(!n)return;var cat=prompt('Categoría:');var c=parseFloat(prompt('Costo unitario ($):')||0)||0;var p=parseFloat(prompt('Precio venta ($):')||(c*1.7))||c*1.7;var q=parseInt(prompt('Cantidad:')||0)||0;var min=parseInt(prompt('Mínimo alerta:')||2)||2;var loc=prompt('Ubicación:');DB.inventario.push({id:'INV-'+Date.now(),nombre:n,cat:cat||'Otro',costo:c,precio:p,qty:q,min:min,loc:loc||''});saveDB();renderInv();}
 function adjI(id,d){var it=DB.inventario.find(function(x){return x.id===id;});if(!it)return;it.qty=Math.max(0,it.qty+d);saveDB();renderInv();}
-function renderGas(){var now=new Date();var m=now.getMonth();var a=now.getFullYear();var mes=DB.gastos.filter(function(g){var d=dDia(g.fecha);return d.getMonth()===m&&d.getFullYear()===a;});var tot=mes.reduce(function(s,g){return s+g.monto;},0);var el=document.getElementById('f-gas');if(!el)return;el.innerHTML='<div style="padding:14px 16px"><div class="card"><div class="ch">Registrar gasto</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Descripción</div><input id="gd" placeholder="Gasolina guagua..."></div><div class="fg"><div class="fl">Categoría</div><select id="gc"><option>Gasolina</option><option>Herramientas</option><option>Equipo</option><option>Seguro</option><option>Teléfono</option><option>Marketing</option><option>Consumibles</option><option>Otro</option></select></div></div><div class="fr"><div class="fg"><div class="fl">Monto ($)</div><input id="gm" type="number" step="0.01" placeholder="0.00"></div><div class="fg"><div class="fl">Fecha</div><input id="gf" type="date" value="'+localDateStr(now)+'"></div></div><button class="btn p full" onclick="saveG()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar</button></div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="st" style="margin:0">'+MESES[m]+' '+a+'</div><span style="font-size:16px;font-weight:700;color:var(--red)">$'+tot.toFixed(2)+'</span></div>'+(mes.length?mes.slice().reverse().map(function(g){return '<div class="er" style="background:var(--white);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:5px"><div><div style="font-size:12px;font-weight:700">'+g.desc+'</div><div style="font-size:11px;color:var(--gray-400)">'+g.cat+' · '+g.fecha+'</div></div><span style="font-size:13px;font-weight:700;color:var(--red)">$'+g.monto.toFixed(2)+'</span></div>';}).join(''):'<div style="text-align:center;padding:20px;font-size:13px;color:var(--gray-400)">Sin gastos.</div>')+'</div>';}
-function saveG(){var d=document.getElementById('gd').value;var m=parseFloat(document.getElementById('gm').value);if(!d||isNaN(m)||m<=0){alert('Completa descripción y monto.');return;}DB.gastos.push({id:'G-'+Date.now(),desc:d,cat:document.getElementById('gc').value,monto:m,fecha:document.getElementById('gf').value||localDateStr()});document.getElementById('gd').value='';document.getElementById('gm').value='';saveDB();renderGas();}
+function renderGas(){var now=new Date();var m=now.getMonth();var a=now.getFullYear();var mes=DB.gastos.filter(function(g){var d=dDia(g.fecha);return d.getMonth()===m&&d.getFullYear()===a;});var tot=mes.reduce(function(s,g){return s+g.monto;},0);var el=document.getElementById('f-gas');if(!el)return;el.innerHTML='<div style="padding:14px 16px"><div class="card"><div class="ch">'+(_gastoEdit?'Editando gasto':'Registrar gasto')+'</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Descripción</div><input id="gd" placeholder="Gasolina guagua..."></div><div class="fg"><div class="fl">Categoría</div><select id="gc"><option>Gasolina</option><option>Herramientas</option><option>Equipo</option><option>Seguro</option><option>Teléfono</option><option>Marketing</option><option>Consumibles</option><option>Otro</option></select></div></div><div class="fr"><div class="fg"><div class="fl">Monto ($)</div><input id="gm" type="number" step="0.01" placeholder="0.00"></div><div class="fg"><div class="fl">Fecha</div><input id="gf" type="date" value="'+localDateStr(now)+'"></div></div><button class="btn p full" onclick="saveG()" style="margin-top:6px">'+(_gastoEdit?'<i class="ti ti-device-floppy"></i> Guardar cambios':'<i class="ti ti-plus"></i> Registrar')+'</button>'+(_gastoEdit?'<button class="btn full" onclick="cancelEditG()" style="margin-top:6px"><i class="ti ti-x"></i> Cancelar</button>':'')+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="st" style="margin:0">'+MESES[m]+' '+a+'</div><span style="font-size:16px;font-weight:700;color:var(--red)">$'+tot.toFixed(2)+'</span></div>'+(mes.length?mes.slice().reverse().map(function(g){return '<div class="er" style="background:var(--white);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:5px"><div><div style="font-size:12px;font-weight:700">'+g.desc+'</div><div style="font-size:11px;color:var(--gray-400)">'+g.cat+' · '+g.fecha+(g.editado?' · editado':'')+'</div></div><span style="display:flex;align-items:center;gap:6px"><span style="font-size:13px;font-weight:700;color:var(--red)">$'+g.monto.toFixed(2)+'</span><button class="btn sm" onclick="editG(\''+g.id+'\')" title="Editar"><i class="ti ti-pencil"></i></button><button class="btn sm" style="color:var(--red)" onclick="delG(\''+g.id+'\')" title="Eliminar"><i class="ti ti-trash"></i></button></span></div>';}).join(''):'<div style="text-align:center;padding:20px;font-size:13px;color:var(--gray-400)">Sin gastos.</div>')+'</div>';}
+// ---- Gastos: corregir y eliminar ----
+// Antes un gasto solo se podía CREAR. Un cero de más ($5,000 en vez de $500) quedaba
+// clavado para siempre en el P&L y en el CSV del contable, sin forma de arreglarlo.
+// Todo lo que entra en una cifra que se reporta tiene que poder corregirse.
+var _gastoEdit=null;
+try{_gastoEdit=localStorage.getItem('sf_gasto_edit')||null;}catch(e){}
+function editG(id){
+  var g=(DB.gastos||[]).find(function(x){return x.id===id;});if(!g)return;
+  _gastoEdit=id;try{localStorage.setItem('sf_gasto_edit',id);}catch(e){}
+  renderGas();
+  document.getElementById('gd').value=g.desc||'';
+  document.getElementById('gc').value=g.cat||'Otro';
+  document.getElementById('gm').value=g.monto||'';
+  document.getElementById('gf').value=g.fecha||localDateStr();
+  saveFields();
+}
+function cancelEditG(){
+  _gastoEdit=null;try{localStorage.removeItem('sf_gasto_edit');}catch(e){}
+  clearFields(['gd','gm','gf']);renderGas();
+}
+function delG(id){
+  var g=(DB.gastos||[]).find(function(x){return x.id===id;});if(!g)return;
+  if(!confirm('¿Eliminar este gasto?\n\n'+g.desc+' — $'+(g.monto||0).toFixed(2)+'\n\nEsto cambia tu ganancia del mes y el CSV del contable.'))return;
+  DB.gastos=DB.gastos.filter(function(x){return x.id!==id;});
+  bita('gasto-borrado',id,g.desc+' $'+(g.monto||0).toFixed(2));
+  if(_gastoEdit===id)cancelEditG();
+  saveDB();renderGas();
+}
+function saveG(){var d=document.getElementById('gd').value;var m=parseFloat(document.getElementById('gm').value);if(!d||isNaN(m)||m<=0){alert('Completa descripción y monto.');return;}
+  var f=document.getElementById('gf').value||localDateStr();
+  if(_gastoEdit){
+    var ex=(DB.gastos||[]).find(function(x){return x.id===_gastoEdit;});
+    if(!ex){alert('Ese gasto ya no existe.');cancelEditG();return;}
+    var antes=ex.monto;
+    ex.desc=d;ex.cat=document.getElementById('gc').value;ex.monto=m;ex.fecha=f;ex.editado=new Date().toISOString();
+    bita('gasto-editado',_gastoEdit,d+': $'+(antes||0).toFixed(2)+' -> $'+m.toFixed(2));
+    _gastoEdit=null;try{localStorage.removeItem('sf_gasto_edit');}catch(e){}
+  }else{
+    DB.gastos.push({id:'G-'+Date.now(),desc:d,cat:document.getElementById('gc').value,monto:m,fecha:f});
+  }
+  clearFields(['gd','gm','gf']);saveDB();renderGas();}
 
 
 
@@ -4279,12 +4328,13 @@ function renderCitas(){
   var past=list.filter(function(c){return c.fecha<hoy||c.estado!=='agendada';}).reverse().slice(0,20);
   var ct=document.getElementById('citas-ct');if(ct)ct.textContent=hoyL.length+' hoy · '+prox.length+' próx.';
   el.innerHTML='<div style="padding:14px 16px">'+
-    '<div class="card"><div class="ch"><i class="ti ti-calendar-plus"></i> Nueva cita</div><div class="cb">'+
+    '<div class="card"'+(_citaEdit?' style="border:2px solid var(--blue)"':'')+'><div class="ch">'+(_citaEdit?'<i class="ti ti-pencil"></i> Editando cita':'<i class="ti ti-calendar-plus"></i> Nueva cita')+'</div><div class="cb">'+
     '<div class="fr"><div class="fg"><div class="fl">Cliente</div><input id="ct-n" placeholder="Juan García"></div><div class="fg"><div class="fl">Teléfono</div><input id="ct-t" type="tel" placeholder="787-000-0000"></div></div>'+
     '<div class="fr"><div class="fg"><div class="fl">Fecha</div><input id="ct-f" type="date" value="'+hoy+'"></div><div class="fg"><div class="fl">Hora</div><input id="ct-h" type="time" value="09:00"></div></div>'+
     '<div class="fr"><div class="fg"><div class="fl">Vehículo</div><input id="ct-v" placeholder="2018 Toyota Corolla"></div><div class="fg"><div class="fl">Servicio</div><input id="ct-s" placeholder="Cambio de aceite"></div></div>'+
     '<div class="fr fr1"><div class="fg"><div class="fl">Dirección (donde está el vehículo)</div><input id="ct-d" placeholder="Urb. ..., Bayamón"></div></div>'+
-    '<button class="btn p full" onclick="saveCita()" style="margin-top:6px"><i class="ti ti-plus"></i> Agendar cita</button>'+
+    '<button class="btn p full" onclick="saveCita()" style="margin-top:6px">'+(_citaEdit?'<i class="ti ti-device-floppy"></i> Guardar cambios':'<i class="ti ti-plus"></i> Agendar cita')+'</button>'+
+    (_citaEdit?'<button class="btn full" onclick="cancelEditCita()" style="margin-top:6px"><i class="ti ti-x"></i> Cancelar</button>':'')+
     '</div></div>'+
     (hoyRuta.length?'<button class="btn full" style="margin:10px 0 2px;background:#1a73e8;color:#fff;border-color:#1a73e8" onclick="rutaHoy()"><i class="ti ti-route"></i> Ruta de hoy ('+hoyRuta.length+' parada'+(hoyRuta.length>1?'s':'')+')</button>':'')+
     citasSec('Hoy',hoyL,true)+citasSec('Próximas',prox,true)+citasSec('Pasadas / completadas',past,false)+
@@ -4303,6 +4353,7 @@ function citaCard(c,act){
     (act?'<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'+
       (c.tel?'<button class="btn sm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="waCita(\''+c.id+'\')"><i class="ti ti-brand-whatsapp"></i> Confirmar</button>':'')+
       '<button class="btn sm p" onclick="citaToRO(\''+c.id+'\')"><i class="ti ti-clipboard-plus"></i> Iniciar RO</button>'+
+      '<button class="btn sm" onclick="editCita(\''+c.id+'\')" title="Editar"><i class="ti ti-pencil"></i></button>'+
       '<button class="btn sm g" onclick="citaEstado(\''+c.id+'\',\'completada\')" title="Completada"><i class="ti ti-check"></i></button>'+
       '<button class="btn sm" onclick="citaEstado(\''+c.id+'\',\'noshow\')" title="No llegó"><i class="ti ti-user-x"></i></button>'+
       '<button class="btn sm" style="color:var(--red)" onclick="delCita(\''+c.id+'\')"><i class="ti ti-trash"></i></button>'+
@@ -4313,17 +4364,50 @@ function saveCita(){
   var n=(document.getElementById('ct-n')||{value:''}).value.trim();
   var f=(document.getElementById('ct-f')||{value:''}).value;
   if(!n||!f){alert('Cliente y fecha son requeridos.');return;}
-  DB.citas.push({id:'CITA-'+Date.now(),cliente:n,tel:(document.getElementById('ct-t')||{value:''}).value.trim(),
+  var campos={cliente:n,tel:(document.getElementById('ct-t')||{value:''}).value.trim(),
     fecha:f,hora:(document.getElementById('ct-h')||{value:''}).value||'09:00',
     vehiculo:(document.getElementById('ct-v')||{value:''}).value.trim(),
     servicio:(document.getElementById('ct-s')||{value:''}).value.trim(),
-    direccion:(document.getElementById('ct-d')||{value:''}).value.trim(),
-    estado:'agendada',creado:new Date().toISOString()});
+    direccion:(document.getElementById('ct-d')||{value:''}).value.trim()};
+  if(_citaEdit){
+    // Editar corrige un error de tipeo: NO crea una cita nueva, y conserva el estado
+    // (completada / no llegó) y la hora en que se agendó originalmente.
+    var ex=DB.citas.find(function(x){return x.id===_citaEdit;});
+    if(!ex){alert('Esa cita ya no existe.');cancelEditCita();return;}
+    Object.keys(campos).forEach(function(k){ex[k]=campos[k];});
+    ex.editado=new Date().toISOString();
+    _citaEdit=null;try{localStorage.removeItem('sf_cita_edit');}catch(e){}
+  }else{
+    campos.id='CITA-'+Date.now();campos.estado='agendada';campos.creado=new Date().toISOString();
+    DB.citas.push(campos);
+  }
   // La cita ya está en DB: el borrador de estos campos cumplió y se retira. La fecha y la
   // hora van incluidas a propósito — si se quedaran guardadas, mañana el formulario abriría
   // con la fecha de la cita vieja en vez de hoy y se agendaría en el día equivocado.
   clearFields(['ct-n','ct-t','ct-v','ct-s','ct-d','ct-f','ct-h']);
   saveDB();renderCitas();
+}
+// ---- Editar una cita ya agendada (antes solo se podía borrar y rehacer, y eso perdía
+// el historial y el estado). Corregir un tipeo no debe costar una cita nueva. ----
+// _citaEdit se guarda también en localStorage: si iOS mata la app a media edición, al
+// volver los campos se reponen (restoreFields) y hay que RECORDAR que era una edición —
+// si no, al dar Guardar se crearía una cita duplicada en vez de corregir la vieja.
+var _citaEdit=null;
+try{_citaEdit=localStorage.getItem('sf_cita_edit')||null;}catch(e){}
+function editCita(id){
+  var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;
+  _citaEdit=id;try{localStorage.setItem('sf_cita_edit',id);}catch(e){}
+  renderCitas();
+  var v={'ct-n':c.cliente||'','ct-t':c.tel||'','ct-f':c.fecha||'','ct-h':c.hora||'09:00',
+         'ct-v':c.vehiculo||'','ct-s':c.servicio||'','ct-d':c.direccion||''};
+  Object.keys(v).forEach(function(k){var el=document.getElementById(k);if(el)el.value=v[k];});
+  saveFields();
+  var b=document.getElementById('citas-body');if(b)b.scrollTop=0;
+}
+function cancelEditCita(){
+  _citaEdit=null;try{localStorage.removeItem('sf_cita_edit');}catch(e){}
+  clearFields(['ct-n','ct-t','ct-v','ct-s','ct-d','ct-f','ct-h']);
+  renderCitas();
 }
 function citaEstado(id,st){var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;c.estado=st;saveDB();renderCitas();}
 function delCita(id){if(!confirm('¿Eliminar esta cita?'))return;DB.citas=DB.citas.filter(function(x){return x.id!==id;});saveDB();renderCitas();}
