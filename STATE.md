@@ -2,7 +2,40 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-27 (batch 14: auditoria parte 2 - dinero entre pantallas + candado usable)
+## Last updated: 2026-07-27 (batch 15: auditoria parte 3 - el boton Restaurar estaba roto)
+
+## 2026-07-27 (batch 15): AUDITORIA PARTE 3 - 4 bugs (SW v14, 317 pruebas verdes, live==repo)
+Eje 3 del estandar (*probar el camino de recuperacion con el archivo de verdad*) + la superficie
+que ve el CLIENTE.
+
+1. **"Restaurar desde la nube" no restauraba.** `importBackup` se blindo el 26-jul; su hermana
+   `restoreFromCloud` -- el boton que usaria si PIERDE el equipo -- quedo cruda. Medido: respaldo
+   de antes del 24-jul (fotos base64 inline, **5.15 MB**) => todo a localStorage => "ALMACENAMIENTO
+   LLENO", en disco **641 bytes**, y la app decia igual **"Datos restaurados desde la nube ✓"**.
+   Ahora migra fotos a IndexedDB antes de guardar (5.15MB -> 2.2KB), sube las que falten, y no
+   avisa de exito si el guardado fallo.
+2. **Sin normalizar, restaurar dejaba la app inservible:** una lista corrompida en el respaldo =>
+   excepciones en home, clientes, finanzas, garage y citas *justo despues de recuperar*. Fix de
+   clase: **`normalizarDB(db)` para las TRES puertas** (loadDB, importBackup, restoreFromCloud).
+3. **Contadores a 0 al importar/restaurar** => con RO-7 en el respaldo la proxima orden seria RO-1
+   y **pisaria una existente** (`upsertRO` une por id). Ahora `_maxIdNum` los deriva del id mas
+   alto, papelera incluida.
+4. **La pagina del cliente (link `#s=`) no cuadraba.** Los renglones traian solo el precio base:
+   "Frenos delanteros $139" con "TOTAL $407.53" abajo y **sin linea de IVU en ningun sitio** = se
+   lee como cobro escondido. Y los recomendados salian todos como la palabra "Recomendado"
+   (leia `d.n`; el campo real es `d.nombre`). Ahora renglon = servicio+labor+piezas y van aparte
+   subtotal, descuento e IVU; los "revisar" automaticos sin confirmar no se le mandan.
+
+**Verificacion con datos REALES:** su respaldo de la nube de hoy (23.5 KB, commit `bb6fe94`
+27-jul 19:06) restaura completo -- RO-2 Migdalia $88.20 **sellada**, 35 fotos como referencia con
+ruta de Storage, firma, 35 puntos de inspeccion, 4 denegados, garage `ready`, proxima orden RO-3,
+23 KB en localStorage, las 8 pantallas renderizan, factura cuadra (88.88 - 9.78 desc + 9.10 IVU =
+88.20). Supabase REST/auth 200, los 4 CDN 200.
+
+**Pruebas nuevas:** `test/restaurar-nube.js` (14), `test/pagina-cliente.js` (13).
+**Suite: 17 archivos, 317 verdes, 0 fallos**, local y en vivo.
+
+## Last updated antes: 2026-07-27 (batch 14: auditoria parte 2 - dinero entre pantallas + candado usable)
 
 ## 2026-07-27 (batch 14): AUDITORIA PARTE 2 - 5 bugs nuevos (SW v13, 290 pruebas verdes, live==repo)
 Continuacion de la auditoria de la manana. Metodo: sonda en navegador contra la app REAL (no
