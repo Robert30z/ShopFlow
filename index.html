@@ -834,7 +834,44 @@ function saveDB(opts){
     return false;
   }
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);if(!DB.serviceParts)DB.serviceParts={};if(!DB.citas)DB.citas=[];if(!DB.svcsCustom)DB.svcsCustom=[];if(!DB.catsCustom)DB.catsCustom=[];if(!DB.tecnicos)DB.tecnicos=[];if(typeof DB.tecCounter!=='number')DB.tecCounter=DB.tecnicos.length;if(!DB.asesores)DB.asesores=[];if(typeof DB.aseCounter!=='number')DB.aseCounter=DB.asesores.length;if(!DB.jobsCustom)DB.jobsCustom=[];if(!DB.promos)DB.promos=[];if(typeof DB.roCounter!=='number')DB.roCounter=DB.ordenes?DB.ordenes.length:0;if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;if(!DB.settings.videoIntro)DB.settings.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';if(!Array.isArray(DB.papelera))DB.papelera=[];if(!Array.isArray(DB.bitacora))DB.bitacora=[];}catch(e){}
+/* ---- UN SOLO NORMALIZADOR PARA LOS TRES CAMINOS DE ENTRADA ----
+   Los datos entran por tres puertas: arrancar (loadDB), importar un archivo y restaurar de la
+   nube. El 26-jul se blindó SOLO la de importar; la de restaurar quedó igual de cruda y se
+   comprobó (auditoría 27-jul) que un respaldo con una lista corrompida dejaba la app tirando
+   excepciones en home, clientes, finanzas, garage y citas. Un normalizador, tres puertas. */
+var LISTAS_DB=['ordenes','clientes','garage','gastos','suplidores','ordenesS','inventario','citas',
+               'svcsCustom','catsCustom','tecnicos','asesores','jobsCustom','promos','papelera','bitacora'];
+function _maxIdNum(lista,pref){
+  var m=0;
+  (lista||[]).forEach(function(x){
+    var s=String((x&&x.id)||'');
+    if(s.indexOf(pref)!==0)return;
+    var n=parseInt(s.slice(pref.length),10);
+    if(!isNaN(n)&&n>m)m=n;
+  });
+  return m;
+}
+function normalizarDB(db){
+  db=db||{};
+  LISTAS_DB.forEach(function(k){if(!Array.isArray(db[k]))db[k]=[];});
+  if(!db.serviceParts||typeof db.serviceParts!=='object'||Array.isArray(db.serviceParts))db.serviceParts={};
+  if(!db.settings||typeof db.settings!=='object'||Array.isArray(db.settings))db.settings={};
+  var st=db.settings;
+  if(typeof st.laborRate!=='number')st.laborRate=103;
+  if(!st.shopName)st.shopName='Pit Stop';
+  if(typeof st.shopPhone!=='string')st.shopPhone='';
+  if(!st.shopAddress)st.shopAddress='Bayamón, PR';
+  if(!st.videoIntro)st.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';
+  // Los contadores NO se pueden poner en 0 ni en "cantidad de ordenes": si el respaldo trae
+  // RO-7 y el contador arranca en 0, la proxima orden se llamaria RO-1 y PISARIA una existente
+  // (upsertRO une por id). Se derivan del id mas alto que exista, papelera incluida.
+  db.roCounter=Math.max(typeof db.roCounter==='number'?db.roCounter:0,
+                        _maxIdNum(db.ordenes,'RO-'),_maxIdNum(db.papelera,'RO-'));
+  db.tecCounter=Math.max(typeof db.tecCounter==='number'?db.tecCounter:0,_maxIdNum(db.tecnicos,'TEC-'));
+  db.aseCounter=Math.max(typeof db.aseCounter==='number'?db.aseCounter:0,_maxIdNum(db.asesores,'ASE-'));
+  return db;
+}
+function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);normalizarDB(DB);}catch(e){try{normalizarDB(DB);}catch(e2){}}
   // Una orden que está en la papelera no puede seguir viva en la lista activa: si dos equipos
   // se sincronizan, mergeDB la resucitaría (une por id) y reaparecería un expediente borrado.
   reconciliarPapelera();
@@ -1494,16 +1531,23 @@ function restoreFromCloud(){
       // restauración desde el propio equipo si trajo menos de lo que había.
       var previo=censo(DB);
       snapGuardar();
-      DB=data;DB.settings=DB.settings||{};DB.settings.aiKey=keep.aiKey;DB.settings.backup=keep.backup;
-      if(!DB.serviceParts)DB.serviceParts={};
-      if(!Array.isArray(DB.papelera))DB.papelera=[];
-      if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+      DB=data;
+      // MISMO trato que importar. Esta función era la hermana descuidada: sin normalizar (un
+      // respaldo con una lista corrompida dejaba home/clientes/finanzas/garage/citas tirando
+      // excepciones) y sin mover las fotos inline a IndexedDB (un respaldo de antes del 24-jul
+      // pesa megas y reventaba la cuota de Safari: salía "ALMACENAMIENTO LLENO" y aun así decía
+      // "Datos restaurados ✓"). Este es EL botón que usaría si pierde el equipo.
+      normalizarDB(DB);
+      DB.settings.aiKey=keep.aiKey;DB.settings.backup=keep.backup;
       reconciliarPapelera();
       bita('restaurado-de-github','',previo.n+' → '+(DB.ordenes||[]).length+' órdenes');
-      _lastGood=censo(DB);          // el reemplazo es intencional: la referencia se mueve con él
-      saveDB({force:true});         // force: reemplazo en bloque, ya tiene su propio guard arriba
-      alert('Datos restaurados desde la nube ✓ ('+DB.ordenes.length+' órdenes)');
-      go('home');
+      return migratePhotosToIDB().catch(function(){}).then(function(){
+        _lastGood=censo(DB);        // el reemplazo es intencional: la referencia se mueve con él
+        if(!saveDB({force:true}))return;   // saveDB ya avisó a gritos — no fingir que se restauró
+        try{schedulePhotoUpload();}catch(e){}
+        alert('Datos restaurados desde la nube ✓ ('+DB.ordenes.length+' órdenes)');
+        go('home');
+      });
     })
     .catch(function(e){alert('No se pudo restaurar: '+e.message);});
 }
@@ -4236,23 +4280,11 @@ function importBackup(e){
       // apaga el respaldo sin decir nada y el equipo se queda desprotegido.
       var keep={aiKey:(DB.settings||{}).aiKey,backup:(DB.settings||{}).backup};
       DB=imported;
-      if(!DB.settings)DB.settings={laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'};
-      if(keep.aiKey)DB.settings.aiKey=keep.aiKey;
-      if(keep.backup&&keep.backup.token&&keep.backup.repo)DB.settings.backup=keep.backup;
-      if(!DB.serviceParts)DB.serviceParts={};
       // Un respaldo con un campo del tipo equivocado (objeto donde va lista) tumbaba la app entera
       // al renderizar. Importar viene de un archivo de afuera: normalizar antes de usarlo.
-      ['ordenes','clientes','garage','gastos','suplidores','ordenesS','inventario','citas',
-       'svcsCustom','catsCustom','tecnicos','asesores','jobsCustom','promos'].forEach(function(k){
-        if(!Array.isArray(DB[k]))DB[k]=[];
-      });
-      if(!DB.serviceParts||typeof DB.serviceParts!=='object'||Array.isArray(DB.serviceParts))DB.serviceParts={};
-      ['roCounter','tecCounter','aseCounter'].forEach(function(k){
-        if(typeof DB[k]!=='number')DB[k]=0;
-      });
-      if(typeof DB.settings.laborRate!=='number')DB.settings.laborRate=103;
-      if(!Array.isArray(DB.papelera))DB.papelera=[];
-      if(!Array.isArray(DB.bitacora))DB.bitacora=[];
+      normalizarDB(DB);
+      if(keep.aiKey)DB.settings.aiKey=keep.aiKey;
+      if(keep.backup&&keep.backup.token&&keep.backup.repo)DB.settings.backup=keep.backup;
       reconciliarPapelera();
       bita('respaldo-importado','',nNow+' → '+nIn+' órdenes (archivo)');
       // Los respaldos viejos traen las fotos base64 INLINE. Guardar eso directo en localStorage
@@ -4832,10 +4864,29 @@ function shareStatus(roId){
   var step=g?({working:2,ready:3,entregado:4}[g.estado]||2):(o.estado==='pagado'?4:o.estado==='pendiente'?3:2);
   var s=DB.settings||{};
   var veh=[o.vehiculo&&o.vehiculo.year,o.vehiculo&&o.vehiculo.make,o.vehiculo&&o.vehiculo.model].filter(Boolean).join(' ');
+  /* Lo que ve el CLIENTE tiene que cuadrar con lo que paga. Antes cada renglón traía solo el
+     precio base del servicio: una orden con mano de obra y piezas listaba "Frenos $139" y abajo
+     "TOTAL $407.53" — sin IVU a la vista y sin las piezas. Desde el sofá eso se lee como un
+     cobro escondido. Ahora cada renglón trae servicio + labor + piezas (la MISMA base del PDF y
+     de la factura) y van aparte el subtotal, el descuento y el IVU. */
+  var rate=DB.settings.laborRate||103;
+  var subCli=0;
+  var svCli=(o.servicios||[]).map(function(x){
+    var base=((x.ep!=null?x.ep:x.p)||0)*(x.qty||1);
+    var lab=(x.laborHours||0)*rate;
+    var pz=(x.parts||[]).reduce(function(a,b){return a+(b.sellPrice||0)*(b.qty||1);},0);
+    subCli+=base+lab+pz;
+    return {n:x.n,p:base+lab+pz,q:1,h:x.laborHours||0,pz:pz};
+  });
+  var descCli=o.cortesia?0:(o.descValor||0);
+  var ivuCli=o.cortesia?0:Math.round((subCli-descCli)*0.115*100)/100;
   var snap={n:s.shopName||'Pit Stop',ph:waNum(s.shopPhone)||'',id:o.id,
     c:((o.cliente||'').split(' ')[0])||'Cliente',v:veh||'Tu vehículo',
-    sv:(o.servicios||[]).map(function(x){return {n:x.n,p:(x.ep!=null?x.ep:x.p)||0,q:x.qty||1};}),
-    dn:(o.denegados||[]).map(function(d){return {n:d.n||d.desc||'Recomendado',p:d.p||d.precio||0};}),
+    sv:svCli,sub:Math.round(subCli*100)/100,desc:descCli,ivu:ivuCli,cort:!!o.cortesia,
+    // el nombre real del recomendado: el campo es `nombre` — leyendo `n`/`desc` salían todos
+    // como la palabra "Recomendado" y el cliente no sabía qué le hacía falta.
+    dn:(o.denegados||[]).filter(function(d){return !d.auto||d.confirmed;})
+        .map(function(d){return {n:d.nombre||d.n||d.desc||'Recomendado',p:(d.precio!=null?d.precio:d.p)||0};}),
     tot:o.total||0,st:step};
   var url=location.origin+location.pathname+'#s='+_b64e(JSON.stringify(snap));
   var msg='Hola '+snap.c+' 👋 Sigue el estado de tu '+snap.v+' aquí:\n'+url;
@@ -4852,7 +4903,26 @@ function renderCustomerStatus(){
   for(var i=0;i<steps.length;i++){var n=i+1,on=n<=st;
     prog+='<div style="flex:1;text-align:center"><div style="width:26px;height:26px;border-radius:50%;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;background:'+(on?'#1FA463':'#e0e0e0')+';color:'+(on?'#fff':'#999')+'">'+(n<st?'✓':n)+'</div><div style="font-size:10px;font-weight:700;color:'+(on?'#1FA463':'#999')+'">'+steps[i]+'</div></div>';
     if(i<steps.length-1)prog+='<div style="height:2px;flex:0 0 12px;background:#ddd;margin-top:13px"></div>';}
-  var svc=(d.sv||[]).map(function(x){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px"><span>'+E(x.n)+(x.q>1?' ×'+x.q:'')+'</span><b>'+M(x.p*(x.q||1))+'</b></div>';}).join('')||'<div style="color:#888;font-size:13px;padding:8px 0">—</div>';
+  var svc=(d.sv||[]).map(function(x){
+    var det=[];
+    if(x.h)det.push(x.h+' h de mano de obra');
+    if(x.pz)det.push('piezas '+M(x.pz));
+    return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px"><span>'+E(x.n)+(x.q>1?' ×'+x.q:'')+
+      (det.length?'<br><span style="font-size:11px;color:#888">'+E(det.join(' · '))+'</span>':'')+
+      '</span><b>'+M(x.p*(x.q||1))+'</b></div>';
+  }).join('')||'<div style="color:#888;font-size:13px;padding:8px 0">—</div>';
+  // Desglose: lo que suman los renglones, el descuento y el IVU. Sin esto el total parecía
+  // salido de la nada (los renglones sumaban menos y no había línea de IVU en ningún sitio).
+  var fila=function(l,v,col){return '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px'+(col?';color:'+col:'')+'"><span>'+l+'</span><span>'+v+'</span></div>';};
+  var desglose='';
+  if(d.sub!=null){
+    desglose+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">';
+    desglose+=fila('Subtotal',M(d.sub));
+    if(d.desc>0)desglose+=fila('Descuento','— '+M(d.desc),'#1FA463');
+    if(d.cort)desglose+=fila('🤝 Cortesía del taller','— '+M(d.sub),'#2196F3');
+    desglose+=fila('IVU (11.5%)',M(d.ivu||0));
+    desglose+='</div>';
+  }
   var rec=(d.dn||[]).length?'<div style="margin-top:18px"><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#B82A20;margin-bottom:6px">Recomendado (opcional)</div>'+d.dn.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f2e0dd;font-size:13px;color:#555"><span>'+E(x.n)+'</span><span>'+M(x.p)+'</span></div>';}).join('')+'</div>':'';
   var approve=d.ph?'<a href="https://wa.me/'+d.ph+'?text='+encodeURIComponent('Apruebo el presupuesto de la orden '+d.id+' ('+M(d.tot)+'). — '+d.c)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border-radius:12px;text-decoration:none;margin-top:10px">✓ Aprobar presupuesto</a><a href="https://wa.me/'+d.ph+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:12px;text-decoration:none;font-size:14px">💬 Escribir al taller</a>':'';
   document.body.style.background='#F6F4F0';
@@ -4863,7 +4933,7 @@ function renderCustomerStatus(){
     +'<div style="font-family:Arial Black,sans-serif;font-size:20px;margin:2px 0 4px">'+E(d.v)+'</div>'
     +'<div style="font-size:13px;color:#555;margin-bottom:18px">Hola '+E(d.c)+' — aquí está el estado y el presupuesto de tu servicio.</div>'
     +'<div style="display:flex;align-items:flex-start;margin:8px 0 20px">'+prog+'</div>'
-    +'<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#5C6470;margin-bottom:2px">Servicios</div>'+svc+rec
+    +'<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#5C6470;margin-bottom:2px">Servicios</div>'+svc+desglose+rec
     +'<div style="display:flex;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:2px solid #12161C;font-size:18px;font-weight:800"><span>Total</span><span>'+M(d.tot)+'</span></div>'
     +'</div>'+approve
     +'<div style="text-align:center;color:#aaa;font-size:11px;margin-top:22px">Presupuesto antes de trabajar · Garantía 30 días · '+E(d.n)+'</div></div>';
