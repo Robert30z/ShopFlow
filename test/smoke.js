@@ -345,6 +345,12 @@ function check(ok, name, detail) {
   // ===== v1.4: NHTSA VIN decode (stubbed fetch → autofill) =====
   const vin = await page.evaluate(`(async function(){
     go('ro');await new Promise(function(r){setTimeout(r,400);});
+    // decodeVIN solo rellena campos VACIOS (a proposito: no pisa lo que el usuario escribio).
+    // Los pasos anteriores del smoke dejan un vehiculo puesto en el asistente, asi que sin este
+    // limpiado la prueba fallaba a ratos leyendo el carro del paso anterior. Era la prueba
+    // arrastrando estado, no la app.
+    ['v-y','v-ma','v-mo'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+    if(typeof RO==='object'&&RO.vehiculo){RO.vehiculo.year='';RO.vehiculo.make='';RO.vehiculo.model='';}
     var realFetch=window.fetch;
     window.fetch=function(){return Promise.resolve({json:function(){return Promise.resolve({Results:[{ModelYear:'2003',Make:'HONDA',Model:'Accord'}]});}});};
     decodeVIN('1HGCM82633A004352');
