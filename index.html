@@ -577,7 +577,19 @@ function hash32(s){var h=5381,i=s.length;while(i)h=(h*33^s.charCodeAt(--i))>>>0;
    cambia ese contenido sin reabrirla a propósito, el guard lo rechaza. Reabrir es legal, pero
    guarda la versión tal como se cerró: la factura original nunca se pierde, solo se supera.
    (Es el equivalente de "postear / despostear" de los sistemas grandes.) */
+/* El sello protege lo que se COBRÓ (cliente, vehículo, trabajos, total, descuento, método), no lo
+   que se ha recibido: `abonado` salió de la huella cuando entró el libro de pagos, porque un pago
+   que llega de otro equipo al sincronizar cambiaría `abonado` y bloquearía la app entera por un
+   cambio legítimo. Los pagos tienen su propia evidencia: renglones append-only que se unen por id.
+   Las facturas selladas ANTES de este cambio traen la huella vieja — se siguen aceptando
+   (`fpFacturaLegacy`), o el guard marcaría como alterada toda factura ya cerrada. */
 function fpFactura(o){
+  try{
+    return hash32(JSON.stringify([o.cliente||'',o.tel||'',o.vehiculo||{},o.servicios||[],o.denegados||[],
+      o.total||0,o.descuento||0,o.descTipo||'',o.descValor||0,!!o.cortesia,o.pago||'']));
+  }catch(e){return '';}
+}
+function fpFacturaLegacy(o){
   try{
     return hash32(JSON.stringify([o.cliente||'',o.tel||'',o.vehiculo||{},o.servicios||[],o.denegados||[],
       o.total||0,o.descuento||0,o.descTipo||'',o.descValor||0,!!o.cortesia,o.pago||'',o.abonado||0]));
@@ -585,9 +597,14 @@ function fpFactura(o){
 }
 function sellarFactura(o){
   if(!o)return;
-  o._cerrada={ts:new Date().toISOString(),dev:deviceLabel(),fp:fpFactura(o),total:o.total||0};
+  o._cerrada={ts:new Date().toISOString(),dev:deviceLabel(),fp:fpFactura(o),total:o.total||0,v:2};
 }
 function facturaSellada(o){return !!(o&&o._cerrada&&o._cerrada.fp);}
+function facturaIntacta(o){
+  if(!facturaSellada(o))return true;
+  var f=o._cerrada.fp;
+  return f===fpFactura(o)||f===fpFacturaLegacy(o);
+}
 // Sellar a mano una factura ya cobrada (las de antes del candado).
 function sellarAhora(roId){
   var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return false;
@@ -636,6 +653,39 @@ function conFacturaEditable(roId,queHace,fn){
   }
   return fn(o)!==false;
 }
+/* ---- LIBRO DE PAGOS: un cobro es un HECHO CON FECHA, no un número suelto ----
+   `abonado` decía CUÁNTO, nunca CUÁNDO ni CÓMO. Por eso "Cobrado hoy" contaba la orden completa
+   el día que se saldaba (aunque la mitad la hubiera recibido el martes) y no había forma de
+   cuadrar la caja al cierre ni de separar ATH de efectivo. Cada cobro deja renglón; `abonado`
+   pasa a ser la suma de los renglones. */
+function sumaPagos(o){return Math.round((((o&&o.pagos)||[]).reduce(function(s,p){return s+((p&&p.monto)||0);},0))*100)/100;}
+function registrarPago(o,monto,metodo){
+  if(!o||!(monto>0))return null;
+  if(!Array.isArray(o.pagos))o.pagos=[];
+  /* Si la orden trae `abonado` sin libro (llegó sincronizada desde un equipo con la versión
+     vieja, o de un respaldo que no pasó por el normalizador), ese dinero entra PRIMERO como
+     renglón. Sin esto, recalcular `abonado` desde un libro incompleto borraba el abono anterior:
+     el cliente que había dado $100 aparecería debiéndolos otra vez. */
+  var faltaLibro=Math.round((((o.abonado)||0)-sumaPagos(o))*100)/100;
+  if(faltaLibro>0.005)o.pagos.push({id:'PG-mig-'+(o.id||'x')+'-'+o.pagos.length,
+    ts:o.pagadoFecha||o.fecha||new Date().toISOString(),monto:faltaLibro,
+    metodo:o.pago||'',dev:'anterior',mig:true});
+  var p={id:'PG-'+Date.now()+'-'+Math.floor(Math.random()*1000),ts:new Date().toISOString(),
+         monto:Math.round(monto*100)/100,metodo:(metodo||o.pago||'').trim(),dev:deviceLabel()};
+  o.pagos.push(p);
+  o.abonado=sumaPagos(o);
+  return p;
+}
+// Las órdenes de antes del libro entran con un renglón por lo que ya estaba cobrado, fechado con
+// el día del pago. Sin esto el historial de caja se vería en cero.
+function migrarPagos(db){
+  ((db||{}).ordenes||[]).concat(((db||{}).papelera)||[]).forEach(function(o){
+    if(!o||Array.isArray(o.pagos))return;
+    var ya=Math.round(((o.abonado||0))*100)/100;
+    o.pagos=ya>0?[{id:'PG-mig-'+o.id,ts:o.pagadoFecha||o.fecha||new Date().toISOString(),
+                   monto:ya,metodo:o.pago||'',dev:'anterior',mig:true}]:[];
+  });
+}
 /* ---- LO QUE UNA ORDEN VALE Y LO QUE TODAVÍA DEBEN (definido UNA sola vez) ----
    Cada pantalla calculaba el balance a su manera y por eso no cuadraban entre sí: el home
    sumaba el TOTAL de las pendientes (ignorando los abonos) mientras el detalle de la orden
@@ -655,7 +705,7 @@ function censo(db){
   var ids={},fp={},firmas=0,fotosAct=0;
   function contar(o,activa){
     if(!o||!o.id)return;
-    var nf=(o.fotos||[]).length;
+    var nf=contarFotos(o);
     ids[o.id]=nf;
     try{fp[o.id]=hash32(JSON.stringify(o));}catch(e){}
     if(activa)fotosAct+=nf;
@@ -703,7 +753,7 @@ function verificaIntegridad(prev,next){
   // (4) una factura CERRADA no se puede alterar sin reabrirla a propósito
   var alteradas=[];
   (next.ordenes||[]).forEach(function(o){
-    if(facturaSellada(o)&&fpFactura(o)!==o._cerrada.fp)alteradas.push(o.id);
+    if(!facturaIntacta(o))alteradas.push(o.id);
   });
   if(alteradas.length)return 'la factura CERRADA '+alteradas.slice(0,3).join(', ')+' se estaría cambiando sin reabrirla (usa “Reabrir para corregir”)';
   return null;
@@ -869,6 +919,7 @@ function normalizarDB(db){
                         _maxIdNum(db.ordenes,'RO-'),_maxIdNum(db.papelera,'RO-'));
   db.tecCounter=Math.max(typeof db.tecCounter==='number'?db.tecCounter:0,_maxIdNum(db.tecnicos,'TEC-'));
   db.aseCounter=Math.max(typeof db.aseCounter==='number'?db.aseCounter:0,_maxIdNum(db.asesores,'ASE-'));
+  try{migrarPagos(db);}catch(e){}
   return db;
 }
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);normalizarDB(DB);}catch(e){try{normalizarDB(DB);}catch(e2){}}
@@ -995,14 +1046,28 @@ function photoImg(f,style){
 }
 // Mueve las fotos inline (viejas o de otro dispositivo) a IDB y las reemplaza por refs.
 // Solo commitea (saveDB) si TODOS los puts funcionaron — si IDB falla, deja todo inline.
+/* Toda foto de una orden vive en una de dos partes: la lista suelta (`o.fotos`) o el punto de
+   inspeccion al que pertenece (`o.inspFotos[item]`). Las tuberias que mueven fotos (migrar a
+   IndexedDB, subir a la nube, contarlas en el censo del guard) tienen que recorrer LAS DOS, o las
+   fotos por item se quedarian solo en este equipo y sin proteccion. */
+function listasDeFotos(o){
+  var out=[];
+  if(o&&Array.isArray(o.fotos))out.push(o.fotos);
+  if(o&&o.inspFotos&&typeof o.inspFotos==='object'){
+    Object.keys(o.inspFotos).forEach(function(k){if(Array.isArray(o.inspFotos[k]))out.push(o.inspFotos[k]);});
+  }
+  return out;
+}
+function contarFotos(o){var n=0;listasDeFotos(o).forEach(function(a){n+=a.length;});return n;}
 function migratePhotosToIDB(){
   if(DB._demo||_photoDBFail)return Promise.resolve();
   var work=[]; // {o,i,url,t}
   (DB.ordenes||[]).forEach(function(o){
-    if(!Array.isArray(o.fotos))return;
-    o.fotos.forEach(function(f,i){
-      var url=(typeof f==='string')?f:(f&&f.d);
-      if(url&&!(f&&f.id))work.push({o:o,i:i,url:url,t:(f&&f.t)||o.fecha||new Date().toISOString()});
+    listasDeFotos(o).forEach(function(arr){
+      arr.forEach(function(f,i){
+        var url=(typeof f==='string')?f:(f&&f.d);
+        if(url&&!(f&&f.id))work.push({arr:arr,i:i,url:url,t:(f&&f.t)||o.fecha||new Date().toISOString()});
+      });
     });
   });
   if(!work.length)return Promise.resolve();
@@ -1014,7 +1079,7 @@ function migratePhotosToIDB(){
     }));
   }).then(function(res){
     if(res.length&&res.every(function(x){return x===true;})){
-      work.forEach(function(w){w.o.fotos[w.i]={id:w.id,t:w.t};});
+      work.forEach(function(w){w.arr[w.i]={id:w.id,t:w.t};});
       saveDB();
     }
     // si algún put falló, NO tocar las fotos inline (no perder nada)
@@ -1058,8 +1123,8 @@ function photoUploadPending(){
     var sess=r&&r.data&&r.data.session;if(!sess)return;var uid=sess.user.id;
     var pend=[];
     function scan(fotos){(fotos||[]).forEach(function(f){if(fotoIsRef(f)&&!f.sp)pend.push(f);});}
-    (DB.ordenes||[]).forEach(function(o){scan(o.fotos);});
-    if(typeof RO!=='undefined'&&RO)scan(RO.fotos);
+    (DB.ordenes||[]).forEach(function(o){listasDeFotos(o).forEach(scan);});
+    if(typeof RO!=='undefined'&&RO)listasDeFotos(RO).forEach(scan);
     if(!pend.length)return;
     _upBusy=true;var i=0,changed=false;
     (function next(){
@@ -1305,6 +1370,33 @@ function aplicarRemoto(remota,rev){
 }
 function cloudDataPayload(){var c=JSON.parse(JSON.stringify(DB));if(c.settings){delete c.settings.aiKey;delete c.settings.backup;}delete c._demo;delete c._demoAt;delete c._snapshot;return c;}
 // Une los datos de dos equipos: por id, sobreviven las órdenes/clientes de AMBOS (anti-clobber).
+/* Al sincronizar gana la orden editada más recientemente — pero hay listas DENTRO de la orden que
+   solo crecen y donde perder un renglón es perder plata o evidencia: los PAGOS y las VERSIONES de
+   una factura reabierta. Encontrado auditando (27-jul): si cobras $50 en el iPad y $38 en el
+   iPhone sobre la misma orden, el merge se quedaba con una versión entera y **uno de los dos
+   cobros desaparecía sin dejar rastro**. Estas listas se unen por id, nunca se reemplazan. */
+function unirAppendOnly(gana,pierde){
+  if(!gana||!pierde)return gana;
+  var o;try{o=JSON.parse(JSON.stringify(gana));}catch(e){return gana;}
+  ['pagos','_versiones'].forEach(function(k){
+    var a=Array.isArray(gana[k])?gana[k]:[],b=Array.isArray(pierde[k])?pierde[k]:[];
+    if(!a.length&&!b.length)return;
+    var vistos={},unido=[];
+    a.concat(b).forEach(function(x){
+      if(!x)return;
+      var id=x.id||(x.ts+'|'+(x.motivo||'')+'|'+((x.version||{}).total||''));
+      if(vistos[id])return;vistos[id]=1;unido.push(x);
+    });
+    unido.sort(function(x,y){return (x.ts||'')<(y.ts||'')?-1:1;});
+    o[k]=unido;
+  });
+  // Nunca bajar lo recibido: si un lado trae un abono sin libro (equipo con versión vieja), se
+  // conserva el mayor y el próximo cobro lo mete al libro (`registrarPago` lo respalda).
+  if(Array.isArray(o.pagos)&&o.pagos.length){
+    o.abonado=Math.max(sumaPagos(o),(gana.abonado||0),(pierde.abonado||0));
+  }
+  return o;
+}
 function mergeDB(local,remote){
   if(!remote)return local;
   var out=JSON.parse(JSON.stringify(remote));
@@ -1324,14 +1416,16 @@ function mergeDB(local,remote){
     if(!ro){salida.push(lo);return;}                       // solo aquí: se conserva
     delete remOrd[lo.id];
     var tl=lo._editedAt||'',tr=ro._editedAt||'';
+    var gana;
     if(tl&&tr&&tl!==tr){
-      salida.push(tl>tr?lo:ro);
+      gana=tl>tr?lo:ro;
       _ultimosConflictos.push(lo.id+(tl>tr?' (ganó la de este equipo)':' (ganó la de la nube)'));
     }else if(tl&&!tr){                                     // solo este equipo la ha tocado
-      salida.push(lo);
+      gana=lo;
     }else{
-      salida.push(ro);                                     // empate o sin marcas: como antes
+      gana=ro;                                             // empate o sin marcas: como antes
     }
+    salida.push(unirAppendOnly(gana,gana===lo?ro:lo));
   });
   Object.keys(remOrd).forEach(function(id){salida.push(remOrd[id]);});
   out.ordenes=salida;
@@ -1762,7 +1856,7 @@ function buildPane(id){
 
   if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de servicios y precios':'Autorización final (entrega)';var desc=id==='firma1'?'El cliente autoriza los servicios y precios presentados en el estimado, y la inspección/diagnóstico del vehículo.':'El cliente confirma el total final, incluyendo servicios agregados o ajustados durante el trabajo.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
 
-  if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--ink);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
+  if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--ink);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"><div id="inx-'+it.id+'" style="display:none;margin-top:5px"><button class="btn sm" style="font-size:10px;padding:4px 8px" onclick="camInsp(\''+it.id+'\')"><i class="ti ti-camera"></i> Foto de esto</button><div id="inf-'+it.id+'" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"></div></div></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
 
   if(id==='servicios')return '<div class="sw"><i class="ti ti-search si"></i><input id="ro-sq" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div><div class="cat-scroll" id="ro-sc"></div><div id="ro-sl"></div><button class="btn sm full" onclick="addManualSvc()" style="margin:8px 0;justify-content:center"><i class="ti ti-plus"></i> Servicio manual (nombre y precio libre)</button><div class="dv"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden</div><button class="btn sm" onclick="RO.servicios=[];renderROSO()"><i class="ti ti-trash"></i></button></div><div id="ro-so"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div><div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas (salen en el recibo y la orden de trabajo)</div><textarea id="tech-n" placeholder="Ej: Cliente trajo su alternador — sin garantía" oninput="RO.techNotes=this.value"></textarea></div>';
 
@@ -1921,25 +2015,66 @@ function openCamera(){
     .then(function(stream){_camStream=stream;vid.srcObject=stream;var pr=vid.play();if(pr&&pr.catch)pr.catch(function(){});st.textContent='Apunta y toca el botón — quédate aquí y tira todas las que quieras.';camUpdateCount();})
     .catch(function(e){st.textContent='No se pudo abrir la cámara ('+((e&&e.name)||'error')+'). Da permiso de cámara o usa "Subir de la galería".';});
 }
+/* ---- FOTOS POR ÍTEM DE INSPECCIÓN ----
+   Hasta ahora las fotos eran una lista suelta de la orden: no había forma de probar CUÁL foto era
+   de las pastillas. Ahora cada punto de la inspección tiene las suyas (`RO.inspFotos[itemId]`),
+   con la misma tubería que ya funciona (IndexedDB + Supabase Storage): la cámara solo cambia de
+   destino. Es lo que convierte el reporte en venta — el cliente ve la pieza, no una palabra. */
+var _camDest=null;   // null = fotos de la orden; {insp:'<itemId>'} = fotos de ese punto
+function camInsp(iid){
+  _camDest={insp:iid};
+  var z=IZ.find(function(x){return x.items.some(function(it){return it.id===iid;});});
+  var it=z&&z.items.find(function(x){return x.id===iid;});
+  var st=document.getElementById('cam-titulo');
+  if(st)st.textContent=it?('Foto — '+it.l):'Foto de inspección';
+  openCamera();
+}
+function _camArr(){
+  if(_camDest&&_camDest.insp){
+    RO.inspFotos=RO.inspFotos||{};
+    if(!Array.isArray(RO.inspFotos[_camDest.insp]))RO.inspFotos[_camDest.insp]=[];
+    return RO.inspFotos[_camDest.insp];
+  }
+  if(!Array.isArray(RO.fotos))RO.fotos=[];
+  return RO.fotos;
+}
+function renderInspFotos(iid){
+  var el=document.getElementById('inf-'+iid);if(!el)return;
+  var arr=((RO.inspFotos||{})[iid])||[];
+  el.innerHTML=arr.map(function(f,i){
+    return '<div style="position:relative">'+photoImg(f,'height:44px;width:44px;object-fit:cover;border-radius:6px;border:1.5px solid var(--gray-200)')+
+      '<button onclick="borrarFotoInsp(\''+iid+'\','+i+')" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:17px;height:17px;font-size:10px;line-height:1;cursor:pointer">×</button></div>';
+  }).join('');
+  fillPhotoImgs(el);
+}
+function borrarFotoInsp(iid,i){
+  if(!confirm('¿Quitar esta foto del punto de inspección?'))return;
+  ((RO.inspFotos||{})[iid]||[]).splice(i,1);
+  renderInspFotos(iid);saveDraft();
+}
 function snapPhoto(){
   var vid=document.getElementById('cam-video');
   if(!vid||!vid.videoWidth)return;
-  if(!Array.isArray(RO.fotos))RO.fotos=[];
+  var arr=_camArr();
   var url=compressToDataURL(vid,1280,110);
-  if(url)RO.fotos.push(storePhoto(url));
+  if(url)arr.push(storePhoto(url));
   var fl=document.getElementById('cam-flash');if(fl){fl.style.opacity='.85';setTimeout(function(){fl.style.opacity='0';},120);}
   camUpdateCount();
+  saveDraft();          // una foto tirada en el campo no espera a los 5 segundos del autoguardado
 }
 function camUpdateCount(){
-  var n=(RO.fotos||[]).length;
+  var n=_camArr().length;
   var c=document.getElementById('cam-count');if(c)c.textContent=n+' foto'+(n!==1?'s':'');
   var strip=document.getElementById('cam-strip');
-  if(strip){strip.innerHTML=(RO.fotos||[]).slice(-6).map(function(f){return photoImg(f,'height:46px;width:46px;object-fit:cover;border-radius:6px;border:2px solid #fff');}).join('');fillPhotoImgs(strip);}
+  if(strip){strip.innerHTML=_camArr().slice(-6).map(function(f){return photoImg(f,'height:46px;width:46px;object-fit:cover;border-radius:6px;border:2px solid #fff');}).join('');fillPhotoImgs(strip);}
 }
 function closeCamera(){
   if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
   var vid=document.getElementById('cam-video');if(vid)vid.srcObject=null;
   var ov=document.getElementById('cam-ov');if(ov)ov.style.display='none';
+  var dest=_camDest;_camDest=null;
+  var tt=document.getElementById('cam-titulo');if(tt)tt.textContent='Fotos de la orden';
+  if(dest&&dest.insp){try{renderInspFotos(dest.insp);}catch(e){}saveDraft();return;}
   renderPhotosGrid();
 }
 
@@ -2128,6 +2263,10 @@ function setInsp(zid,iid,color){
   var k={verde:'v',amarillo:'a',rojo:'r'};
   Object.keys(k).forEach(function(cc){var b=document.getElementById('ib'+k[cc]+'-'+iid);if(b)b.className='ibt'+(cc===color?' '+k[cc]:'');});
   var ni=document.getElementById('in-'+iid);if(ni)ni.style.display=(color==='amarillo'||color==='rojo')?'block':'none';
+  // Las fotos POR ITEM son la prueba de por que hay que cambiar la pieza: se ofrecen justo
+  // donde se marca el problema, no en una galeria suelta al final de la orden.
+  var nx=document.getElementById('inx-'+iid);if(nx)nx.style.display=(color==='amarillo'||color==='rojo')?'block':'none';
+  try{renderInspFotos(iid);}catch(e){}
   if(color==='rojo'){
     var zone=IZ.find(function(z){return z.items.some(function(it){return it.id===iid;});});
     var item=zone&&zone.items.find(function(it){return it.id===iid;});
@@ -2418,7 +2557,11 @@ function saveRO(){
   // (Se sella la copia guardada en DB, no el RO en memoria.)
   if(RO.estado==='pagado'){
     var _gRO=DB.ordenes.find(function(x){return x.id===RO.id;});
-    if(_gRO&&!facturaSellada(_gRO))sellarFactura(_gRO);
+    if(_gRO){
+      var _falta=balanceRO(_gRO);
+      if(_falta>0&&!_gRO.cortesia)registrarPago(_gRO,_falta,_gRO.pago);  // el cobro del día, fechado
+      if(!facturaSellada(_gRO))sellarFactura(_gRO);
+    }
   }
   autoSaveCli();
   if(!DB.garage.find(function(g){return g.roId===RO.id;})){
@@ -2843,12 +2986,39 @@ function gTab(id){document.querySelectorAll('#garage .tp').forEach(function(p){p
 function renderGarage(){
   var now=new Date();
   function rc(list,elid){var e=document.getElementById(elid);if(!e)return;if(!list.length){e.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin vehículos.</div>';return;}
-  e.innerHTML='<div style="padding:12px 14px">'+list.map(function(c){var sm={working:{l:'En trabajo',cl:'bb'},ready:{l:'Listo ✓',cl:'bg'},waiting:{l:'Esperando',cl:'ba'},entregado:{l:'Entregado',cl:'bgr'}};var s=sm[c.estado]||{l:c.estado,cl:'bgr'};var th='';if(c.readyTime&&c.estado!=='entregado'){var hrs=(now-new Date(c.readyTime))/3600000;var pct=Math.min(hrs/c.maxHours*100,100);var rem=Math.max(c.maxHours-hrs,0);var bc=pct<60?'var(--green)':pct<90?'var(--amber)':'var(--red)';th='<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--gray-400)">Timer recogido</span><span style="font-weight:700;color:'+(pct>=100?'var(--red)':'var(--amber)')+'">'+( pct>=100?'VENCIDO':'En '+rem.toFixed(1)+'h')+'</span></div><div class="pb"><div class="pf" style="width:'+pct.toFixed(0)+'%;background:'+bc+'"></div></div></div>';}var ll=c.log&&c.log.length?c.log[c.log.length-1]:'—';return '<div class="gc '+c.estado+'"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div><div style="font-size:14px;font-weight:700">'+c.cliente+'</div><div style="font-size:12px;color:var(--gray-400)">'+c.vehiculo+(c.tablilla?' · '+c.tablilla:'')+'</div></div><span class="badge '+s.cl+'">'+s.l+'</span></div><div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">'+c.trabajo+'</div>'+th+'<div style="font-size:11px;background:var(--gray-50);border-radius:var(--r-sm);padding:6px 9px;margin-top:6px;color:var(--gray-400)">'+ll+'</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn sm'+(c.estado==='working'?' p':'')+'" onclick="setGS(\''+c.id+'\',\'working\')">En trabajo</button><button class="btn sm'+(c.estado==='ready'?' g':'')+'" onclick="setGS(\''+c.id+'\',\'ready\')">Listo</button><button class="btn sm" onclick="setGS(\''+c.id+'\',\'entregado\')" style="color:var(--gray-400)">Entregar</button></div><div style="display:flex;gap:6px;margin-top:7px"><input id="gl-'+c.id+'" placeholder="Anotación — ej: Cliente contactado a las 2pm" style="flex:1;font-size:11px"><button class="btn sm p" onclick="addGL(\''+c.id+'\')" style="padding:5px 9px"><i class="ti ti-send"></i></button></div></div>';}).join('')+'</div>';}
+  e.innerHTML='<div style="padding:12px 14px">'+list.map(function(c){var sm={working:{l:'En trabajo',cl:'bb'},ready:{l:'Listo ✓',cl:'bg'},waiting:{l:'Esperando',cl:'ba'},entregado:{l:'Entregado',cl:'bgr'}};var s=sm[c.estado]||{l:c.estado,cl:'bgr'};var th='';if(c.readyTime&&c.estado!=='entregado'){var hrs=(now-new Date(c.readyTime))/3600000;var pct=Math.min(hrs/c.maxHours*100,100);var rem=Math.max(c.maxHours-hrs,0);var bc=pct<60?'var(--green)':pct<90?'var(--amber)':'var(--red)';th='<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--gray-400)">Timer recogido</span><span style="font-weight:700;color:'+(pct>=100?'var(--red)':'var(--amber)')+'">'+( pct>=100?'VENCIDO':'En '+rem.toFixed(1)+'h')+'</span></div><div class="pb"><div class="pf" style="width:'+pct.toFixed(0)+'%;background:'+bc+'"></div></div></div>';}var ll=c.log&&c.log.length?c.log[c.log.length-1]:'—';return '<div class="gc '+c.estado+'"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div><div style="font-size:14px;font-weight:700">'+c.cliente+'</div><div style="font-size:12px;color:var(--gray-400)">'+c.vehiculo+(c.tablilla?' · '+c.tablilla:'')+'</div></div><span class="badge '+s.cl+'">'+s.l+'</span></div><div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">'+c.trabajo+'</div>'+th+'<div style="font-size:11px;background:var(--gray-50);border-radius:var(--r-sm);padding:6px 9px;margin-top:6px;color:var(--gray-400)">'+ll+'</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn sm'+(c.estado==='working'?' p':'')+'" onclick="setGS(\''+c.id+'\',\'working\')">En trabajo</button><button class="btn sm'+(c.estado==='ready'?' g':'')+'" onclick="setGS(\''+c.id+'\',\'ready\')">Listo</button><button class="btn sm" onclick="setGS(\''+c.id+'\',\'entregado\')" style="color:var(--gray-400)">Entregar</button>'+(c.roId&&c.estado!=='entregado'?'<button class="btn sm" onclick="waListo(\''+c.roId+'\')" style="background:#25D366;color:#fff;border-color:#25D366" title="Avisar que está listo"><i class="ti ti-brand-whatsapp"></i></button>':'')+'</div><div style="display:flex;gap:6px;margin-top:7px"><input id="gl-'+c.id+'" placeholder="Anotación — ej: Cliente contactado a las 2pm" style="flex:1;font-size:11px"><button class="btn sm p" onclick="addGL(\''+c.id+'\')" style="padding:5px 9px"><i class="ti ti-send"></i></button></div></div>';}).join('')+'</div>';}
   rc(DB.garage.filter(function(c){return c.estado==='working'||c.estado==='waiting';}),'g-act');
   rc(DB.garage.filter(function(c){return c.estado==='ready';}),'g-lst');
   rc(DB.garage.filter(function(c){return c.estado==='entregado';}).slice(-8).reverse(),'g-ent');
 }
-function setGS(id,val){var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.estado=val;if(val==='ready'&&!c.readyTime){c.readyTime=new Date().toISOString();c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Listo. Timer iniciado.');}if(val==='entregado'){c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Entregado.');}saveDB();renderGarage();}
+function setGS(id,val){
+  var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;
+  var eraOtro=c.estado!==val;
+  c.estado=val;
+  if(val==='ready'&&!c.readyTime){c.readyTime=new Date().toISOString();c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Listo. Timer iniciado.');}
+  if(val==='entregado'){c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Entregado.');}
+  saveDB();renderGarage();
+  // El mensaje que más llamadas ahorra: "su carro está listo". Se ofrece en el momento en que
+  // el carro cambia a listo, que es cuando se te olvida.
+  if(val==='ready'&&eraOtro)waListo(c.roId,true);
+}
+/* Avisar al cliente que el carro está listo. `preguntar` = salió solo al marcar listo (se puede
+   decir que no); sin él, es un botón que el usuario apretó a propósito. */
+function waListo(roId,preguntar){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});
+  if(!o||!waNum(o.tel)){if(!preguntar)alert('Esta orden no tiene un número de teléfono válido.');return;}
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
+  var bal=balanceRO(o);
+  if(preguntar&&!confirm('¿Le aviso a '+(o.cliente||'el cliente')+' por WhatsApp que '+veh+' está listo?'))return;
+  var s=DB.settings||{};
+  waSend(o.tel,'Saludos '+(o.cliente||'')+' 👋 le saluda '+(s.shopName||'Pit Stop')+'.\n\n'+
+    '✅ '+veh+' ya está LISTO'+(o.id?' (orden '+o.id+')':'')+'.\n'+
+    (bal>0.005?'Balance a pagar al recoger: $'+bal.toFixed(2)+(s.ath?' — ATH Móvil '+s.ath:'')+'\n':'Ya está saldado, no debe nada. ✓\n')+
+    '\n¿Cuándo le queda bien recogerlo? Si necesita que se lo lleve, avíseme. 🔧');
+  o.avisoListo=new Date().toISOString();
+  bita('aviso-listo',roId,'se le avisó al cliente que el carro está listo');
+  saveDB();
+}
 function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());inp.value='';saveDB();renderGarage();}
 
 function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){if(!q)return true;var v=o.vehiculo||{};var hay=[o.cliente,o.id,v.tag,v.vin,v.make,v.model,v.year,o.empresa,o.techNotes,o.queja].filter(Boolean).join(' ').toLowerCase();return hay.includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
@@ -3024,7 +3194,7 @@ function renderPL(){
   var ganBruta=ing-partsCost;
   var neta=ganBruta-gastos;
   // IVU cobrado este mes (11.5% incluido en cada total) — para la planilla
-  var ivuMes=ords.reduce(function(s,o){return s+((o.total||0)-(o.total||0)/1.115);},0);
+  var ivuMes=ords.reduce(function(s,o){return o.sinIVU?s:s+((o.total||0)-(o.total||0)/1.115);},0);
   // Resumen por técnico del mes
   var tecCard='';
   if((DB.tecnicos||[]).length){
@@ -3064,7 +3234,20 @@ function renderPL(){
     '<button class="btn p full" style="margin-top:8px" onclick="addIngManual()"><i class="ti ti-plus"></i> Registrar ingreso manual</button>'+
   '</div>';
 }
-function addIngManual(){var desc=prompt('Descripción:');if(!desc)return;var monto=parseFloat(prompt('Monto ($):'));if(isNaN(monto))return;DB.ordenes.push({id:'ING-'+Date.now().toString().slice(-6),fecha:new Date().toISOString(),cliente:desc,tel:'',vehiculo:{},servicios:[{id:'m',n:desc,p:monto,qty:1,ep:monto}],total:monto,pago:'Cash',estado:'pagado',insp:{},denegados:[]});saveDB();renderPL();}
+function addIngManual(){
+  var desc=prompt('Descripción:');if(!desc)return;
+  var monto=parseFloat(prompt('Monto ($):'));if(isNaN(monto))return;
+  // Antes TODO ingreso manual se reportaba con IVU incluido: $200 de un trabajito en efectivo
+  // le sumaban $20.63 de IVU a la planilla que nunca cobró. Ahora se pregunta.
+  var conIVU=confirm('¿Ese monto INCLUYE el IVU de 11.5%?\n\nAceptar = sí, ya trae IVU (se reporta en la planilla).\nCancelar = no, es un ingreso sin IVU (no entra en el IVU cobrado).');
+  var o={id:'ING-'+Date.now().toString().slice(-6),fecha:new Date().toISOString(),cliente:desc,tel:'',
+         vehiculo:{},servicios:[{id:'m',n:desc,p:monto,qty:1,ep:monto}],total:monto,pago:'Cash',
+         estado:'pagado',insp:{},denegados:[],sinIVU:!conIVU,manual:true};
+  registrarPago(o,monto,'Cash');
+  DB.ordenes.push(o);
+  bita('ingreso-manual','','$'+monto.toFixed(2)+(conIVU?' (con IVU)':' (sin IVU)')+' — '+desc);
+  saveDB();renderPL();
+}
 function renderSup(){var el=document.getElementById('f-sup');if(!el)return;el.innerHTML='<div style="padding:14px 16px"><button class="btn p full" onclick="addSupOrden()" style="margin-bottom:12px"><i class="ti ti-plus"></i> Nueva orden de suplidor</button>'+(DB.ordenesS.length?DB.ordenesS.slice().reverse().map(function(o){return '<div class="card" style="margin-bottom:8px"><div class="cb"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:13px;font-weight:700">'+o.sup+'</span><span class="badge '+(o.estado==='pagado'?'bg':'ba')+'">'+(o.estado==='pagado'?'Pagado':'Pendiente')+'</span></div><div style="font-size:12px;color:var(--gray-400)">Orden #'+o.num+' · '+o.fecha+'</div><div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:11px;color:var(--gray-400)">'+o.items+'</span><span style="font-size:15px;font-weight:700;color:var(--red)">$'+o.total.toFixed(2)+'</span></div>'+(o.estado==='pendiente'?'<button class="btn sm g" onclick="markSP(\''+o.id+'\')" style="margin-top:8px;width:100%"><i class="ti ti-check"></i> Marcar pagado</button>':'')+' </div></div>';}).join(''):'<div style="text-align:center;padding:24px;font-size:13px;color:var(--gray-400)">Sin órdenes registradas.</div>')+'</div>';}
 function addSupOrden(){var sup=prompt('Suplidor (ej: Advance Auto Parts):');if(!sup)return;var num=prompt('# Orden / invoice:');var items=prompt('Descripción de items:');var total=parseFloat(prompt('Total ($):'));if(isNaN(total))return;var est=confirm('¿Ya pagado?')?'pagado':'pendiente';DB.ordenesS.push({id:'OS-'+Date.now(),sup:sup,num:num||'—',fecha:new Date().toISOString().split('T')[0],items:items||'—',total:total,estado:est});saveDB();renderSup();}
 function markSP(id){var o=DB.ordenesS.find(function(x){return x.id===id;});if(o)o.estado='pagado';saveDB();renderSup();}
@@ -3214,8 +3397,24 @@ function renderPartsListRO(){
   var total=parts.reduce(function(s,p){return s+(p.sellPrice*p.qty);},0);
   document.getElementById('pm-total').textContent='$'+total.toFixed(2);
 }
+/* El inventario se descontaba al AGREGAR una pieza a la orden, pero no se devolvía al borrarla ni
+   se ajustaba al cambiar la cantidad. Encontrado auditando (27-jul): metes 4 bujías por error,
+   las borras, y el estante queda con 4 menos para siempre; cambias de 1 a 3 y solo descontó 1.
+   Un inventario que miente es peor que no tenerlo — te manda a comprar lo que ya tienes. */
+function ajustarInventario(nombre,partNum,delta){
+  if(!delta||!(DB.inventario||[]).length)return null;
+  var n=String(nombre||'').toLowerCase();
+  var inv=DB.inventario.find(function(i){
+    return (n&&String(i.nombre||'').toLowerCase()===n)||(partNum&&i.sku&&i.sku===partNum);
+  });
+  if(!inv)return null;
+  inv.qty=Math.max(0,(inv.qty||0)+delta);
+  return inv;
+}
 function deletePartRO(i){
   if(!confirm('¿Eliminar esta pieza?'))return;
+  var p=(RO.servicios[currentROPartIdx].parts||[])[i];
+  if(p&&ajustarInventario(p.name,p.partNum,+(p.qty||1)))saveDB();   // vuelve al estante
   RO.servicios[currentROPartIdx].parts.splice(i,1);
   renderPartsListRO();
 }
@@ -3382,14 +3581,18 @@ function savePartRO(){
   var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]};
   if(!svc.parts)svc.parts=[];
   if(_editPartIdx>=0&&svc.parts[_editPartIdx]){
+    var vieja=svc.parts[_editPartIdx];
     svc.parts[_editPartIdx]=part; // EDITAR la pieza existente (arregla el typo, no crea otra)
+    // Ajustar el estante por la DIFERENCIA: de 1 a 3 saca 2 más; de 3 a 1 devuelve 2.
+    if(String(vieja.name||'').toLowerCase()===String(name).toLowerCase()){
+      if(ajustarInventario(name,part.partNum,(vieja.qty||1)-qty))saveDB();
+    }else{
+      if(ajustarInventario(vieja.name,vieja.partNum,+(vieja.qty||1)))saveDB();
+      if(ajustarInventario(name,part.partNum,-qty))saveDB();
+    }
   }else{
     svc.parts.push(part);
-    // Auto-deduct from inventory silently — solo al AGREGAR, no al editar
-    if(DB.inventario.length>0){
-      var inv2=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
-      if(inv2){inv2.qty=Math.max(0,inv2.qty-qty);saveDB();}
-    }
+    if(ajustarInventario(name,part.partNum,-qty))saveDB();   // sale del estante
   }
   _editPartIdx=-1;setPartBtnLabel();
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
@@ -3634,6 +3837,20 @@ function openRODetail(roId){
     html+='<div class="card"><div class="ch"><i class="ti ti-clipboard-check"></i> Inspección</div><div class="cb">';
     if(reds.length)html+='<div style="margin-bottom:6px"><span class="badge br">Crítico</span> <span style="font-size:12px;color:var(--gray-600)">'+reds.join(', ')+'</span></div>';
     if(ambers.length)html+='<div><span class="badge ba">Atención</span> <span style="font-size:12px;color:var(--gray-600)">'+ambers.join(', ')+'</span></div>';
+    // Problema → foto → nota: la evidencia pegada al punto que la explica, no una galería suelta.
+    var conF=[];
+    IZ.forEach(function(z){z.items.forEach(function(it){
+      var fs=((o.inspFotos||{})[it.id])||[];
+      if(fs.length)conF.push({l:it.l,c:(o.insp||{})[it.id],n:(o.inspNotes||{})[it.id]||'',f:fs});
+    });});
+    conF.forEach(function(c){
+      html+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--gray-100)">'+
+        '<div style="font-size:12px;font-weight:700;color:'+(c.c==='rojo'?'var(--red)':c.c==='amarillo'?'var(--amber)':'var(--ink)')+'">'+E_(c.l)+'</div>'+
+        (c.n?'<div style="font-size:11px;color:var(--gray-400);font-style:italic;margin-bottom:4px">'+E_(c.n)+'</div>':'')+
+        '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">'+
+          c.f.map(function(f){return photoImg(f,'height:64px;width:64px;object-fit:cover;border-radius:7px;border:1.5px solid var(--gray-200)');}).join('')+
+        '</div></div>';
+    });
     html+='</div></div>';
   }
   // Services
@@ -3646,6 +3863,28 @@ function openRODetail(roId){
     '<div class="tot-bar"><span>Total</span><span>$'+(o.total||0).toFixed(2)+(o.cortesia?' 🤝':'')+'</span></div>'+
     '<div style="margin-top:8px;font-size:12px;color:var(--gray-400)">Método de pago: '+(o.pago||'—')+'</div>'+
   '</div></div>';
+  // Aprobación del cliente — evidencia de que dijo que sí, y por cuánto
+  if(o.aprob){
+    var desf=aprobDesfasada(o);
+    html+='<div style="background:'+(desf?'var(--amber-light)':'var(--green-light)')+';border:1.5px solid '+(desf?'var(--amber)':'var(--green)')+';border-radius:var(--r-md);padding:11px 13px;margin-bottom:12px">'
+      +'<div style="font-size:12.5px;font-weight:800;color:'+(desf?'var(--amber)':'var(--green)')+';margin-bottom:3px"><i class="ti ti-thumb-up"></i> ESTIMADO APROBADO POR EL CLIENTE</div>'
+      +'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5">$'+((o.aprob.total||0).toFixed(2))+' · '+fechaCorta(o.aprob.ts)+' · vía '+E_(o.aprob.canal)+'</div>'
+      +(desf?'<div style="font-size:11.5px;color:var(--amber);font-weight:700;margin-top:5px">⚠️ La orden cambió después de que aprobó (aprobó $'+((o.aprob.total||0).toFixed(2))+', ahora $'+((o.total||0).toFixed(2))+'). Vuelve a confirmarle antes de cobrar.</div><button class="btn sm full" onclick="aprobarEstimado(\''+o.id+'\')" style="margin-top:7px"><i class="ti ti-refresh"></i> Volvió a aprobar — actualizar</button>':'')
+      +'</div>';
+  }else if(o.estado!=='pagado'){
+    html+='<button class="btn full" onclick="aprobarEstimado(\''+o.id+'\')" style="margin-bottom:12px;background:var(--green-light);color:var(--green);border-color:var(--green);font-weight:700"><i class="ti ti-thumb-up"></i> El cliente aprobó el estimado ($'+((o.total||0).toFixed(2))+')</button>'
+      +'<div style="font-size:11px;color:var(--gray-400);margin:-8px 0 12px;line-height:1.5">Queda con fecha y hora en el expediente. Es lo que te cubre si después dice que no autorizó el precio.</div>';
+  }
+  // Libro de pagos: cada cobro con su fecha y su método
+  if((o.pagos||[]).length){
+    html+='<div class="card"><div class="ch"><i class="ti ti-cash"></i> Pagos recibidos</div><div class="cb">'+
+      o.pagos.map(function(p){
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span>'+fechaCorta(p.ts)+(p.metodo?' · '+E_(p.metodo):'')+(p.mig?' <span style="color:var(--gray-400)">(antes del libro)</span>':'')+'</span><b>$'+((p.monto||0).toFixed(2))+'</b></div>';
+      }).join('')+
+      '<div class="er" style="margin-top:4px"><span style="font-weight:700">Recibido</span><span style="font-weight:700;color:var(--green)">$'+sumaPagos(o).toFixed(2)+'</span></div>'+
+      (balanceRO(o)>0.005?'<div class="er"><span style="color:var(--red)">Balance</span><span style="color:var(--red);font-weight:700">$'+balanceRO(o).toFixed(2)+'</span></div>':'')+
+    '</div></div>';
+  }
   // Parts purchased
   if(allParts.length){
     html+='<div class="card"><div class="ch"><i class="ti ti-package"></i> Piezas compradas</div><div class="cb">'+
@@ -3724,20 +3963,41 @@ function openRODetail(roId){
   go('ro-detail');
 }
 
+/* ---- APROBACIÓN DEL ESTIMADO (la protección legal que pedía) ----
+   El link de estado ya traía el botón "Aprobar presupuesto", pero la aprobación se quedaba en el
+   chat: la orden no sabía nada. Si el cliente después dice "yo nunca autoricé eso", la firma del
+   papel cubre la inspección, no el precio final. Aquí queda: cuándo, por qué vía, POR CUÁNTO, y
+   con la huella de lo aprobado — así, si el trabajo crece después, la app avisa que hay que
+   volver a confirmar en vez de asumir. */
+function aprobarEstimado(roId){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return;
+  var canal=prompt('¿Cómo te lo aprobó el cliente?\n(WhatsApp / en persona / llamada / texto)','WhatsApp');
+  if(canal===null)return;
+  if(!confirm('Registrar que '+(o.cliente||'el cliente')+' APROBÓ el trabajo por $'+((o.total||0).toFixed(2))+'.\n\nQueda con fecha y hora en el expediente y en la bitácora.'))return;
+  o.aprob={ts:new Date().toISOString(),canal:(canal||'').trim()||'—',total:o.total||0,
+           fp:fpFactura(o),dev:deviceLabel()};
+  bita('estimado-aprobado',roId,'$'+((o.total||0).toFixed(2))+' vía '+o.aprob.canal);
+  if(!saveDB())return;
+  openRODetail(roId);
+}
+// ¿El trabajo cambió después de que el cliente dijo que sí?
+function aprobDesfasada(o){return !!(o&&o.aprob&&o.aprob.fp&&o.aprob.fp!==fpFactura(o));}
 function registrarAbono(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var bal=Math.max(0,(o.total||0)-(o.abonado||0));
   var v=prompt('Balance pendiente: $'+bal.toFixed(2)+'\n¿Cuánto abonó el cliente ahora? ($)');
   if(v===null)return;
   var amt=parseFloat(v);if(isNaN(amt)||amt<=0){alert('Monto inválido.');return;}
+  var met=prompt('¿Cómo te pagó ese abono?\n(ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
+  if(met===null)return;
   conFacturaEditable(roId,'registrar un abono de $'+amt.toFixed(2),function(o){
-    o.abonado=Math.round(((o.abonado||0)+amt)*100)/100;
+    registrarPago(o,amt,met);
     var saldada=o.abonado>=(o.total||0)-0.01;
     if(saldada){
       o.estado='pagado';o.pagadoFecha=new Date().toISOString();
       sellarFactura(o);   // saldada = cobrada del todo = factura sellada, igual que markPaid
     }
-    bita('abono',roId,'+$'+amt.toFixed(2)+' · abonado $'+o.abonado.toFixed(2)+' de $'+((o.total||0).toFixed(2))+(saldada?' · SALDADA y SELLADA':''));
+    bita('abono',roId,'+$'+amt.toFixed(2)+' ('+(met||o.pago||'')+') · abonado $'+o.abonado.toFixed(2)+' de $'+((o.total||0).toFixed(2))+(saldada?' · SALDADA y SELLADA':''));
     if(!saveDB())return false;
     if(saldada)alert('Balance saldado — orden PAGADA ✓\n\nLa factura quedó sellada.');
     openRODetail(roId);
@@ -3761,9 +4021,11 @@ function cobrarYCerrar(roId){
   if(isNaN(rec)||rec<0){alert('No entendí ese monto — no cambié nada.');return;}
   var antes=o.estado;
   o.pago=(m||o.pago||'ATH Móvil').trim();
-  o.abonado=Math.round(Math.min(rec,total)*100)/100;
-  if(rec>=total-0.005){
-    o.estado='pagado';o.abonado=total;o.pagadoFecha=new Date().toISOString();
+  // Lo que entra AHORA es un renglón del libro de pagos, con su hora y su método.
+  var recibeAhora=Math.max(0,Math.min(rec,total-(o.abonado||0)));
+  if(recibeAhora>0)registrarPago(o,recibeAhora,o.pago);
+  if((o.abonado||0)>=total-0.005){
+    o.estado='pagado';o.pagadoFecha=new Date().toISOString();
   }else{
     o.estado='pendiente';
   }
@@ -3791,9 +4053,11 @@ function markPaid(roId){
   var m=prompt('Orden '+o.id+' — $'+(o.total||0).toFixed(2)+'\n¿Método de pago recibido? (ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
   if(m===null)return;
   o.pago=(m||o.pago||'ATH Móvil').trim();
+  var falta=balanceRO(o);
+  if(falta>0)registrarPago(o,falta,o.pago);       // el balance que acaba de entrar, fechado
   o.estado='pagado';o.abonado=o.total||0;o.pagadoFecha=new Date().toISOString();
   sellarFactura(o);
-  bita('orden-cerrada',roId,'pendiente → pagado · '+o.pago+' · $'+(o.total||0).toFixed(2)+' · SELLADA');
+  bita('orden-cerrada',roId,'pendiente → pagado · '+o.pago+' · $'+falta.toFixed(2)+' recibidos · SELLADA');
   saveDB();openRODetail(roId);
 }
 
@@ -3952,6 +4216,8 @@ function abrirSeg(cual){
   else if(cual==='snap')renderSnapshots();
   else renderBitacora();
 }
+// Escapar lo que escribió una persona antes de meterlo en HTML (un nombre con "<" rompía la vista)
+function E_(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function fechaCorta(iso){
   try{return new Date(iso).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
   catch(e){return iso||'';}
@@ -4763,7 +5029,8 @@ function sharePDFDoc(doc,fname,title){
 function dviPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   // Cargar las fotos desde IndexedDB ANTES de armar el PDF (addImage es síncrono)
-  if((o.fotos||[]).some(function(f){return fotoIsRef(f)&&!_photoCache[f.id];})){hydratePhotos(o.fotos).then(function(){dviPDF(roId);});return;}
+  var _todas=[];listasDeFotos(o).forEach(function(a){_todas=_todas.concat(a);});
+  if(_todas.some(function(f){return fotoIsRef(f)&&!_photoCache[f.id];})){hydratePhotos(_todas).then(function(){dviPDF(roId);});return;}
   if(typeof window.jspdf==='undefined'){alert('PDF cargando... intenta de nuevo.');return;}
   var doc=new window.jspdf.jsPDF();var y=0;
   var s=inspSummary(o);
@@ -4812,6 +5079,35 @@ function dviPDF(roId){
     if(y+gl.length*3.6>282){doc.addPage();y=16;}
     doc.text(gl,14,y);y+=gl.length*3.6+6;
   }
+  /* LA PRUEBA, no la palabra. Las fotos van pegadas al punto que las explica ("Pastillas
+     delanteras" y debajo la foto de las pastillas), que es lo que hace que el cliente autorice
+     el trabajo. Antes eran una galeria suelta de la orden y no se sabia de que era cada una. */
+  var conFotos=[];
+  IZ.forEach(function(z){z.items.forEach(function(it){
+    var fs=((o.inspFotos||{})[it.id])||[];
+    if(fs.length)conFotos.push({l:it.l,estado:(o.insp||{})[it.id]||'',fotos:fs,nota:(o.inspNotes||{})[it.id]||''});
+  });});
+  if(conFotos.length){
+    if(y>250){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(11,31,58);
+    doc.text('EVIDENCIA POR PUNTO REVISADO',14,y);y+=2;
+    doc.setDrawColor(11,31,58);doc.line(14,y,196,y);y+=6;
+    conFotos.forEach(function(c){
+      if(y>240){doc.addPage();y=16;}
+      doc.setFont(undefined,'bold');doc.setFontSize(9);
+      doc.setTextColor(c.estado==='rojo'?211:c.estado==='amarillo'?186:60,c.estado==='rojo'?47:c.estado==='amarillo'?117:60,c.estado==='rojo'?47:c.estado==='amarillo'?23:60);
+      doc.text(c.l+(c.nota?' — '+c.nota:''),14,y);y+=4;
+      doc.setTextColor(0,0,0);
+      var x=14,alto=0;
+      c.fotos.slice(0,6).forEach(function(f){
+        var url=fotoSrc(f);if(!url)return;
+        if(x>150){x=14;y+=alto+3;alto=0;}
+        if(y>250){doc.addPage();y=16;x=14;}
+        try{doc.addImage(url,'JPEG',x,y,44,33);x+=47;alto=33;}catch(e){}
+      });
+      y+=alto+7;
+    });
+  }
   // presupuesto pendiente
   var denP=(o.denegados||[]).filter(function(d){return (!d.auto||d.confirmed)&&(d.precio||0)>0;});
   if(denP.length){
@@ -4827,7 +5123,7 @@ function dviPDF(roId){
   if(fotos.length){
     if(y>200){doc.addPage();y=16;}
     doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(0,0,0);
-    doc.text('EVIDENCIA FOTOGRÁFICA',14,y);y+=4;
+    doc.text('FOTOS GENERALES DEL VEHÍCULO',14,y);y+=4;
     var x=14,w=57,h=43,col=0;
     fotos.forEach(function(f){
       try{doc.addImage(fotoSrc(f),'JPEG',x,y,w,h);}catch(e){}
@@ -5117,7 +5413,20 @@ function buildEquipoStats(){
   });
   var h0=new Date();h0=new Date(h0.getFullYear(),h0.getMonth(),h0.getDate());var h1=new Date(h0.getFullYear(),h0.getMonth(),h0.getDate()+1);
   var oHoy=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d>=h0&&d<h1&&o.estado!=='abierta';});
-  var cobrado=DB.ordenes.filter(function(o){if(o.estado!=='pagado')return false;var d=new Date(o.pagadoFecha||o.fecha);return d>=h0&&d<h1;}).reduce(function(s,o){return s+(o.total||0);},0);
+  // Dinero que ENTRÓ hoy, renglón por renglón del libro de pagos. Antes se contaba la orden
+  // completa el día que se saldaba: si el martes abonó $50 y el jueves los otros $38, el jueves
+  // decía $88 y el martes $0 — imposible cuadrar la caja al cierre.
+  var cobrado=0,cobradoPorMetodo={};
+  (DB.ordenes||[]).forEach(function(o){
+    (o.pagos||[]).forEach(function(p){
+      var d=new Date(p.ts);
+      if(!(d>=h0&&d<h1))return;
+      cobrado+=(p.monto||0);
+      var k=(p.metodo||'otro').trim()||'otro';
+      cobradoPorMetodo[k]=Math.round(((cobradoPorMetodo[k]||0)+(p.monto||0))*100)/100;
+    });
+  });
+  cobrado=Math.round(cobrado*100)/100;
   var pend=porCobrarTotal();
   // $ por hora del período (métrica Tekmetric): ventas sin IVU y ganancia (sin costo de piezas) ÷ horas facturadas
   var pHoras=0,pSub=0,pPartsCost=0;
@@ -5126,7 +5435,9 @@ function buildEquipoStats(){
     (o.servicios||[]).forEach(function(sv){(sv.parts||[]).forEach(function(p){pPartsCost+=(p.cost||0)*(p.qty||1);});});
   });
   var dolHora={horas:pHoras,ventasHora:pHoras>0?pSub/pHoras:null,gananciaHora:pHoras>0?(pSub-pPartsCost)/pHoras:null};
-  return {ini:ini,fin:fin,tecs:tecs,ases:ases,dolHora:dolHora,hoy:{ordenes:oHoy.length,vendido:oHoy.reduce(function(s,o){return s+(o.total||0);},0),cobrado:cobrado,pendiente:pend}};
+  return {ini:ini,fin:fin,tecs:tecs,ases:ases,dolHora:dolHora,
+          hoy:{ordenes:oHoy.length,vendido:oHoy.reduce(function(s,o){return s+(o.total||0);},0),
+               cobrado:cobrado,porMetodo:cobradoPorMetodo,pendiente:pend}};
 }
 function renderEquipo(){
   var el=document.getElementById('f-eq');if(!el)return;
@@ -5139,7 +5450,13 @@ function renderEquipo(){
       '<div class="sc"><div class="sl">Vendido</div><div class="sv g">$'+st.hoy.vendido.toFixed(0)+'</div></div>'+
       '<div class="sc"><div class="sl">Cobrado</div><div class="sv g">$'+st.hoy.cobrado.toFixed(0)+'</div></div>'+
       '<div class="sc"><div class="sl">Por cobrar</div><div class="sv '+(st.hoy.pendiente>0?'r':'')+'">$'+st.hoy.pendiente.toFixed(0)+'</div></div>'+
-    '</div><div style="font-size:10px;color:var(--gray-400);margin-top:6px">Por cobrar = balance de TODAS las órdenes pendientes, no solo de hoy.</div></div></div>'+
+    '</div>'+
+    // Desglose de la caja del día: cuánto entró por ATH, cuánto en efectivo, cuánto en tarjeta.
+    (Object.keys(st.hoy.porMetodo||{}).length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+
+      Object.keys(st.hoy.porMetodo).sort(function(a,b){return st.hoy.porMetodo[b]-st.hoy.porMetodo[a];}).map(function(k){
+        return '<span class="badge bg" style="font-size:11px">'+k+': $'+st.hoy.porMetodo[k].toFixed(2)+'</span>';
+      }).join('')+'</div>':'')+
+    '<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Cobrado = dinero que entró HOY (cada abono con su fecha). Por cobrar = balance de TODAS las órdenes pendientes.</div></div></div>'+
     '<div class="tabs" style="margin-bottom:10px;overflow-x:auto">'+chip('sem','Esta semana')+chip('sem1','Semana pasada')+chip('mes','Este mes')+chip('mes1','Mes pasado')+'</div>'+
     '<div style="text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:8px">'+fmtD(st.ini)+' — '+fmtD(new Date(st.fin.getTime()-86400000))+'</div>'+
     '<div class="card" style="margin-bottom:10px"><div class="ch"><i class="ti ti-cash"></i> $ por hora del período</div><div class="cb"><div class="sg sg3" style="display:flex;gap:6px">'+
@@ -5238,7 +5555,13 @@ function apruebaDen(roId,di){
   var d=(o.denegados||[])[di];if(!d)return;
   if(!confirm('¿El cliente aprobó "'+d.nombre+'" ($'+(d.precio||0).toFixed(2)+')?\n\nSe mueve a servicios y el total se recalcula.'))return;
   conFacturaEditable(roId,'mover “'+d.nombre+'” a servicios',function(o){
-    if(o.estado==='pagado'){o.abonado=o.total||0;o.estado='pendiente';} // ya pagó el total viejo — queda como abono del nuevo
+    // ya pagó el total viejo — eso queda como abono del nuevo. El monto sale del LIBRO DE PAGOS,
+    // no de "el total de antes": si solo había abonado una parte, inventar el total sería regalar
+    // el trabajo nuevo.
+    if(o.estado==='pagado'){
+      o.abonado=Math.max(sumaPagos(o),o.abonado||0);   // ni un centavo de más ni de menos
+      o.estado='pendiente';
+    }
     o.denegados.splice(di,1);
     o.servicios=o.servicios||[];
     o.servicios.push({id:'den-'+Date.now(),uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:d.nombre,p:d.precio||0,ep:d.precio||0,qty:1,parts:[],laborHours:0});
@@ -5258,7 +5581,9 @@ function buildContableCSV(ym){
   DB.ordenes.forEach(function(o){
     if(o.estado==='abierta')return;
     var d=new Date(o.fecha);if(d.getFullYear()!==y||d.getMonth()!==m-1)return;
-    var tot=o.total||0,sub=tot/1.115,ivu=tot-sub;tS+=sub;tI+=ivu;tT+=tot;
+    // Un ingreso marcado SIN IVU va completo al subtotal: fingir un IVU que no se cobro le
+    // mete a la planilla dinero que Hacienda no recibio.
+    var tot=o.total||0,sub=o.sinIVU?tot:tot/1.115,ivu=tot-sub;tS+=sub;tI+=ivu;tT+=tot;
     var dv=o.descValor||0,cv=o.cortesia?(o.cortesiaValor||0):0;tD+=dv;tC+=cv;
     rows.push([d.toLocaleDateString('es-PR'),o.id,esc(o.cliente),o.estado,esc(o.pago||''),esc(tecName(o.tecnico)),esc(aseName(o.asesor)),sub.toFixed(2),ivu.toFixed(2),tot.toFixed(2),dv.toFixed(2),cv?esc(cv.toFixed(2)+' ('+(o.cortesiaMotivo||'')+')'):''].join(','));
   });
@@ -5579,6 +5904,7 @@ document.addEventListener('click',hideSplash,{once:true});
     <video id="cam-video" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;background:#000"></video>
     <div id="cam-flash" style="position:absolute;inset:0;background:var(--white);opacity:0;transition:opacity .12s;pointer-events:none"></div>
     <div id="cam-count" style="position:absolute;top:14px;left:14px;background:rgba(0,0,0,.55);color:#fff;padding:5px 12px;border-radius:20px;font-size:13px;font-weight:700">0 fotos</div>
+    <div id="cam-titulo" style="position:absolute;top:14px;right:14px;max-width:55%;text-align:right;background:rgba(0,0,0,.55);color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700">Fotos de la orden</div>
     <div id="cam-strip" style="position:absolute;bottom:12px;left:12px;display:flex;gap:5px"></div>
   </div>
   <div style="background:#000;padding:12px 16px 26px;text-align:center">
