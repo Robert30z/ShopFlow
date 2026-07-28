@@ -2,10 +2,29 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-19)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-21)
 
-**Estado: TODO EN VIVO Y VERDE.** `live == repo`, SW **v19**, suite **26 archivos / 482 checks /
-0 fallos** en local Y contra `robert30z.github.io/ShopFlow`. Working tree limpio y pusheado.
+**Estado: TODO EN VIVO Y VERDE.** SW **v20**, suite **27 archivos / 498 checks / 0 fallos**.
+Working tree limpio y pusheado.
+
+**🆕 BATCH 21 (28-jul, 2da auditoria del dia): LA CAJA NO CUADRABA.** 4 bugs, todos de dinero o
+de cara al cliente, encontrados sondeando la app en el navegador en equipo limpio:
+1. **La ORDEN RAPIDA DEL MENU cobraba sin dejar rastro** — `saveMO` la creaba 'pagada' pero nunca
+   le decia nada al libro de pagos: "Cierre de hoy" mostraba **Vendido $111.50 y COBRADO $0**, y
+   como ya estaba 'pagada' tampoco salia como deuda. Ese dinero no existia en NINGUNA pantalla de
+   cobro. Ademas hardcodeaba "ATH Movil" ⇒ el desglose de la caja mentia en cada venta de mostrador.
+2. **"Resumen del dia" (Historial) CONTRADECIA a "Cierre de hoy" (Finanzas)** — el mismo dia, con
+   las mismas 2 ordenes: **"$112 / $223" contra "$100 / $123"**, y la verdad era **$211.50 / $123**.
+   Historial sumaba el total de las pagadas ignorando la fecha real del cobro y los abonos.
+   Ahora las dos llaman a `cobradoEnRango` (una sola definicion, no pueden volver a separarse).
+3. **El "x Cobrar" de KPIs ignoraba los abonos** ($223 en vez de $123) — misma clase del bug del
+   home arreglado el 27-jul; esa pantalla se habia quedado fuera. Ahora usa `porCobrarTotal`.
+4. **"undefined" en pantalla y MANDADO AL CLIENTE** — `o.vehiculo` casi siempre existe como objeto,
+   asi que el respaldo `'—'` nunca caia: sin ano se armaba "undefined Kia Forte". Salia en Ordenes,
+   Historial (dia/todas/por cliente) y en el **WhatsApp al cliente**: *"Le toca el mantenimiento de
+   undefined"*. Los 5 sitios pasan por `vehTxt`.
+Prueba nueva: `test/caja-cuadra.js` (16 checks). ⭐ **Lo que mas rindio otra vez: preguntarle lo
+MISMO a dos pantallas distintas y comparar** — los 3 primeros bugs salieron de ahi.
 
 **LO QUE LE TOCA A ROBERTO (en orden):**
 1. **Pegar `supabase/aprobaciones.sql`** en Supabase -> SQL Editor -> New query -> Run (una sola
@@ -56,8 +75,9 @@ clicks reales, de la cita al cobro). Los 7 bugs salieron de ahi o de tirar del h
 **Correr las pruebas:** `python -m http.server 8931` en la raiz del repo y `node <archivo>.js`
 desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.io/ShopFlow/index.html" node smoke.js`.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
+La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-28 (batches 18-20: aprobacion remota, 7 bugs, AI al dia)
+## Last updated: 2026-07-28 (batches 18-21: aprobacion remota, 7 bugs, AI al dia, la caja cuadra)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
 `aiFetch` llamaba a `claude-opus-4-8`. Ahora **`claude-opus-5`**, con dos decisiones a proposito:
