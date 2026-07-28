@@ -2,7 +2,52 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## Last updated: 2026-07-27 (batch 15: auditoria parte 3 - el boton Restaurar estaba roto)
+## Last updated: 2026-07-27 (batches 16-17: libro de pagos, aprobacion, fotos por punto + 4 bugs)
+
+## 2026-07-27 (batch 17): LA APP ABIERTA DOS VECES SE COMIA ORDENES (SW v16, 368 verdes)
+Sonda creativa, escenarios que nadie habia probado. **Hallazgo grave:** la PWA instalada Y Safari
+con ShopFlow abierto (o dos ventanas) se pisan. Pestana A crea una orden con firma y pago y
+guarda (disco: 2 ordenes); pestana B, cargada antes, cambia el telefono en Ajustes y guarda =>
+**disco con 1 orden, la de A desaparecida, sin aviso y con `saveDB` devolviendo exito**. El guard
+no lo veia: compara contra su memoria, no contra el disco.
+- **Fix:** `DB._rev` por escritura + `reconciliarDisco()` en `saveDB`: si el disco trae una
+  revision que este contexto no escribio, se UNE con `mergeDB` (gana la edicion mas reciente,
+  pagos y versiones se suman) y queda en la bitacora (`otra-pestana`).
+- **Ajustes a tres bandas:** se parte de lo del disco y solo se pisa lo que ESTE contexto cambio
+  desde que leyo. Sin eso, el ultimo en guardar borraba el ajuste del otro.
+- **Trampa que cazo la prueba:** si la revision reconciliada no SUBE por encima de la del disco,
+  la otra pestana cree que nadie escribio y vuelve a pisar (colision de numeros).
+- Probado sin hallazgos: nombres/servicios con comillas, `< >`, emoji y HTML inyectado (5
+  pantallas + detalle + PDF + link del cliente: aguanta todo, no ejecuta nada); orden con fecha
+  futura por reloj mal puesto (P&L, CSV y cobro del dia siguen cuadrando entre si).
+
+## 2026-07-27 (batch 16): LO QUE FALTABA + 3 bugs (SW v15, 359 verdes)
+1. **LIBRO DE PAGOS** (`o.pagos[]`): `abonado` decia CUANTO pero nunca CUANDO ni COMO. "Cobrado
+   hoy" contaba la orden entera el dia que se saldaba (abono del martes + resto del jueves = $88
+   el jueves, $0 el martes) => imposible cuadrar caja o separar ATH de efectivo. Cada cobro deja
+   renglon {fecha, monto, metodo, equipo}; el cierre del dia desglosa por metodo. Migracion
+   automatica de lo viejo + backfill defensivo en `registrarPago` (una orden que llegue de un
+   equipo con version vieja no pierde su abono al recalcular).
+2. **APROBACION DEL ESTIMADO** (`o.aprob`): fecha, canal, monto y huella. Si el trabajo crece
+   despues, la app avisa "aprobo $X, ahora $Y" en vez de asumir. La firma del papel cubre la
+   inspeccion, no el precio final — este es el hueco legal que quedaba.
+3. **AVISO "SU CARRO ESTA LISTO"** por WhatsApp (sale solo al marcar listo + boton en el garage).
+4. **FOTOS POR PUNTO DE INSPECCION** (`o.inspFotos[item]`): la camara cambia de destino
+   (`_camDest`), el DVI PDF trae "EVIDENCIA POR PUNTO REVISADO" con la foto pegada a su punto.
+   **Clave:** las tuberias (migrar a IDB, subir a Storage, censo del guard) recorren TODAS las
+   listas via `listasDeFotos(o)` — si no, habrian sido fotos de segunda, sin respaldo.
+5. 🐛 **EL MERGE SE COMIA PLATA:** cobrar $50 en el iPad y $38 en el iPhone sobre la misma orden
+   => el merge se quedaba con UNA version entera y **un cobro desaparecia**. Igual con las
+   versiones congeladas de una factura reabierta. `unirAppendOnly` une por id. Por esto `abonado`
+   SALIO de la huella de la factura (`fpFactura`): un pago que llega de otro equipo cambiaria la
+   huella y bloquearia la app por un cambio legitimo. Las selladas de antes se validan con
+   `fpFacturaLegacy`.
+6. 🐛 **EL INVENTARIO MENTIA:** se descontaba al agregar pero no se devolvia al borrar ni se
+   ajustaba al cambiar cantidad (`ajustarInventario`).
+7. 🐛 **IVU FANTASMA:** todo ingreso manual se reportaba con IVU incluido ($200 en efectivo =>
+   $20.63 a la planilla que nunca cobro). Ahora se pregunta (`sinIVU`).
+
+## Last updated antes: 2026-07-27 (batch 15: auditoria parte 3 - el boton Restaurar estaba roto)
 
 ## 2026-07-27 (batch 15): AUDITORIA PARTE 3 - 4 bugs (SW v14, 317 pruebas verdes, live==repo)
 Eje 3 del estandar (*probar el camino de recuperacion con el archivo de verdad*) + la superficie
