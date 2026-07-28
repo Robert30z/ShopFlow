@@ -31,7 +31,7 @@ MISMO a dos pantallas distintas y comparar** — los 3 primeros bugs salieron de
    vez). Atajo desde la app: Ajustes -> "Aprobacion del cliente desde el link" -> **Copiar el SQL**,
    y despues **Probar la puerta**. SIN ese paso la app funciona exactamente igual que ayer (el
    boton del cliente abre WhatsApp); CON el paso, el cliente aprueba con un toque y entra solo.
-2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v19).
+2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v20).
 3. **Rotar el PAT de Supabase y cambiar la contrasena** (pendiente desde el 26-jul).
 4. **API key de Anthropic** para que funcionen los botones AI: console.anthropic.com -> Billing
    (minimo $5) -> API keys -> Create key -> pegarla en Ajustes -> Inteligencia Artificial. La key
