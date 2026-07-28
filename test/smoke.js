@@ -271,8 +271,17 @@ function check(ok, name, detail) {
   // cita → RO prefill (year/make/model parsed from "2019 Honda Civic")
   await page.evaluate(`citaToRO(DB.citas[0].id)`);
   await page.waitForTimeout(500);
-  const pre = await page.evaluate(() => ({ c: RO.cliente, y: RO.vehiculo.year, ma: RO.vehiculo.make, mo: RO.vehiculo.model, estado: DB.citas[0].estado }));
-  check(pre.c === 'Cita Smoke' && pre.y === '2019' && pre.ma === 'Honda' && pre.mo === 'Civic' && pre.estado === 'completada', 'Cita → RO prefill + marked completada', JSON.stringify(pre));
+  const pre = await page.evaluate(() => ({ c: RO.cliente, y: RO.vehiculo.year, ma: RO.vehiculo.make, mo: RO.vehiculo.model, estado: DB.citas[0].estado, link: RO.citaId }));
+  // La cita sigue AGENDADA hasta que la orden exista: abrir el asistente y salirse no puede
+  // borrarla del día (28-jul; detalle y prueba dedicada en cita-y-fechas.js).
+  check(pre.c === 'Cita Smoke' && pre.y === '2019' && pre.ma === 'Honda' && pre.mo === 'Civic' && pre.estado === 'agendada' && !!pre.link, 'Cita → RO prefill (la cita sigue agendada hasta guardar)', JSON.stringify(pre));
+  const trasGuardar = await page.evaluate(() => {
+    RO.servicios = [{ id: 's1', uid: 'u1', n: 'Frenos', p: 139, ep: 139, qty: 1, laborHours: 0, parts: [] }];
+    calcEst(); saveRO();
+    return { estado: DB.citas[0].estado, roId: DB.citas[0].roId };
+  });
+  await page.waitForTimeout(300);
+  check(trasGuardar.estado === 'completada' && !!trasGuardar.roId, 'Cita queda completada al guardar la orden', JSON.stringify(trasGuardar));
 
   // ===== v1.4: Seguimientos + DVI + Cobro (seeded data, window.open stubbed) =====
   const seg = await page.evaluate(`(function(){
@@ -349,7 +358,8 @@ function check(ok, name, detail) {
   // cleanup v1.4 seeds so the delete-RO check below still sees exactly one RO
   // force: es una manipulacion deliberada del fixture. Sin force el guard de integridad la bloquea
   // (y hace bien: quitar una orden sin pasar por la papelera es exactamente lo que vigila).
-  await page.evaluate(`(function(){DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-SM1';});DB.citas=[];saveDB({force:true});})()`);
+  // (tambien sale la orden que nacio de la cita, para que el conteo de abajo siga siendo exacto)
+  await page.evaluate(`(function(){var ids=(DB.citas||[]).map(function(c){return c.roId;}).filter(Boolean);DB.ordenes=DB.ordenes.filter(function(o){return o.id!=='RO-SM1'&&ids.indexOf(o.id)<0;});DB.garage=(DB.garage||[]).filter(function(g){return DB.ordenes.find(function(o){return o.id===g.roId;});});DB.citas=[];saveDB({force:true});})()`);
 
   // Borrar una RO la manda a la PAPELERA (no la destruye) y limpia el garage sin dejar huerfanos
   await page.evaluate(`go('historial')`);

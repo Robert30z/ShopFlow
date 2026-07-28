@@ -1883,7 +1883,7 @@ function initRO(){
     return;
   }
   RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',cortesia:false,cortesiaMotivo:'',empresa:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
-  var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=d.toISOString().split('T')[0];
+  var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=localDateStr(d);
   if(_citaPrefill)applyCitaPrefill();
   curStep=0;
   buildSteps();buildPanes();
@@ -2649,6 +2649,7 @@ function saveOpenRO(){
   RO.estado='abierta';
   calcEst();RO.total=Math.round(RO.total*100)/100;
   upsertRO();autoSaveCli();
+  cerrarCitaDeRO(DB.ordenes.find(function(x){return x.id===RO.id;}));
   bita('orden-guardada',RO.id,'ABIERTA · '+(RO.cliente||'')+' · $'+(RO.total||0).toFixed(2)+' · '+((RO.fotos||[]).length)+' fotos');
   if(!saveDB())return;
   // Respaldo a la nube AHORA (no esperar los 45s) — la orden ABIERTA queda segura al instante
@@ -2679,6 +2680,7 @@ function saveRO(){
     }
   }
   autoSaveCli();
+  cerrarCitaDeRO(DB.ordenes.find(function(x){return x.id===RO.id;}));
   if(!DB.garage.find(function(g){return g.roId===RO.id;})){
     DB.garage.push({id:'GAR-'+Date.now(),roId:RO.id,cliente:RO.cliente,vehiculo:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),tablilla:RO.vehiculo.tag,color:RO.vehiculo.color,estado:'working',trabajo:RO.servicios.map(function(s){return s.n;}).join(', '),entradaTime:new Date().toISOString(),readyTime:null,maxHours:24,log:['Ingresado — '+new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})]});
   }
@@ -3364,7 +3366,7 @@ function addIngManual(){
   saveDB();renderPL();
 }
 function renderSup(){var el=document.getElementById('f-sup');if(!el)return;el.innerHTML='<div style="padding:14px 16px"><button class="btn p full" onclick="addSupOrden()" style="margin-bottom:12px"><i class="ti ti-plus"></i> Nueva orden de suplidor</button>'+(DB.ordenesS.length?DB.ordenesS.slice().reverse().map(function(o){return '<div class="card" style="margin-bottom:8px"><div class="cb"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:13px;font-weight:700">'+o.sup+'</span><span class="badge '+(o.estado==='pagado'?'bg':'ba')+'">'+(o.estado==='pagado'?'Pagado':'Pendiente')+'</span></div><div style="font-size:12px;color:var(--gray-400)">Orden #'+o.num+' · '+o.fecha+'</div><div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:11px;color:var(--gray-400)">'+o.items+'</span><span style="font-size:15px;font-weight:700;color:var(--red)">$'+o.total.toFixed(2)+'</span></div>'+(o.estado==='pendiente'?'<button class="btn sm g" onclick="markSP(\''+o.id+'\')" style="margin-top:8px;width:100%"><i class="ti ti-check"></i> Marcar pagado</button>':'')+' </div></div>';}).join(''):'<div style="text-align:center;padding:24px;font-size:13px;color:var(--gray-400)">Sin órdenes registradas.</div>')+'</div>';}
-function addSupOrden(){var sup=prompt('Suplidor (ej: Advance Auto Parts):');if(!sup)return;var num=prompt('# Orden / invoice:');var items=prompt('Descripción de items:');var total=parseFloat(prompt('Total ($):'));if(isNaN(total))return;var est=confirm('¿Ya pagado?')?'pagado':'pendiente';DB.ordenesS.push({id:'OS-'+Date.now(),sup:sup,num:num||'—',fecha:new Date().toISOString().split('T')[0],items:items||'—',total:total,estado:est});saveDB();renderSup();}
+function addSupOrden(){var sup=prompt('Suplidor (ej: Advance Auto Parts):');if(!sup)return;var num=prompt('# Orden / invoice:');var items=prompt('Descripción de items:');var total=parseFloat(prompt('Total ($):'));if(isNaN(total))return;var est=confirm('¿Ya pagado?')?'pagado':'pendiente';DB.ordenesS.push({id:'OS-'+Date.now(),sup:sup,num:num||'—',fecha:localDateStr(),items:items||'—',total:total,estado:est});saveDB();renderSup();}
 function markSP(id){var o=DB.ordenesS.find(function(x){return x.id===id;});if(o)o.estado='pagado';saveDB();renderSup();}
 function renderInv(){var el=document.getElementById('f-inv');if(!el)return;el.innerHTML='<div style="padding:14px 16px"><button class="btn p full" onclick="addInvItem()" style="margin-bottom:12px"><i class="ti ti-plus"></i> Agregar pieza al inventario</button>'+(DB.inventario.length?DB.inventario.map(function(it,i){var low=it.qty<=it.min;var m=it.precio>0?((it.precio-it.costo)/it.precio*100):100;return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--white);border-bottom:1px solid var(--gray-100)"><div style="flex:1"><div style="font-size:12px;font-weight:700;color:'+(low?'var(--red)':'var(--gray-900)')+'">'+it.nombre+'</div><div style="font-size:10px;color:var(--gray-400)">'+it.cat+(it.loc?' · '+it.loc:'')+'</div><div style="font-size:10px;margin-top:2px">$'+it.costo+' → $'+it.precio+' · <strong style="color:var(--green)">'+m.toFixed(0)+'%</strong></div></div><div style="text-align:center;margin:0 10px"><div style="font-size:18px;font-weight:700;color:'+(low?'var(--red)':'var(--green)')+'">'+it.qty+'</div><div style="font-size:9px;color:var(--gray-400)">min '+it.min+'</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn sm g" onclick="adjI(\''+it.id+'\',1)" style="padding:5px 8px"><i class="ti ti-plus"></i></button><button class="btn sm" onclick="adjI(\''+it.id+'\',-1)" style="padding:5px 8px"><i class="ti ti-minus"></i></button></div></div>';}).join(''):'<div style="text-align:center;padding:24px;font-size:13px;color:var(--gray-400)">Sin inventario.</div>')+'</div>';}
 function addInvItem(){var n=prompt('Nombre de la pieza:');if(!n)return;var cat=prompt('Categoría:');var c=parseFloat(prompt('Costo unitario ($):')||0)||0;var p=parseFloat(prompt('Precio venta ($):')||(c*1.7))||c*1.7;var q=parseInt(prompt('Cantidad:')||0)||0;var min=parseInt(prompt('Mínimo alerta:')||2)||2;var loc=prompt('Ubicación:');DB.inventario.push({id:'INV-'+Date.now(),nombre:n,cat:cat||'Otro',costo:c,precio:p,qty:q,min:min,loc:loc||''});saveDB();renderInv();}
@@ -3486,7 +3488,7 @@ function openPartsModalRO(svcIdx){
   if(!svc.parts)svc.parts=[];
   document.getElementById('pm-title').textContent='Piezas — '+svc.n;
   document.getElementById('pm-sub').textContent='Para esta orden específica';
-  var d=document.getElementById('pp-date');if(d)d.value=new Date().toISOString().split('T')[0];
+  var d=document.getElementById('pp-date');if(d)d.value=localDateStr();
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
   var air=document.getElementById('ai-suggest-result');if(air){air.style.display='none';air.innerHTML='';}
@@ -3605,7 +3607,7 @@ function openPartsModal(svcId,svcName){
   currentPartService={id:svcId,name:svcName};
   document.getElementById('pm-title').textContent='Piezas del servicio';
   document.getElementById('pm-sub').textContent=svcName;
-  var d=document.getElementById('pp-date');if(d)d.value=new Date().toISOString().split('T')[0];
+  var d=document.getElementById('pp-date');if(d)d.value=localDateStr();
   // Clear inputs
   ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
@@ -3663,7 +3665,7 @@ function savePart(){
     qty:qty,
     sellPrice:sell,
     receipt:document.getElementById('pp-receipt').value,
-    date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]
+    date:document.getElementById('pp-date').value||localDateStr()
   };
   if(!DB.serviceParts[currentPartService.id])DB.serviceParts[currentPartService.id]=[];
   if(_editPartIdx>=0&&DB.serviceParts[currentPartService.id][_editPartIdx]){
@@ -3693,7 +3695,7 @@ function savePartRO(){
   var cost=parseFloat(document.getElementById('pp-cost').value)||0;
   var qty=parseInt(document.getElementById('pp-qty').value)||1;
   var sell=parseFloat(document.getElementById('pp-sell').value)||0;
-  var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||new Date().toISOString().split('T')[0]};
+  var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||localDateStr()};
   if(!svc.parts)svc.parts=[];
   if(_editPartIdx>=0&&svc.parts[_editPartIdx]){
     var vieja=svc.parts[_editPartIdx];
@@ -4607,7 +4609,7 @@ function delCustomSvc(id){
 // ============ PROMOCIONES (combos a precio fijo) ============
 function promoVigente(p){
   if(p.on===false)return false;
-  if(p.hasta){var hoy=new Date().toISOString().split('T')[0];if(hoy>p.hasta)return false;}
+  if(p.hasta){var hoy=localDateStr();if(hoy>p.hasta)return false;}   // día de PR, no UTC: la promo vale hasta el final de SU último día
   return true;
 }
 function renderPromosAdmin(){
@@ -4665,7 +4667,7 @@ function exportBackup(){
   var blob=new Blob([data],{type:'application/json'});
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');
-  a.href=url;a.download='ShopFlow_backup_'+new Date().toISOString().split('T')[0]+'.json';
+  a.href=url;a.download='ShopFlow_backup_'+localDateStr()+'.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
@@ -4979,7 +4981,19 @@ function applyCitaPrefill(){
     if(/^\d{4}$/.test(vp[0])){RO.vehiculo.year=vp[0];RO.vehiculo.make=vp[1]||'';RO.vehiculo.model=vp.slice(2).join(' ');}
     else{RO.vehiculo.make=vp[0];RO.vehiculo.model=vp.slice(1).join(' ');}
   }
-  c.estado='completada';c.roId=RO.id;saveDB();
+  /* La cita se marca como atendida cuando la orden EXISTE, no cuando se abre el asistente.
+     Antes se cerraba aquí mismo: si tocabas "convertir en orden" y te salías sin guardar (o
+     iOS mataba Safari a media orden), la cita desaparecía del día y no quedaba ninguna orden.
+     El cliente llegaba a las 10:00 y en la app no había rastro de él. */
+  RO.citaId=c.id;
+}
+// Cierra la cita de la que salió esta orden — se llama SOLO después de guardarla.
+function cerrarCitaDeRO(o){
+  if(!o||!o.citaId)return;
+  var c=(DB.citas||[]).find(function(x){return x.id===o.citaId;});
+  if(!c||c.estado==='completada')return;
+  c.estado='completada';c.roId=o.id;
+  bita('cita-atendida',o.id,'cita de '+(c.cliente||'')+' '+(c.fecha||'')+' '+(c.hora||'')+' → orden');
 }
 function renderHomeCitas(){
   var el=document.getElementById('home-citas');if(!el)return;
