@@ -2,52 +2,112 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-27 (sesion larga: batches 14, 15, 16, 17)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-19)
 
-**Estado: TODO EN VIVO Y VERDE.** `live == repo`, SW **v16**, suite **21 archivos / 368 pruebas /
-0 fallos** corridas en local Y contra `robert30z.github.io/ShopFlow`. Working tree limpio, todo
-pusheado a `main`. Supabase REST/auth 200, los 4 CDN 200, respaldo GitHub al dia (commit de hoy
-19:06, 23.5 KB, RO-2 Migdalia con sus 35 fotos, sellada).
+**Estado: TODO EN VIVO Y VERDE.** `live == repo`, SW **v18**, suite **26 archivos / 482 checks /
+0 fallos** en local Y contra `robert30z.github.io/ShopFlow`. Working tree limpio y pusheado.
 
-**LO UNICO QUE LE TOCA A ROBERTO:**
-1. Abrir ShopFlow en el **iPad y el iPhone** y **recargar 2 veces** (para que baje el SW v16).
-2. **Rotar el PAT de Supabase y cambiar la contrasena** de esa cuenta (pendiente desde el 26-jul).
+**LO QUE LE TOCA A ROBERTO (en orden):**
+1. **Pegar `supabase/aprobaciones.sql`** en Supabase -> SQL Editor -> New query -> Run (una sola
+   vez). Atajo desde la app: Ajustes -> "Aprobacion del cliente desde el link" -> **Copiar el SQL**,
+   y despues **Probar la puerta**. SIN ese paso la app funciona exactamente igual que ayer (el
+   boton del cliente abre WhatsApp); CON el paso, el cliente aprueba con un toque y entra solo.
+2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v18).
+3. **Rotar el PAT de Supabase y cambiar la contrasena** (pendiente desde el 26-jul).
+4. Si quiere, revisar los precios del catalogo nuevo (Ajustes -> Catalogo de servicios): entraron
+   los de su guia (aceite $100/$140, diagnostico $60, bateria $45, pre-compra $80, frenos $139).
 
-**Lo que se hizo hoy** (detalle completo abajo, batch por batch): 13 bugs encontrados sondeando la
-app real + 4 funciones que faltaban (libro de pagos, aprobacion del estimado, aviso "carro listo",
-fotos por punto de inspeccion). Los mas gordos: el P&L no cuadraba con el CSV del contable, el
-boton "Restaurar desde la nube" no restauraba y mentia, el merge se comia un cobro cuando dos
-equipos cobraban la misma orden, y **la app abierta dos veces en el mismo equipo borraba ordenes
-en silencio**.
+**LO QUE SE HIZO (28-jul):** la **aprobacion remota del estimado** (el punto 1 de la lista de ayer)
++ **7 bugs** que salieron corriendo una orden de reparacion COMPLETA en un equipo limpio, tocando
+la interfaz de verdad — no llamando funciones.
 
-**QUEDA EXPUESTO (dicho de frente, no arreglado):**
-- Los nombres de cliente se pintan crudos en varias pantallas: un `<` rompe el layout. Probado que
-  NO hay XSS explotable con un solo usuario, pero un pase de escape general esta pendiente.
+**QUEDA EXPUESTO (dicho de frente):**
+- **El SQL de las aprobaciones NO se corrio contra la base de datos real** (no hay PAT: se pidio
+  rotarlo). Se probaron los caminos de la app contra un cliente Supabase falso, con las dos
+  respuestas (buena y mala) y el degradado a WhatsApp. La primera aprobacion de verdad hay que
+  mirarla.
 - El link `#s=` de una orden con 25 servicios pesa 3.2 KB; con ~40 reventaria wa.me.
-- Sin permisos/roles (importa al emplear o al vender). IndexedDB no existe en navegacion privada.
-- El flujo de sincronizacion entre dos equipos esta probado sintetico (mergeDB, conflictos, pagos),
-  **no con dos aparatos reales en la mano**.
+- Los nombres de cliente se pintan crudos en varias pantallas (un `<` rompe el layout; no hay XSS
+  explotable con un solo usuario, probado).
+- Sin permisos/roles. IndexedDB no existe en navegacion privada.
+- La sincronizacion entre dos equipos sigue probada sintetico, **no con dos aparatos en la mano**.
+- El token del link vale para quien lo tenga (igual que cualquier link de firma): 128 bits al azar,
+  vence a los 45 dias, y queda registrado nombre + IP + navegador de quien aprobo.
 
 **LO SIGUIENTE QUE YO ATACARIA (en orden):**
-1. **Que la aprobacion del cliente entre SOLA desde el link** (hoy Roberto la registra a mano
-   cuando le llega el WhatsApp). Con Supabase se puede, pero hay que abrir una puerta anonima
-   (RPC + rate limit + token por orden) y eso se disena, no se improvisa.
-2. **Video de 15 seg** (ej. alternador moviendose). DISENO CRITICO: SOLO a Supabase Storage,
-   **nunca al respaldo GitHub** (30s = 30-60 MB = revienta el respaldo; 1 GB ~ 20 videos).
-3. Historial por vehiculo en pantalla + recordatorio de `nextDate` (ya se guarda, nadie lo persigue).
-4. Escape general de texto del usuario en el HTML (lo de arriba).
-5. Editar jobs personalizados y promos (bajo riesgo, no entran en cifras reportadas).
+1. Historial por vehiculo en pantalla + recordatorio de `nextDate` (ya se guarda, nadie lo persigue).
+2. Video de 15 seg — DISENO CRITICO: **solo a Supabase Storage, nunca al respaldo GitHub**.
+3. Escape general de texto del usuario en el HTML.
+4. Editar jobs personalizados y promos.
+5. Aviso cuando una aprobacion lleva 24h sin contestar.
 
 **COMO SE AUDITA ESTO** (no negociable, ver memoria `feedback-auditoria-bulletproof`): una
 auditoria que termina en "todo verde" sin un hallazgo, fallo. Sondear la app REAL en el navegador,
 no releer lo ya arreglado. Ejes: datos en vuelo · que los numeros cuadren entre pantallas · probar
 el camino de recuperacion con el archivo de verdad · arreglar la CLASE, no la instancia · una
 prueba por bug · reportar honesto lo que NO se reviso.
+⭐ **Lo que mas rindio el 28-jul: correr una orden COMPLETA como la corre el** (equipo limpio,
+clicks reales, de la cita al cobro). Los 7 bugs salieron de ahi o de tirar del hilo de uno de ellos.
 
 **Correr las pruebas:** `python -m http.server 8931` en la raiz del repo y `node <archivo>.js`
 desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.io/ShopFlow/index.html" node smoke.js`.
+La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 
-## Last updated: 2026-07-27 (batches 16-17: libro de pagos, aprobacion, fotos por punto + 4 bugs)
+## Last updated: 2026-07-28 (batches 18-19: aprobacion remota + 7 bugs de la orden completa)
+
+## 2026-07-28 (batch 19): LA CITA NO SE PUEDE PERDER + EL DIA ES EL DE PR (SW v18, 482 checks)
+6. 🐛 **Convertir una cita en orden la daba por atendida al INSTANTE.** `citaToRO` marcaba la
+   cita "completada" al abrir el asistente, antes de que existiera ninguna orden: tocar el boton y
+   salirse (o que iOS matara Safari a media orden) borraba la cita del dia sin dejar orden. El
+   cliente llegaba a las 10:00 y en la app no habia rastro de el. Ahora se cierra cuando la orden
+   EXISTE (`cerrarCitaDeRO` en `saveRO` y `saveOpenRO`), con bitacora y enlace `citaId`.
+7. 🐛 **7 sitios seguian escribiendo el dia del calendario en UTC** — la misma clase del bug de
+   los gastos del dia 1. En PR (UTC-4) desde las 8:00 PM ya es MANANA. La peor: `promoVigente`
+   apagaba sola una promo el ultimo dia a las 8 de la noche. Tambien la fecha por defecto de las
+   piezas y la de las ordenes a suplidores. Todo pasa por `localDateStr()`.
+   Prueba `cita-y-fechas.js`: corre con el reloj en `America/Puerto_Rico` y **escanea el fuente**
+   para que no vuelva a entrar una fecha UTC.
+   ⚠️ `smoke.js` exigia el contrato viejo de las citas ("marked completada" al abrir): actualizado.
+
+## 2026-07-28 (batch 18): APROBACION REMOTA DEL ESTIMADO + 5 bugs de la orden completa (SW v17)
+**LO NUEVO — el cliente aprueba DESDE EL LINK y lo sella el SERVIDOR.** Era el punto 1 de la lista
+de ayer y la ultima pieza de la proteccion legal: antes el boton "Aprobar" abria un WhatsApp y la
+aprobacion se quedaba en el chat, con el taller escribiendo a mano una nota sobre si mismo.
+- `supabase/aprobaciones.sql`: tabla + **dos** funciones publicas (`aprob_ver`, `aprob_registrar`),
+  RLS que deja al anonimo SIN acceso a la tabla, freno de intentos por IP, y un **trigger que
+  impide reescribir una aprobacion ya decidida** (ni el taller puede). Guarda hora del servidor,
+  nombre, IP y navegador. ⚠️ **Falta correr el SQL** (no hay PAT; se pega desde Ajustes).
+- App: `aprobTokenDe` (token de 128 bits que **se renueva si el presupuesto cambia** — aprobar $154
+  no puede valer por $656), `aprobPublicar` (fire-and-forget: en iOS un `await` antes de abrir
+  WhatsApp lo bloquea el navegador), `aprobPull` (baja las decisiones, idempotente, no avisa dos
+  veces) enganchado a `syncPull` + canal realtime **aparte** (si la tabla no existe, la suscripcion
+  falla sin llevarse por delante la sincronizacion del taller).
+- Degradado: sin SQL, sin sesion o sin senal, el link va SIN token y el boton abre WhatsApp como
+  siempre. La pagina del cliente **nunca le dice "aprobado" si no se registro**.
+- La orden muestra "esperando la aprobacion", quien aprobo y desde donde, y avisa si el trabajo
+  crecio despues. El rechazo sale en rojo.
+
+**5 BUGS de correr una orden completa en equipo limpio (`test/orden-completa.js`, 43 checks):**
+1. 🐛 **El catalogo de fabrica estaba en INGLES** ("Front Brake Service", "Battery Replacement")
+   en una app en espanol para un taller en Bayamon: buscar "freno", "bateria", "alternador" o
+   "goma" daba CERO resultados en las 10 categorias.
+2. 🐛 **El buscador solo miraba la categoria ABIERTA** y sin resultados dejaba el area EN BLANCO,
+   sin mensaje — parecia que la app se colgo. Ahora busca en todo el catalogo, dice de que
+   categoria salio cada uno, **ignora acentos** (`norm()`, tambien en clientes, ordenes,
+   inventario, flotas, promos y jobs) y ofrece anadirlo a mano cuando no hay nada.
+3. 🐛 **El aceite cotizaba $45/$75 cuando su precio real es $100/$140** — cotizar por el catalogo
+   era regalar la mitad del trabajo. Su propia guia (`HQ\Pit Stop\PRECIOS-LABOR.md`) ya avisaba de
+   esto. Entraron tambien diagnostico $60, bateria $45, pre-compra $80, frenos $139.
+4. 🐛 **Horas facturadas infladas por la cantidad.** La MISMA tarjeta de la orden decia "Mano de
+   obra: 1h x $100 = $100.00" y debajo "FACTURADAS 2.00 h" (renglon "Amortiguador x2 · 1h"): la
+   factura multiplica el PRECIO por la cantidad, nunca las horas. Su **$/hora salia a la MITAD** —
+   el numero con el que decide si sube la tarifa o si un tecnico rinde. Una sola fuente:
+   `_horasFactDe` (la usan la tarjeta de la orden, el $/hora y los asesores).
+5. 🐛 **Cobrar mas que el balance se aceptaba callado.** $500 en una cuenta de $111.50 dejaba
+   "Cobrado hoy" en $500 y el P&L en $111.50: la caja del dia no cerraba por $388.50 que nunca
+   entraron, y un cero de mas al teclear bastaba. Ahora avisa, apunta el balance, y el vuelto queda
+   anotado en el renglon (`p.vuelto`) y en la bitacora. El invariante vive en `registrarPago`, o
+   sea que ningun camino puede volver a apuntar de mas.
 
 ## 2026-07-27 (batch 17): LA APP ABIERTA DOS VECES SE COMIA ORDENES (SW v16, 368 verdes)
 Sonda creativa, escenarios que nadie habia probado. **Hallazgo grave:** la PWA instalada Y Safari
