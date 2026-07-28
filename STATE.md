@@ -4,7 +4,7 @@
 
 ## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-19)
 
-**Estado: TODO EN VIVO Y VERDE.** `live == repo`, SW **v18**, suite **26 archivos / 482 checks /
+**Estado: TODO EN VIVO Y VERDE.** `live == repo`, SW **v19**, suite **26 archivos / 482 checks /
 0 fallos** en local Y contra `robert30z.github.io/ShopFlow`. Working tree limpio y pusheado.
 
 **LO QUE LE TOCA A ROBERTO (en orden):**
@@ -12,8 +12,12 @@
    vez). Atajo desde la app: Ajustes -> "Aprobacion del cliente desde el link" -> **Copiar el SQL**,
    y despues **Probar la puerta**. SIN ese paso la app funciona exactamente igual que ayer (el
    boton del cliente abre WhatsApp); CON el paso, el cliente aprueba con un toque y entra solo.
-2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v18).
+2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v19).
 3. **Rotar el PAT de Supabase y cambiar la contrasena** (pendiente desde el 26-jul).
+4. **API key de Anthropic** para que funcionen los botones AI: console.anthropic.com -> Billing
+   (minimo $5) -> API keys -> Create key -> pegarla en Ajustes -> Inteligencia Artificial. La key
+   vive SOLO en ese equipo (no viaja en respaldo ni sincronizacion): hay que pegarla en el iPad y
+   en el iPhone por separado. ~2 centavos por uso.
 4. Si quiere, revisar los precios del catalogo nuevo (Ajustes -> Catalogo de servicios): entraron
    los de su guia (aceite $100/$140, diagnostico $60, bateria $45, pre-compra $80, frenos $139).
 
@@ -53,7 +57,19 @@ clicks reales, de la cita al cobro). Los 7 bugs salieron de ahi o de tirar del h
 desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.io/ShopFlow/index.html" node smoke.js`.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 
-## Last updated: 2026-07-28 (batches 18-19: aprobacion remota + 7 bugs de la orden completa)
+## Last updated: 2026-07-28 (batches 18-20: aprobacion remota, 7 bugs, AI al dia)
+
+## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
+`aiFetch` llamaba a `claude-opus-4-8`. Ahora **`claude-opus-5`**, con dos decisiones a proposito:
+- **`thinking: {type:'disabled'}`** — en Opus 5 el razonamiento viene ENCENDIDO por defecto y
+  comparte el techo de `max_tokens` con la respuesta. Los 4 sitios que llaman al AI usan techos de
+  300 a 800 tokens (descripcion de trabajo, estimado de horas, diagnostico), asi que con el
+  razonamiento puesto las contestaciones habrian salido CORTADAS a la mitad. Desactivarlo es
+  valido al effort por defecto (`high`); a `xhigh`/`max` daria 400.
+- **`system` corto en espanol de taller** — con el razonamiento apagado el modelo a veces deja
+  etiquetas internas sueltas en el texto; esta linea lo evita y de paso fija la voz.
+⚠️ **NO se pudo probar contra la API**: sin la API key de Roberto no hay a que llamar. La primera
+vez que toque un boton AI hay que mirar que conteste bien.
 
 ## 2026-07-28 (batch 19): LA CITA NO SE PUEDE PERDER + EL DIA ES EL DE PR (SW v18, 482 checks)
 6. 🐛 **Convertir una cita en orden la daba por atendida al INSTANTE.** `citaToRO` marcaba la
