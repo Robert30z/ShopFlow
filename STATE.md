@@ -2,7 +2,16 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-23)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-24)
+
+**🆕 BATCH 24 — LA CITA DE AMANDA SE REPARA SOLA.** Arreglar el merge (batch 23) evita que vuelva
+a pasar pero **NO reparaba la cita que ya quedo mal** — Roberto abrio el iPad en v22 y la cita
+seguia en la agenda con el carro ya trabajado y cobrado. **El la cazo, no yo: yo di el arreglo por
+terminado.** El enlace sobrevivio del lado de la ORDEN (`o.citaId`); con eso se reconstruye.
+`repararCitasPisadas` corre en cada carga (junto a `migrarPagos`): cada orden que nacio de una cita
+cierra su cita. Idempotente, no toca citas que ninguna orden reclame, deja renglon en la bitacora.
+**VERIFICADO CON SU RESPALDO REAL** en equipo limpio: la cita queda `completada` con `roId: RO-3`
+y el home pasa de ensenarla a "Sin citas para hoy".
 
 **🆕 BATCH 22 — LA VERSION SE VE EN PANTALLA (se lo pidio Roberto).** `APP_V` pegado a la fecha del
 encabezado ("Julio 28 · v22") + tarjeta en Ajustes con la version que corre, la que esta guardada
@@ -41,7 +50,7 @@ datos" esta RESUELTO**.
 
 ## 🚦 (historico) cierre previo del 2026-07-28 (batches 18-21)
 
-**Estado: TODO EN VIVO Y VERDE.** SW **v22**, suite **30 archivos / 531 checks / 0 fallos** (local Y en vivo), `live == repo`.
+**Estado: TODO EN VIVO Y VERDE.** SW **v23**, suite **30 archivos / 537 checks / 0 fallos** (local Y en vivo), `live == repo` byte a byte.
 Working tree limpio y pusheado.
 
 **🆕 BATCH 21 (28-jul, 2da auditoria del dia): LA CAJA NO CUADRABA.** 4 bugs, todos de dinero o
@@ -68,7 +77,7 @@ MISMO a dos pantallas distintas y comparar** — los 3 primeros bugs salieron de
    vez). Atajo desde la app: Ajustes -> "Aprobacion del cliente desde el link" -> **Copiar el SQL**,
    y despues **Probar la puerta**. SIN ese paso la app funciona exactamente igual que ayer (el
    boton del cliente abre WhatsApp); CON el paso, el cliente aprueba con un toque y entra solo.
-2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v22). Para confirmar que agarro:
+2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v23). Para confirmar que agarro:
    Ajustes -> **Version de la app** debe decir v22 y "Estas al dia" (o usar el boton nuevo
    "Buscar actualizacion y recargar"). La version tambien sale junto a la fecha del encabezado.
 3. **Rotar el PAT de Supabase y cambiar la contrasena** (pendiente desde el 26-jul).
@@ -116,7 +125,7 @@ desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-28 (batches 18-23: aprobacion remota, 7 bugs, AI, la caja cuadra,
+## Last updated: 2026-07-28 (batches 18-24: aprobacion remota, 7 bugs, AI, la caja cuadra,
 ## version visible, la nube ya no pisa lo fresco, respaldo verificado con orden real)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
