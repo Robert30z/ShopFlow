@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v22';
+var APP_V='v23';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -1076,7 +1076,30 @@ function normalizarDB(db){
   db.tecCounter=Math.max(typeof db.tecCounter==='number'?db.tecCounter:0,_maxIdNum(db.tecnicos,'TEC-'));
   db.aseCounter=Math.max(typeof db.aseCounter==='number'?db.aseCounter:0,_maxIdNum(db.asesores,'ASE-'));
   try{migrarPagos(db);}catch(e){}
+  try{repararCitasPisadas(db);}catch(e){}
   return db;
+}
+/* REPARA LAS CITAS QUE LA NUBE RESUCITÓ (bug arreglado en el batch 23, 28-jul).
+   Mientras `mergeDB` dejaba que la nube atrasada ganara, una cita que se convirtió en orden
+   volvía a aparecer como "agendada": el cliente seguía en la agenda del día aunque el carro ya
+   estaba trabajado y cobrado. Arreglar el merge evita que vuelva a pasar, pero NO repara la cita
+   que ya quedó mal — le pasó a Roberto con la de Amanda Ortiz del 28-jul.
+   El enlace sobrevivió del lado de la ORDEN (`o.citaId`), porque las órdenes sí se mezclaban bien.
+   Con eso se reconstruye: cada orden que nació de una cita cierra su cita. Corre en cada carga,
+   es idempotente, y no toca ninguna cita que no tenga una orden que la reclame. */
+function repararCitasPisadas(db){
+  db=db||DB;
+  var citas=db.citas||[];if(!citas.length)return 0;
+  var porId={};citas.forEach(function(c){if(c&&c.id)porId[c.id]=c;});
+  var n=0;
+  (db.ordenes||[]).forEach(function(o){
+    if(!o||!o.citaId)return;
+    var c=porId[o.citaId];
+    if(!c||c.estado==='completada')return;
+    c.estado='completada';c.roId=o.id;n++;
+  });
+  if(n)try{bita('citas-reparadas','',n+' cita(s) que la nube habia devuelto a "agendada" se cerraron con su orden');}catch(e){}
+  return n;
 }
 function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);normalizarDB(DB);}catch(e){try{normalizarDB(DB);}catch(e2){}}
   // Una orden que está en la papelera no puede seguir viva en la lista activa: si dos equipos

@@ -133,6 +133,31 @@ const is = (n, got, exp) => (got === exp ? ok(n, got) : no(n, { got, exp }));
   is('"Marcar pagado" tambien saca el carro del garage', g.estado, 'entregado');
   is('...y lo deja anotado en la bitácora del carro', g.log > 0, true);
 
+  // --- 6. LAS CITAS QUE YA QUEDARON MAL SE REPARAN SOLAS ---
+  // Caso EXACTO de Roberto: RO-3 guarda `citaId`, pero la cita volvio a "agendada" sin `roId`.
+  // Arreglar el merge no repara lo ya danado; esto si, y en cada carga de la app.
+  const rep = await page.evaluate(() => {
+    const db = {
+      ordenes: [
+        { id: 'RO-3', citaId: 'CITA-1785179062544', cliente: 'Amanda Ortiz', total: 372.02, estado: 'pagado' },
+        { id: 'RO-2', cliente: 'Migdalia Cotto', total: 88.2, estado: 'pagado' }            // sin cita
+      ],
+      citas: [
+        { id: 'CITA-1785179062544', cliente: 'Amanda Ortiz', fecha: '2026-07-28', hora: '11:00', estado: 'agendada' },
+        { id: 'CITA-OTRA', cliente: 'Cliente de manana', fecha: '2026-07-29', estado: 'agendada' }   // legitima
+      ]
+    };
+    const n = repararCitasPisadas(db);
+    const n2 = repararCitasPisadas(db);   // idempotente
+    return { n, n2, amanda: db.citas[0], otra: db.citas[1] };
+  });
+  is('Repara la cita de Amanda que la nube devolvio a "agendada"', rep.amanda.estado, 'completada');
+  is('...y le devuelve el enlace a su orden', rep.amanda.roId, 'RO-3');
+  is('Reporta exactamente 1 reparada', rep.n, 1);
+  is('Correrla otra vez no hace nada (idempotente)', rep.n2, 0);
+  is('NO toca una cita legitima de manana', rep.otra.estado, 'agendada');
+  is('...ni le inventa una orden', rep.otra.roId, undefined);
+
   console.log('\n' + (fail === 0 ? 'TODO VERDE' : 'HAY FALLOS') + ' — ' + pass + ' pass / ' + fail + ' fail');
   if (errs.length) { console.log('page errors:', errs); process.exitCode = 1; }
   if (fail) process.exitCode = 1;
