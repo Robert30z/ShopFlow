@@ -2,9 +2,46 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-21)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-23)
 
-**Estado: TODO EN VIVO Y VERDE.** SW **v20**, suite **27 archivos / 498 checks / 0 fallos**.
+**🆕 BATCH 22 — LA VERSION SE VE EN PANTALLA (se lo pidio Roberto).** `APP_V` pegado a la fecha del
+encabezado ("Julio 28 · v22") + tarjeta en Ajustes con la version que corre, la que esta guardada
+en el equipo, de que equipo se trata y un veredicto ("Estas al dia" / "Falta una recarga"), mas un
+boton **"Buscar actualizacion y recargar"** que le ahorra el "cierra la app dos veces".
+`test/version.js` vigila que `APP_V` (index.html) y `CACHE_V` (sw.js) digan lo MISMO.
+
+**🆕 BATCH 23 — LA NUBE ATRASADA PISABA LO FRESCO (13 listas) + EL CARRO NO SALIA DEL GARAGE.**
+Los dos salieron de **auditar su RESPALDO REAL** (el lo pidio), no el codigo: su data contradecia
+a su propia bitacora.
+1. 🐛 `mergeDB` resolvia las ORDENES por "gana la edicion mas reciente" (arreglado el 27-jul) pero
+   **las otras 13 listas seguian con la regla vieja: para un id presente en los dos lados LA NUBE
+   GANABA SIEMPRE**. EVIDENCIA REAL: el 28-jul convirtio la cita de Amanda en orden a las 12:13 PM,
+   la app la marco "completada" (quedo en la bitacora) y **el respaldo de las 12:58 la tenia otra
+   vez "agendada"** — la nube la resucito. Con `inventario` eso = conteos de piezas mal sin que
+   nadie se entere; con `gastos`, una correccion que se revierte sola.
+   Fix: `COLS_SYNC` + huella por item en `censo()` + marca en `marcarEditadas()` + la misma
+   resolucion por `_editedAt` de las ordenes. `papelera` se queda con la union (un borrado tiene
+   que llegar a los demas equipos).
+2. 🐛 **El carro se quedaba en el garage como EN TRABAJO para siempre** si la orden se cerraba con
+   "Marcar pagado" (sacarlo vivia dentro de `cobrarYCerrar`). EVIDENCIA REAL: el Kia Soul de Amanda
+   se cobro y sello 12:13 PM y a las 12:58 seguia `working`. Fix: `cerrarGarageDeRO` en los dos
+   caminos. Prueba: `test/sync-no-pisa.js` (21 checks, reproduce el caso de Amanda).
+3. 🧹 `smoke.js`: la prueba del VIN arrastraba el carro del paso anterior y fallaba 2 de 3 corridas
+   contra el sitio en vivo. **Era la prueba, no la app** (`decodeVIN` solo rellena campos vacios a
+   proposito). Limpia los campos antes de decodificar.
+
+**✅ RESPALDO VERIFICADO DE PUNTA A PUNTA (28-jul tarde).** Roberto cerro una orden en casa de un
+cliente y pidio confirmar el respaldo. Corrio 4 veces ese dia (ultimo 12:58 PM). Bajado por
+`gh api`, **restaurado con `importBackup` en equipo limpio contra el sitio EN VIVO**: RO-3 Amanda
+Ortiz ($372.02, 26 fotos, firmada) vuelve completa, cobro en el libro, **factura sellada e
+`facturaIntacta`=true**. Sin secretos dentro. Las **fotos NO van en el respaldo de GitHub** (solo
+la referencia a Supabase Storage) — bucket privado, **no verificable sin credencial**; lo confirmo
+EL abriendo la orden en el iPhone. Eso ademas confirma que **el bug del 23-jul "el iPhone no baja
+datos" esta RESUELTO**.
+
+## 🚦 (historico) cierre previo del 2026-07-28 (batches 18-21)
+
+**Estado: TODO EN VIVO Y VERDE.** SW **v22**, suite **30 archivos / 531 checks / 0 fallos** (local Y en vivo), `live == repo`.
 Working tree limpio y pusheado.
 
 **🆕 BATCH 21 (28-jul, 2da auditoria del dia): LA CAJA NO CUADRABA.** 4 bugs, todos de dinero o
@@ -31,7 +68,9 @@ MISMO a dos pantallas distintas y comparar** — los 3 primeros bugs salieron de
    vez). Atajo desde la app: Ajustes -> "Aprobacion del cliente desde el link" -> **Copiar el SQL**,
    y despues **Probar la puerta**. SIN ese paso la app funciona exactamente igual que ayer (el
    boton del cliente abre WhatsApp); CON el paso, el cliente aprueba con un toque y entra solo.
-2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v20).
+2. Abrir la app en **iPad e iPhone y recargar 2 veces** (SW v22). Para confirmar que agarro:
+   Ajustes -> **Version de la app** debe decir v22 y "Estas al dia" (o usar el boton nuevo
+   "Buscar actualizacion y recargar"). La version tambien sale junto a la fecha del encabezado.
 3. **Rotar el PAT de Supabase y cambiar la contrasena** (pendiente desde el 26-jul).
 4. **API key de Anthropic** para que funcionen los botones AI: console.anthropic.com -> Billing
    (minimo $5) -> API keys -> Create key -> pegarla en Ajustes -> Inteligencia Artificial. La key
@@ -77,7 +116,8 @@ desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-28 (batches 18-21: aprobacion remota, 7 bugs, AI al dia, la caja cuadra)
+## Last updated: 2026-07-28 (batches 18-23: aprobacion remota, 7 bugs, AI, la caja cuadra,
+## version visible, la nube ya no pisa lo fresco, respaldo verificado con orden real)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
 `aiFetch` llamaba a `claude-opus-4-8`. Ahora **`claude-opus-5`**, con dos decisiones a proposito:
