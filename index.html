@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v21';
+var APP_V='v22';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -776,6 +776,14 @@ function rangoHoy(){
    en el CSV del contable. Se decide aquí para que ninguna pantalla se quede fuera del acuerdo
    (el P&L contaba las abiertas y por eso no cuadraba con el CSV que él le manda al contable). */
 function esContable(o){return !!o&&o.estado!=='abierta';}
+/* TODO lo que viaja entre equipos aparte de las órdenes. Las órdenes ya tenían resuelto quién gana
+   al sincronizar (la edición más reciente); estas 13 listas NO — para un id presente en los dos
+   lados la nube ganaba siempre y la edición fresca del equipo se perdía en silencio.
+   Pasó de verdad: el 28-jul convirtió la cita de Amanda en orden, la app la marcó "completada"
+   (quedó en la bitácora), y el respaldo de esa tarde la tenía otra vez "agendada" — la nube
+   atrasada la resucitó. Con inventario eso significa conteos de piezas mal sin que nadie lo note. */
+var COLS_SYNC=['clientes','citas','garage','gastos','inventario','tecnicos','asesores',
+               'svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS'];
 function censo(db){
   db=db||DB;
   var ids={},fp={},firmas=0,fotosAct=0;
@@ -789,7 +797,16 @@ function censo(db){
   }
   (db.ordenes||[]).forEach(function(o){contar(o,true);});
   (db.papelera||[]).forEach(function(o){contar(o,false);});
-  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,fp:fp,
+  // Huella de TODO lo demás que se sincroniza (citas, garage, gastos, inventario...), para poder
+  // marcarles la hora de edición igual que a las órdenes. Ver `COLS_SYNC` y `mergeDB`.
+  var fpc={};
+  COLS_SYNC.forEach(function(k){
+    (db[k]||[]).forEach(function(it){
+      if(!it||!it.id)return;
+      try{fpc[k+':'+it.id]=hash32(JSON.stringify(it));}catch(e){}
+    });
+  });
+  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,fp:fp,fpc:fpc,
           pap:(db.papelera||[]).length,ts:Date.now()};
 }
 /* Marca con la hora cuál orden cambió de verdad, comparando su huella con la del último estado
@@ -802,6 +819,16 @@ function marcarEditadas(){
     if(!o||!o.id)return;
     var f;try{f=hash32(JSON.stringify(o));}catch(e){return;}
     if(prevFp[o.id]!==f){o._editedAt=ahora;o._editedBy=dev;n++;}
+  });
+  // Lo mismo para citas, garage, gastos, inventario y compañía: sin marca, `mergeDB` no tiene
+  // forma de saber cuál versión es la fresca y la nube gana por defecto.
+  var prevC=(_lastGood&&_lastGood.fpc)||{};
+  COLS_SYNC.forEach(function(k){
+    (DB[k]||[]).forEach(function(it){
+      if(!it||!it.id)return;
+      var f;try{f=hash32(JSON.stringify(it));}catch(e){return;}
+      if(prevC[k+':'+it.id]!==f){it._editedAt=ahora;it._editedBy=dev;n++;}
+    });
   });
   return n;
 }
@@ -1569,7 +1596,34 @@ function mergeDB(local,remote){
   });
   Object.keys(remOrd).forEach(function(id){salida.push(remOrd[id]);});
   out.ordenes=salida;
-  ['clientes','citas','garage','gastos','inventario','tecnicos','asesores','svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS','papelera'].forEach(function(k){
+  /* MISMA REGLA QUE LAS ÓRDENES PARA TODO LO DEMÁS: por id gana la edición más reciente.
+     Antes esto era "si el id ya está en la nube, se queda el de la nube" — o sea la nube ganaba
+     siempre y una edición fresca del equipo se perdía sin avisar. Evidencia real: el 28-jul la
+     cita de Amanda se marcó "completada" al convertirla en orden (quedó en la bitácora) y el
+     respaldo de esa tarde la tenía otra vez "agendada". Con `inventario` el mismo fallo deja
+     conteos de piezas mal; con `gastos`, una corrección que se revierte sola. */
+  COLS_SYNC.forEach(function(k){
+    var rem={},res=[];
+    (remote[k]||[]).forEach(function(it){if(it&&it.id)rem[it.id]=it;});
+    (local[k]||[]).forEach(function(it){
+      if(!it||!it.id)return;
+      var ri=rem[it.id];
+      if(!ri){res.push(it);return;}
+      delete rem[it.id];
+      var tl=it._editedAt||'',tr=ri._editedAt||'';
+      if(tl&&tr&&tl!==tr){
+        var gl=tl>tr;
+        res.push(gl?it:ri);
+        _ultimosConflictos.push(k+'/'+it.id+(gl?' (ganó la de este equipo)':' (ganó la de la nube)'));
+      }else if(tl&&!tr){res.push(it);}   // solo este equipo lo ha tocado
+      else{res.push(ri);}                // empate o sin marcas: como antes, la nube
+    });
+    Object.keys(rem).forEach(function(id){res.push(rem[id]);});
+    out[k]=res;
+  });
+  // La papelera se queda con la unión por id: un borrado hecho en un equipo tiene que llegar a
+  // los demás, y ahí no hay "edición" que comparar — el expediente entra entero o no entra.
+  ['papelera'].forEach(function(k){
     var rIds={};(out[k]||[]).forEach(function(it){if(it&&it.id)rIds[it.id]=1;});
     (local[k]||[]).forEach(function(it){if(it&&it.id&&!rIds[it.id])(out[k]=out[k]||[]).push(it);});
   });
@@ -4251,16 +4305,7 @@ function cobrarYCerrar(roId){
   }else{
     o.estado='pendiente';
   }
-  // El carro sale del garage si ya se lo llevaron.
-  var g=(DB.garage||[]).find(function(x){return x.roId===roId;});
-  if(g&&g.estado!=='entregado'&&confirm('¿El cliente ya se llevó el carro?\n\nSí = sale del garage como ENTREGADO.\nNo = se queda como listo, esperando que lo recojan.')){
-    g.estado='entregado';
-    g.log=g.log||[];g.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Entregado y cobrado.');
-  }else if(g&&g.estado==='working'){
-    g.estado='ready';
-    if(!g.readyTime)g.readyTime=new Date().toISOString();
-    g.log=g.log||[];g.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — Trabajo terminado y cobrado. Listo para recoger.');
-  }
+  cerrarGarageDeRO(roId);
   if(o.estado==='pagado')sellarFactura(o);   // cobrada del todo = factura sellada
   bita('orden-cerrada',roId,antes+' → '+o.estado+' · '+o.pago+' · recibido $'+o.abonado.toFixed(2)+' de $'+total.toFixed(2)+(o.estado==='pagado'?' · SELLADA':''));
   if(!saveDB())return;
@@ -4269,6 +4314,24 @@ function cobrarYCerrar(roId){
     ? '✓ '+o.id+' cobrada y cerrada.\n\n$'+total.toFixed(2)+' por '+o.pago+'.\nYa cuenta en tus ventas del día.'
     : '✓ '+o.id+' cerrada con abono.\n\nRecibido $'+o.abonado.toFixed(2)+' — queda un balance de $'+falta.toFixed(2)+'.\nAparece en "por cobrar" hasta que la completes.');
   openRODetail(roId);
+}
+/* EL CARRO TIENE QUE SALIR DEL GARAGE CUANDO SE COBRA — por CUALQUIERA de los dos caminos.
+   Esto vivía dentro de `cobrarYCerrar` nada más, así que cerrar por "Marcar pagado" dejaba el
+   carro en el garage como EN TRABAJO para siempre. Pasó de verdad: el Kia Soul de Amanda se cobró
+   y se selló el 28-jul a las 12:13 PM y a las 12:58 seguía en el garage "working". El tablero le
+   enseña carros en el taller que ya entregó. */
+function cerrarGarageDeRO(roId){
+  var g=(DB.garage||[]).find(function(x){return x.roId===roId;});
+  if(!g||g.estado==='entregado')return;
+  var hora=new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'});
+  if(confirm('¿El cliente ya se llevó el carro?\n\nSí = sale del garage como ENTREGADO.\nNo = se queda como listo, esperando que lo recojan.')){
+    g.estado='entregado';
+    g.log=g.log||[];g.log.push(hora+' — Entregado y cobrado.');
+  }else if(g.estado==='working'){
+    g.estado='ready';
+    if(!g.readyTime)g.readyTime=new Date().toISOString();
+    g.log=g.log||[];g.log.push(hora+' — Trabajo terminado y cobrado. Listo para recoger.');
+  }
 }
 function markPaid(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
@@ -4279,6 +4342,7 @@ function markPaid(roId){
   if(falta>0)registrarPago(o,falta,o.pago);       // el balance que acaba de entrar, fechado
   o.estado='pagado';o.abonado=o.total||0;o.pagadoFecha=new Date().toISOString();
   sellarFactura(o);
+  cerrarGarageDeRO(roId);                          // el carro no se queda "en trabajo" para siempre
   bita('orden-cerrada',roId,'pendiente → pagado · '+o.pago+' · $'+falta.toFixed(2)+' recibidos · SELLADA');
   saveDB();openRODetail(roId);
 }
