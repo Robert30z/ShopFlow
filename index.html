@@ -833,15 +833,66 @@ function revertirAlUltimoBueno(){
     if(!Array.isArray(DB.bitacora))DB.bitacora=[];
     if(!DB.serviceParts)DB.serviceParts={};
     _lastGood=censo(DB);
+    _revEscrita=(typeof DB._rev==='number')?DB._rev:0;_verAjustes();   // el disco manda: es de donde acabamos de leer
     _autorizado.fotos={};
     try{rerenderCurrent();}catch(e){}
     return true;
   }catch(e){return false;}
 }
 
+/* ---- DOS PESTAÑAS DEL MISMO EQUIPO (la pérdida que nadie estaba mirando) ----
+   Medido el 27-jul: la app abierta dos veces en el mismo aparato (la PWA instalada + Safari, o
+   dos ventanas) se pisa a sí misma. La pestaña A crea una orden y guarda; la pestaña B, que
+   cargó antes y no sabe nada, cambia el teléfono en Ajustes y guarda: **la orden de A desaparece
+   del disco sin un solo aviso** y `saveDB` devuelve éxito. El guard no lo veía porque compara
+   contra SU propia memoria, no contra lo que hay escrito.
+   Ahora cada escritura lleva número de revisión. Si el disco tiene una revisión que este contexto
+   no escribió, se UNE lo del disco antes de guardar (mismo motor que usa la nube: gana la edición
+   más reciente y los pagos/versiones se suman) en vez de reemplazarlo. */
+var _revEscrita=null,_settingsVistos=null;
+function _verAjustes(){try{_settingsVistos=JSON.parse(JSON.stringify(DB.settings||{}));}catch(e){_settingsVistos=null;}}
+function _revEnDisco(){
+  try{
+    var s=localStorage.getItem('sf_v1');if(!s)return null;
+    var m=s.match(/"_rev":(\d+)/);
+    return m?+m[1]:0;
+  }catch(e){return null;}
+}
+function reconciliarDisco(){
+  var rd=_revEnDisco();
+  if(rd===null||rd===_revEscrita)return false;      // nadie más escribió desde la última vez
+  var d;try{d=JSON.parse(localStorage.getItem('sf_v1'));}catch(e){return false;}
+  if(!d||!Array.isArray(d.ordenes))return false;
+  var mios={};(DB.ordenes||[]).concat(DB.papelera||[]).forEach(function(o){if(o&&o.id)mios[o.id]=1;});
+  var ajenas=(d.ordenes||[]).concat(d.papelera||[]).filter(function(o){return o&&o.id&&!mios[o.id];});
+  try{
+    // Las LISTAS se unen. Los AJUSTES se comparan a tres bandas: se parte de lo que hay en disco
+    // (lo que puso la otra ventana) y solo se pisa lo que ESTE contexto cambió desde la última
+    // vez que leyó el disco. Sin esto, el último en guardar borraba el ajuste del otro.
+    var mios=DB.settings||{},vistos=_settingsVistos||{},fusion=null;
+    try{
+      fusion=JSON.parse(JSON.stringify(d.settings||{}));
+      Object.keys(mios).forEach(function(k){
+        if(JSON.stringify(mios[k])!==JSON.stringify(vistos[k]))fusion[k]=mios[k];   // yo lo cambié
+      });
+    }catch(e){fusion=null;}
+    DB=mergeDB(DB,d);
+    if(fusion)DB.settings=fusion;
+    // La revisión tiene que quedar por encima de la que ya está en disco: si se queda igual, la
+    // OTRA pestaña creería que nadie escribió y pisaría esto sin reconciliar (colisión de números).
+    DB._rev=Math.max((typeof DB._rev==='number'?DB._rev:0),(typeof d._rev==='number'?d._rev:0));
+    normalizarDB(DB);
+    reconciliarPapelera();
+    _lastGood=censo(DB);
+    if(ajenas.length)bita('otra-pestana','',ajenas.length+' orden(es) escritas por otra ventana de la app se unieron en vez de perderse: '+ajenas.slice(0,4).map(function(o){return o.id;}).join(', '));
+  }catch(e){return false;}
+  return true;
+}
 // ---- EL ÚNICO CAMINO DE ESCRITURA ----
 function saveDB(opts){
   opts=opts||{};
+  // Antes de mirar nada: ¿escribió otra ventana de la app mientras tanto?
+  if(!DB._demo){try{reconciliarDisco();}catch(e){}}
   if(!opts.force&&!DB._demo){
     var mal=verificaIntegridad(_lastGood,DB);
     if(mal){
@@ -862,7 +913,9 @@ function saveDB(opts){
   // (importar/restaurar): ahí los datos traen su propia historia y no hay que fingir que es de ahora.
   if(!opts.force&&!DB._demo){try{marcarEditadas();}catch(e){}}
   try{
+    DB._rev=(typeof DB._rev==='number'?DB._rev:0)+1;   // marca de escritura (ver reconciliarDisco)
     localStorage.setItem('sf_v1',JSON.stringify(DB));
+    _revEscrita=DB._rev;_verAjustes();
     _autorizado.fotos={};
     if(!DB._demo)_lastGood=censo(DB);
     scheduleCloudBackup();
@@ -930,6 +983,7 @@ function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);
   recogerAlertas();
   // El censo de arranque es la referencia contra la que se compara el primer guardado.
   _lastGood=censo(DB);
+  _revEscrita=(typeof DB._rev==='number')?DB._rev:0;_verAjustes();   // lo que este contexto ya conoce del disco
 }
 // Quita de `ordenes` lo que ya está en la papelera (la papelera manda).
 function reconciliarPapelera(){
@@ -1442,6 +1496,7 @@ function mergeDB(local,remote){
   out.settings=out.settings||{};local.settings=local.settings||{};
   out.settings.aiKey=local.settings.aiKey;out.settings.backup=local.settings.backup; // secretos por-dispositivo, no viajan
   out.serviceParts=Object.assign({},remote.serviceParts||{},local.serviceParts||{});
+  out._rev=local._rev;   // la revision es de ESTE equipo (control de dos pestanas), no viaja
   return out;
 }
 // Re-render por sincronización. Guarda lo que el usuario tiene a medias ANTES de
