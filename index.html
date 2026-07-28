@@ -729,6 +729,41 @@ function porCobrarTotal(lista){
   return (lista||DB.ordenes||[]).filter(function(o){return o.estado==='pendiente';})
     .reduce(function(s,o){return s+balanceRO(o);},0);
 }
+/* ---- DINERO QUE ENTRÓ EN UN RANGO (definido UNA sola vez) ----
+   "Cobrado" salía en DOS pantallas con DOS matemáticas distintas y por eso nunca cuadraba la caja:
+   "Cierre de hoy" (Finanzas → Equipo) leía el libro de pagos, mientras "Resumen del día"
+   (Historial) sumaba el TOTAL de las órdenes marcadas pagadas — ignorando la fecha real del cobro
+   y los abonos. Con una orden de $111.50 cobrada y otra de $223 con $100 abonados el mismo día,
+   una pantalla decía $112 y la otra $100; ninguna de las dos decía la verdad ($211.50). Una sola
+   función, un solo número, y el que cierra la caja deja de tener que escoger a cuál creerle. */
+function cobradoEnRango(ini,fin,lista){
+  var tot=0,porMetodo={};
+  ((lista||DB.ordenes)||[]).forEach(function(o){
+    (((o||{}).pagos)||[]).forEach(function(p){
+      var d=new Date(p.ts);
+      if(!(d>=ini&&d<fin))return;
+      tot+=(p.monto||0);
+      var k=(((p.metodo||'otro')+'').trim())||'otro';
+      porMetodo[k]=Math.round(((porMetodo[k]||0)+(p.monto||0))*100)/100;
+    });
+  });
+  return {total:Math.round(tot*100)/100,porMetodo:porMetodo};
+}
+/* ---- EL VEHÍCULO EN TEXTO (definido UNA sola vez) ----
+   `o.vehiculo` casi siempre existe como objeto ({}), así que el `o.vehiculo ? ... : '—'` de antes
+   NUNCA caía al respaldo: con el año vacío armaba la cadena "undefined Kia Forte" y la pintaba tal
+   cual. Salía en Órdenes, Historial (día/todas/por cliente) y — lo peor — SE LE MANDABA AL CLIENTE
+   por WhatsApp: "Le toca el mantenimiento de undefined". Un solo sitio y un respaldo de verdad. */
+function vehTxt(o,fallback){
+  var v=(o&&o.vehiculo)||{};
+  var s=((v.year||'')+' '+(v.make||'')+' '+(v.model||'')).replace(/\s+/g,' ').trim();
+  return s||(fallback===undefined?'—':fallback);
+}
+// El día del taller, en la hora del equipo (que en PR es la hora de PR) — nunca en UTC.
+function rangoHoy(){
+  var a=new Date();var h0=new Date(a.getFullYear(),a.getMonth(),a.getDate());
+  return {ini:h0,fin:new Date(h0.getFullYear(),h0.getMonth(),h0.getDate()+1)};
+}
 /* Una orden ABIERTA es trabajo que todavía no es dinero: no cuenta en ventas, ni en IVU, ni
    en el CSV del contable. Se decide aquí para que ninguna pantalla se quede fuera del acuerdo
    (el P&L contaba las abiertas y por eso no cuadraba con el CSV que él le manda al contable). */
@@ -3296,7 +3331,33 @@ function updMCC(){var c=MO.reduce(function(s,o){return s+o.qty;},0);var el=docum
 function renderMOItems(){var el=document.getElementById('menu-oi');if(!el)return;el.innerHTML=MO.map(function(o,i){return '<div class="oi"><span class="oi-n">'+o.n+(o.qty>1?' ×'+o.qty:'')+'</span><span style="font-weight:700;color:var(--red);margin-right:8px">$'+(o.p*o.qty).toFixed(2)+'</span><button onclick="MO.splice('+i+',1);updMCC();renderMOItems();" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var el2=document.getElementById('menu-tot');if(el2)el2.textContent='$'+(sub*1.115).toFixed(2);}
 function toggleMO(){var p=document.getElementById('menu-op');if(p)p.style.display=p.style.display==='none'?'block':'none';}
 function clearMO(){MO=[];updMCC();renderMOItems();}
-function saveMO(){if(!MO.length){alert('Agrega servicios primero.');return;}var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var id=nextRONum();DB.ordenes.push({id:id,fecha:new Date().toISOString(),cliente:'Orden rápida del menú',tel:'',vehiculo:{},servicios:MO.map(function(o){return{id:o.id,n:o.n,p:o.p,qty:o.qty,ep:o.p};}),total:Math.round(sub*1.115*100)/100,pago:'ATH Móvil',estado:'pagado',insp:{},denegados:[]});saveDB();clearMO();alert('Guardado como '+id);go('ordenes');}
+/* ORDEN RÁPIDA DEL MENÚ — nacía PAGADA pero sin decírselo al libro de pagos, así que el dinero
+   desaparecía de la caja: "Cierre de hoy" mostraba Vendido $111.50 y **Cobrado $0**, y como el
+   estado era 'pagado' tampoco salía en "por cobrar". Los $111.50 no existían en ninguna pantalla
+   de cobro. Además hardcodeaba "ATH Móvil": el desglose de la caja (cuánto por ATH, cuánto en
+   efectivo) mentía en cada venta de mostrador. Ahora pasa por el mismo camino que las demás:
+   se pregunta el método, se apunta el renglón, se sella la factura y queda en la bitácora. */
+function saveMO(){
+  if(!MO.length){alert('Agrega servicios primero.');return;}
+  var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);
+  var total=Math.round(sub*1.115*100)/100;
+  var met=prompt('Orden rápida — $'+total.toFixed(2)+'\n¿Cómo te pagó?\n(ATH Móvil / Cash / Tarjeta / Zelle / Cheque)','ATH Móvil');
+  if(met===null)return;                       // cancelar no crea la orden
+  met=(met||'ATH Móvil').trim()||'ATH Móvil';
+  var id=nextRONum();
+  var o={id:id,fecha:new Date().toISOString(),cliente:'Orden rápida del menú',tel:'',vehiculo:{},
+         servicios:MO.map(function(x){return{id:x.id,n:x.n,p:x.p,qty:x.qty,ep:x.p};}),
+         total:total,pago:met,estado:'pagado',pagadoFecha:new Date().toISOString(),
+         insp:{},denegados:[]};
+  registrarPago(o,total,met);                 // el cobro entra al libro, con su hora y su método
+  DB.ordenes.push(o);
+  sellarFactura(o);                           // cobrada del todo = factura sellada (batch 12)
+  bita('orden-rapida',id,'$'+total.toFixed(2)+' · '+met+' · '+MO.length+' servicio'+(MO.length!==1?'s':'')+' · SELLADA');
+  if(!saveDB())return;
+  clearMO();
+  alert('Guardado como '+id+' ✓\n\n$'+total.toFixed(2)+' por '+met+'.\nYa cuenta en la caja de hoy.');
+  go('ordenes');
+}
 
 function finTab(id){document.querySelectorAll('#finanzas .tp').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('#fin-tabs .tab').forEach(function(t){t.classList.remove('active');});document.getElementById(id).classList.add('active');var tabs=document.querySelectorAll('#fin-tabs .tab');var ids=['f-pl','f-kpi','f-eq','f-sup','f-inv','f-gas'];ids.forEach(function(p,i){if(p===id&&tabs[i])tabs[i].classList.add('active');});if(id==='f-pl')renderPL();if(id==='f-kpi')renderKPIs();if(id==='f-eq')renderEquipo();if(id==='f-sup')renderSup();if(id==='f-inv')renderInv();if(id==='f-gas')renderGas();}
 function renderPL(){
@@ -3778,8 +3839,13 @@ function renderHistDia(){
   var now=new Date();var today=now.toDateString();
   var ords=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;}).sort(function(a,b){return new Date(a.fecha)-new Date(b.fecha);});
   var total=ords.reduce(function(s,o){return s+(o.total||0);},0);
-  var pagado=ords.filter(function(o){return o.estado==='pagado';}).reduce(function(s,o){return s+(o.total||0);},0);
-  var pendiente=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+(o.total||0);},0);
+  /* Cobrado y pendiente salen de las MISMAS funciones que "Cierre de hoy" (Finanzas → Equipo).
+     Antes esta pantalla sumaba el total de las órdenes marcadas pagadas e ignoraba tanto la fecha
+     real del cobro como los abonos: decía "Cobrado $112 / Pendiente $223" el mismo día que la otra
+     pantalla decía "$100 / $123". Cerrar la caja era escoger a cuál creerle. */
+  var _r=rangoHoy();
+  var pagado=cobradoEnRango(_r.ini,_r.fin).total;   // dinero que ENTRÓ hoy, con su fecha
+  var pendiente=porCobrarTotal(ords);               // balance real de las de hoy, menos lo abonado
   // Count cars (unique by tag or by order)
   var carCount=ords.length;
   // Parts cost today
@@ -3798,14 +3864,15 @@ function renderHistDia(){
       '<div class="sc"><div class="sl">Carros</div><div class="sv n">'+carCount+'</div></div>'+
       '<div class="sc"><div class="sl">Total</div><div class="sv g">$'+total.toFixed(0)+'</div></div>'+
       '<div class="sc"><div class="sl">Cobrado</div><div class="sv b">$'+pagado.toFixed(0)+'</div></div>'+
-      '<div class="sc"><div class="sl">Pendiente</div><div class="sv a">$'+pendiente.toFixed(0)+'</div></div>'+
+      '<div class="sc"><div class="sl">Pend. de hoy</div><div class="sv a">$'+pendiente.toFixed(0)+'</div></div>'+
     '</div>'+
+    '<div style="font-size:10px;color:var(--gray-400);text-align:center;margin:-8px 0 12px">Cobrado = dinero que entró HOY (cada abono con su fecha), el mismo número de Finanzas → Equipo.</div>'+
     (carCount>0?'<div class="st">Órdenes de hoy ('+carCount+')</div>'+ords.map(function(o){return roCardHTML(o);}).join(''):'<div style="text-align:center;padding:40px 20px;color:var(--gray-400)"><i class="ti ti-clipboard-off" style="font-size:40px;display:block;margin-bottom:12px;opacity:.3"></i><div style="font-size:13px">No hay órdenes registradas hoy todavía.</div></div>')+
   '</div>';
 }
 
 function roCardHTML(o){
-  var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'—';
+  var veh=vehTxt(o,'—');
   var time=new Date(o.fecha).toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'});
   var inspR=Object.values(o.insp||{}).filter(function(v){return v==='rojo';}).length;
   var denCount=(o.denegados||[]).filter(function(d){return !d.auto||(d.auto&&d.confirmed);}).length;
@@ -3868,7 +3935,7 @@ function renderHistClientes(){
         '<div style="text-align:right"><div style="font-size:15px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div><div style="font-size:9px;color:var(--gray-400)">histórico</div></div>'+
       '</div>'+
       '<div style="padding:8px 14px">'+ords.map(function(o){
-        var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'—';
+        var veh=vehTxt(o,'—');
         return '<div onclick="openRODetail(\''+o.id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer">'+
           '<div><div style="font-size:12px;font-weight:600">'+o.id+' · '+new Date(o.fecha).toLocaleDateString('es-PR',{day:'numeric',month:'short',year:'numeric'})+'</div><div style="font-size:11px;color:var(--gray-400)">'+veh+'</div></div>'+
           '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:var(--red)">$'+(o.total||0).toFixed(2)+'</span><i class="ti ti-chevron-right" style="color:var(--gray-300)"></i></div>'+
@@ -3885,7 +3952,7 @@ function openRODetail(roId){
   if(!o){alert('Orden no encontrada.');return;}
   currentDetailRO=o;
   document.getElementById('rod-title').textContent=o.id;
-  var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'—';
+  var veh=vehTxt(o,'—');
   var reds=[];var ambers=[];
   IZ.forEach(function(z){z.items.forEach(function(it){if((o.insp||{})[it.id]==='rojo')reds.push(it.l);if((o.insp||{})[it.id]==='amarillo')ambers.push(it.l);});});
   var denConf=(o.denegados||[]).filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
@@ -4216,7 +4283,7 @@ function waSend(tel,text){
 }
 function waRecibo(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
-  var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'';
+  var veh=vehTxt(o,'');
   var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
     'Su orden '+o.id+(veh?' ('+veh+')':'')+' está lista.\n'+
     (o.cortesia?'Total: $0.00 — CORTESÍA DEL TALLER 🤝':'Total: $'+(o.total||0).toFixed(2)+(o.estado==='pagado'?' — PAGADO ✓':' — pendiente de pago ('+(o.pago||'ATH Móvil')+')'))+'\n\n'+
@@ -4225,7 +4292,7 @@ function waRecibo(roId){
 }
 function waRemind(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
-  var veh=o.vehiculo?(o.vehiculo.year+' '+(o.vehiculo.make||'')+' '+(o.vehiculo.model||'')).trim():'su vehículo';
+  var veh=vehTxt(o,'su vehículo');
   var fecha=o.nextDate?new Date(o.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long'}):'pronto';
   var msg='Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
     'Le toca el mantenimiento de '+veh+' ('+fecha+'). ¿Le coordino una cita esta semana?\n\n'+
@@ -5094,7 +5161,10 @@ function renderKPIs(){
     (o.denegados||[]).forEach(function(d){if(!d.auto||d.confirmed)den+=(d.precio||0);});
   });
   var ar=(app+den)>0?app/(app+den)*100:100;
-  var pend=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+(o.total||0);},0);
+  // El "x Cobrar" de KPIs sumaba el TOTAL de las pendientes ignorando los abonos: el cliente que
+  // ya había dado $100 de $223 seguía saliendo debiendo $223 aquí mientras el home y el cierre de
+  // caja decían $123. Mismo bug que se arregló en el home el 27-jul; esta pantalla se quedó fuera.
+  var pend=porCobrarTotal(ords);
   var totDesc=0,totCort=0,nCort=0;
   o90.forEach(function(o){totDesc+=(o.descValor||0);if(o.cortesia){nCort++;totCort+=(o.cortesiaValor||0);}});
   // ingresos por semana — 8 ventanas de 7 días terminando hoy
@@ -5787,22 +5857,13 @@ function buildEquipoStats(){
     return {id:a.id,nombre:a.nombre,ordenes:aor.length,piezas:piezas,labor:laborH*rate,laborH:laborH,vendido:vendido,
       hPorOrden:aor.length?laborH/aor.length:0,close:(aprob+deneg)>0?aprob/(aprob+deneg)*100:null};
   });
-  var h0=new Date();h0=new Date(h0.getFullYear(),h0.getMonth(),h0.getDate());var h1=new Date(h0.getFullYear(),h0.getMonth(),h0.getDate()+1);
+  var _r=rangoHoy();var h0=_r.ini,h1=_r.fin;
   var oHoy=DB.ordenes.filter(function(o){var d=new Date(o.fecha);return d>=h0&&d<h1&&o.estado!=='abierta';});
   // Dinero que ENTRÓ hoy, renglón por renglón del libro de pagos. Antes se contaba la orden
   // completa el día que se saldaba: si el martes abonó $50 y el jueves los otros $38, el jueves
   // decía $88 y el martes $0 — imposible cuadrar la caja al cierre.
-  var cobrado=0,cobradoPorMetodo={};
-  (DB.ordenes||[]).forEach(function(o){
-    (o.pagos||[]).forEach(function(p){
-      var d=new Date(p.ts);
-      if(!(d>=h0&&d<h1))return;
-      cobrado+=(p.monto||0);
-      var k=(p.metodo||'otro').trim()||'otro';
-      cobradoPorMetodo[k]=Math.round(((cobradoPorMetodo[k]||0)+(p.monto||0))*100)/100;
-    });
-  });
-  cobrado=Math.round(cobrado*100)/100;
+  var _cob=cobradoEnRango(h0,h1);
+  var cobrado=_cob.total,cobradoPorMetodo=_cob.porMetodo;
   var pend=porCobrarTotal();
   // $ por hora del período (métrica Tekmetric): ventas sin IVU y ganancia (sin costo de piezas) ÷ horas facturadas
   var pHoras=0,pSub=0,pPartsCost=0;
