@@ -2,6 +2,51 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## 🚦 CONTINUA AQUI — cierre del 2026-07-27 (sesion larga: batches 14, 15, 16, 17)
+
+**Estado: TODO EN VIVO Y VERDE.** `live == repo`, SW **v16**, suite **21 archivos / 368 pruebas /
+0 fallos** corridas en local Y contra `robert30z.github.io/ShopFlow`. Working tree limpio, todo
+pusheado a `main`. Supabase REST/auth 200, los 4 CDN 200, respaldo GitHub al dia (commit de hoy
+19:06, 23.5 KB, RO-2 Migdalia con sus 35 fotos, sellada).
+
+**LO UNICO QUE LE TOCA A ROBERTO:**
+1. Abrir ShopFlow en el **iPad y el iPhone** y **recargar 2 veces** (para que baje el SW v16).
+2. **Rotar el PAT de Supabase y cambiar la contrasena** de esa cuenta (pendiente desde el 26-jul).
+
+**Lo que se hizo hoy** (detalle completo abajo, batch por batch): 13 bugs encontrados sondeando la
+app real + 4 funciones que faltaban (libro de pagos, aprobacion del estimado, aviso "carro listo",
+fotos por punto de inspeccion). Los mas gordos: el P&L no cuadraba con el CSV del contable, el
+boton "Restaurar desde la nube" no restauraba y mentia, el merge se comia un cobro cuando dos
+equipos cobraban la misma orden, y **la app abierta dos veces en el mismo equipo borraba ordenes
+en silencio**.
+
+**QUEDA EXPUESTO (dicho de frente, no arreglado):**
+- Los nombres de cliente se pintan crudos en varias pantallas: un `<` rompe el layout. Probado que
+  NO hay XSS explotable con un solo usuario, pero un pase de escape general esta pendiente.
+- El link `#s=` de una orden con 25 servicios pesa 3.2 KB; con ~40 reventaria wa.me.
+- Sin permisos/roles (importa al emplear o al vender). IndexedDB no existe en navegacion privada.
+- El flujo de sincronizacion entre dos equipos esta probado sintetico (mergeDB, conflictos, pagos),
+  **no con dos aparatos reales en la mano**.
+
+**LO SIGUIENTE QUE YO ATACARIA (en orden):**
+1. **Que la aprobacion del cliente entre SOLA desde el link** (hoy Roberto la registra a mano
+   cuando le llega el WhatsApp). Con Supabase se puede, pero hay que abrir una puerta anonima
+   (RPC + rate limit + token por orden) y eso se disena, no se improvisa.
+2. **Video de 15 seg** (ej. alternador moviendose). DISENO CRITICO: SOLO a Supabase Storage,
+   **nunca al respaldo GitHub** (30s = 30-60 MB = revienta el respaldo; 1 GB ~ 20 videos).
+3. Historial por vehiculo en pantalla + recordatorio de `nextDate` (ya se guarda, nadie lo persigue).
+4. Escape general de texto del usuario en el HTML (lo de arriba).
+5. Editar jobs personalizados y promos (bajo riesgo, no entran en cifras reportadas).
+
+**COMO SE AUDITA ESTO** (no negociable, ver memoria `feedback-auditoria-bulletproof`): una
+auditoria que termina en "todo verde" sin un hallazgo, fallo. Sondear la app REAL en el navegador,
+no releer lo ya arreglado. Ejes: datos en vuelo · que los numeros cuadren entre pantallas · probar
+el camino de recuperacion con el archivo de verdad · arreglar la CLASE, no la instancia · una
+prueba por bug · reportar honesto lo que NO se reviso.
+
+**Correr las pruebas:** `python -m http.server 8931` en la raiz del repo y `node <archivo>.js`
+desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.io/ShopFlow/index.html" node smoke.js`.
+
 ## Last updated: 2026-07-27 (batches 16-17: libro de pagos, aprobacion, fotos por punto + 4 bugs)
 
 ## 2026-07-27 (batch 17): LA APP ABIERTA DOS VECES SE COMIA ORDENES (SW v16, 368 verdes)
