@@ -474,7 +474,11 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="tip-box" style="background:var(--blue-light);color:var(--blue)"><i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0"></i><span>Llena la app con datos de ejemplo realistas (órdenes, citas, KPIs, fotos, firmas) para enseñársela a un cliente. Tus datos reales quedan guardados en este dispositivo y vuelven intactos al salir. Mientras el demo está activo, el respaldo en la nube queda pausado.</span></div>
         <button id="demo-btn" class="btn full" onclick="demoToggle()"><i class="ti ti-masks-theater"></i> Activar modo demo</button>
       </div></div>
-      <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:12px">ShopFlow v1.0 · by Pit Stop</div>
+      <div class="card"><div class="ch"><i class="ti ti-versions"></i> Versión de la app</div><div class="cb">
+        <div id="set-version" style="font-size:12px;line-height:1.8">Calculando...</div>
+        <button class="btn full" onclick="forzarActualizar()" style="margin-top:8px"><i class="ti ti-refresh"></i> Buscar actualización y recargar</button>
+      </div></div>
+      <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:12px">ShopFlow · by Pit Stop</div>
     </div>
   </div>
 </div>
@@ -483,6 +487,10 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
+/* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
+   Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
+   dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
+var APP_V='v21';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -1897,7 +1905,8 @@ function renderHome(){
   var now=new Date();
   renderProtect();
   try{renderAbiertas();}catch(e){}
-  var dd=document.getElementById('hdate');if(dd)dd.textContent=MESES[now.getMonth()]+' '+now.getDate();
+  // La version va pegada a la fecha del encabezado: visible desde cualquier pantalla, sin buscar.
+  var dd=document.getElementById('hdate');if(dd)dd.textContent=MESES[now.getMonth()]+' '+now.getDate()+' · '+APP_V;
   var today=now.toDateString();
   var to=DB.ordenes.filter(function(o){return new Date(o.fecha).toDateString()===today;});
   var hoy=to.reduce(function(s,o){return s+(o.estado==='abierta'?0:(o.total||0));},0);
@@ -4594,6 +4603,48 @@ function purgarDePapelera(roId){
 // ============ ALMACENAMIENTO (info + limpieza) ============
 function lsBytes(){var t=0;try{for(var k in localStorage){if(Object.prototype.hasOwnProperty.call(localStorage,k))t+=(localStorage[k].length+k.length);}}catch(e){}return t*2;}
 function photoAllIds(){return photoDBOpen().then(function(db){return new Promise(function(res){var ids=[];try{var rq=db.transaction('fotos','readonly').objectStore('fotos').openKeyCursor();rq.onsuccess=function(e){var c=e.target.result;if(c){ids.push(c.key);c.continue();}else res(ids);};rq.onerror=function(){res(ids);};}catch(e){res(ids);}});}).catch(function(){return [];});}
+/* QUÉ VERSIÓN ESTÁ CORRIENDO DE VERDAD.
+   Dos números, no uno, porque pueden desfasarse y ahí está la respuesta a "¿ya cogió el cambio?":
+   · APP_V   = la version del `index.html` que el navegador tiene AHORA MISMO en pantalla.
+   · caché   = la version que el service worker tiene guardada.
+   Si son iguales, esta al dia. Si el caché va por detrás, el código nuevo ya bajó pero el service
+   worker no ha hecho el relevo: una recarga mas y listo. */
+function versionInfo(){
+  return (window.caches&&caches.keys?caches.keys():Promise.resolve([])).then(function(ks){
+    var mias=(ks||[]).filter(function(k){return /^shopflow-v\d+$/.test(k);})
+                     .sort(function(a,b){return parseInt(b.slice(10),10)-parseInt(a.slice(10),10);});
+    var cache=mias.length?mias[0].replace('shopflow-',''):null;
+    return {app:APP_V,cache:cache,alDia:!cache||cache===APP_V,dev:deviceLabel()};
+  }).catch(function(){return {app:APP_V,cache:null,alDia:true,dev:deviceLabel()};});
+}
+function renderVersion(){
+  var el=document.getElementById('set-version');if(!el)return;
+  versionInfo().then(function(v){
+    var el2=document.getElementById('set-version');if(!el2)return;
+    var linea=v.alDia
+      ? '<span style="color:var(--green);font-weight:700"><i class="ti ti-circle-check"></i> Estás al día.</span>'
+      : '<span style="color:var(--amber);font-weight:700"><i class="ti ti-alert-triangle"></i> Falta una recarga — el código nuevo ya bajó pero no ha entrado.</span>';
+    el2.innerHTML=
+      '<div style="display:flex;justify-content:space-between"><span style="color:var(--gray-400)">Versión de la app</span><b style="font-family:monospace;font-size:14px">'+v.app+'</b></div>'+
+      '<div style="display:flex;justify-content:space-between"><span style="color:var(--gray-400)">Guardada en el equipo</span><b style="font-family:monospace">'+(v.cache||'—')+'</b></div>'+
+      '<div style="display:flex;justify-content:space-between"><span style="color:var(--gray-400)">Este equipo</span><b style="font-family:monospace">'+v.dev+'</b></div>'+
+      '<div style="margin-top:6px">'+linea+'</div>';
+  });
+}
+/* El botón: le pide al service worker que busque código nuevo y recarga. Le ahorra el
+   "cierra la app dos veces" — que nunca fue obvio y siempre dejaba la duda de si funcionó. */
+function forzarActualizar(){
+  var fin=function(){location.reload();};
+  if(!navigator.serviceWorker||!navigator.serviceWorker.getRegistration){fin();return;}
+  navigator.serviceWorker.getRegistration().then(function(reg){
+    if(!reg){fin();return;}
+    return reg.update().then(function(){
+      // si hay uno esperando, se le dice que tome el relevo ya (sw.js escucha 'SKIP_WAITING')
+      if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage({type:'SKIP_WAITING'});
+      setTimeout(fin,600);
+    });
+  }).catch(fin);
+}
 function renderStorageInfo(){
   var el=document.getElementById('set-storage-info');if(!el)return;
   var ls=(lsBytes()/1024).toFixed(0);
@@ -4623,6 +4674,7 @@ function liberarEspacio(){
 // ============ AJUSTES / SETTINGS ============
 function initAjustes(){
   renderStorageInfo();
+  renderVersion();
   try{verificarTodo(false);}catch(e){}   // el resumen sale al instante; la consulta a la nube va a botón
   var sd=document.getElementById('set-dark');if(sd)sd.checked=(DB.settings.theme==='dark');
   var sbt=document.getElementById('set-bigtext');if(sbt)sbt.checked=!!DB.settings.bigText;
@@ -6261,7 +6313,7 @@ if('serviceWorker' in navigator){
 }
 
 var now=new Date();
-document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate();
+document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate()+' · '+APP_V;
 renderHome();
 demoBanner();
 

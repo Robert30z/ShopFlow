@@ -1,7 +1,7 @@
 // ShopFlow service worker — la app abre SIN internet (mecánico móvil = señal mala).
 // Estrategia: index.html va red-primero (siempre fresco online, cache offline);
 // CDN y assets van cache-primero. Sube CACHE_V cuando cambie la estrategia.
-var CACHE_V='shopflow-v20';
+var CACHE_V='shopflow-v21';
 
 self.addEventListener('install',function(e){
   e.waitUntil(
@@ -9,6 +9,11 @@ self.addEventListener('install',function(e){
       .then(function(c){return c.addAll(['./','./index.html','./manifest.json']);})
       .then(function(){return self.skipWaiting();})
   );
+});
+
+// El botón "Buscar actualización y recargar" (Ajustes) manda esto cuando hay un worker esperando.
+self.addEventListener('message',function(e){
+  if(e&&e.data&&e.data.type==='SKIP_WAITING')self.skipWaiting();
 });
 
 self.addEventListener('activate',function(e){
