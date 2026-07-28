@@ -430,6 +430,15 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         </div>
         <div id="set-sync-status" style="font-size:11px;color:var(--gray-400);margin-top:8px"></div>
       </div></div>
+      <div class="card"><div class="ch"><i class="ti ti-thumb-up"></i> Aprobación del cliente desde el link</div><div class="cb">
+        <div class="tip-box" style="background:var(--green-light);color:var(--green)"><i class="ti ti-lock-check" style="font-size:16px;flex-shrink:0"></i><span>Cuando mandas "Compartir estado con cliente", él puede aprobar el trabajo con un toque. Lo sella el servidor (fecha, nombre e IP) y entra solo en la orden — no una nota que escribiste tú. Es lo que te cubre si después dice que no autorizó el precio.</span></div>
+        <div id="aprob-estado" style="font-size:12px;line-height:1.6;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn full" onclick="aprobProbar()"><i class="ti ti-plug-connected"></i> Probar la puerta</button>
+          <button class="btn full" onclick="aprobCopiarSQL()"><i class="ti ti-clipboard"></i> Copiar el SQL</button>
+        </div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:8px;line-height:1.5">Se pega UNA sola vez: Supabase → SQL Editor → New query → pegar → Run. Sin eso todo sigue funcionando igual que antes (el botón del cliente abre WhatsApp).</div>
+      </div></div>
       <div class="card"><div class="ch"><i class="ti ti-cloud-upload"></i> Respaldo automático en la nube (respaldo extra)</div><div class="cb">
         <div class="tip-box" style="background:var(--green-light);color:var(--green)"><i class="ti ti-shield-lock" style="font-size:16px;flex-shrink:0"></i><span>Cada cambio se sube solo a un repositorio PRIVADO tuyo de GitHub. Si el iPad se pierde o Safari borra los datos, restauras todo con un toque.</span></div>
         <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Repositorio (usuario/repo)</div><input id="set-bk-repo" placeholder="Robert30z/shopflow-backup" autocapitalize="off" autocomplete="off" oninput="saveSettings()"></div></div>
@@ -492,22 +501,36 @@ var IZ=[
   {id:'ext',z:'Lights & Exterior',items:[{id:'lhd',l:'Headlights'},{id:'ltl',l:'Tail lights'},{id:'lbk',l:'Brake light'},{id:'wip',l:'Wipers'},{id:'hrn',l:'Horn'}]}
 ];
 
+/* CATÁLOGO DE FÁBRICA — en ESPAÑOL. Estaba en inglés ("Front Brake Service", "Battery
+   Replacement") dentro de una app en español para un taller en Bayamón: buscar "freno",
+   "batería" o "alternador" daba CERO resultados y una pantalla en blanco.
+   Los precios que están documentados en la guía de Pit Stop entran aquí (el aceite regular
+   cotizaba $45 cuando el precio real es $100, y el sintético $75 contra $140 — cotizar
+   por el catálogo era regalar la mitad del trabajo). Los que no están documentados se
+   quedan como estaban. Cada taller los edita en Ajustes → Catálogo; los ids NO se cambian
+   porque las piezas por servicio y las estadísticas viejas cuelgan de ellos. */
 var MS={
-  aceites:[{id:'a1',n:'Mantenimiento Básico de Aceite y Filtro',p:45,c:0},{id:'a2',n:'Mantenimiento Completo de Aceite y Filtro',p:75,c:0}],
-  frenos:[{id:'f1',n:'Front Brake Service',p:120,c:0},{id:'f2',n:'Rear Brake Service',p:110,c:0},{id:'f3',n:'Complete Brake Service (Front & Rear)',p:200,c:0},{id:'f4',n:'Brake Fluid Flush',p:55,c:0}],
-  suspension:[{id:'s1',n:'Suspension Component Replacement',p:120,c:0},{id:'s2',n:'CV Axle Replacement',p:140,c:0},{id:'s3',n:'Wheel Alignment (sublet)',p:75,c:0}],
-  ac:[{id:'ac1',n:'A/C Service & Recharge',p:120,c:0},{id:'ac2',n:'A/C Diagnostic',p:65,c:0},{id:'ac3',n:'A/C Component Replacement',p:200,c:0}],
-  electrico:[{id:'e1',n:'Battery Replacement',p:60,c:0},{id:'e2',n:'Alternator Replacement',p:180,c:0},{id:'e3',n:'Starter Replacement',p:160,c:0},{id:'e4',n:'Spark Plug Replacement',p:80,c:0},{id:'e5',n:'OBD-II Diagnostic',p:65,c:0}],
-  motor:[{id:'m1',n:'Timing Belt Service',p:250,c:0},{id:'m2',n:'Water Pump Replacement',p:160,c:0},{id:'m3',n:'Coolant Flush',p:85,c:0},{id:'m4',n:'Serpentine Belt Replacement',p:75,c:0},{id:'m5',n:'Tune-Up',p:120,c:0}],
-  transmision:[{id:'t1',n:'Transmission Fluid Service',p:120,c:0},{id:'t2',n:'Differential Fluid Service',p:85,c:0},{id:'t3',n:'Power Steering Flush',p:65,c:0}],
-  diagnostico:[{id:'d1',n:'Full Diagnostic (OBD-II)',p:65,c:0},{id:'d2',n:'Pre-Purchase Inspection',p:95,c:0},{id:'d3',n:'Electrical Diagnostic',p:95,c:0},{id:'d4',n:'Noise / Drivability Diagnostic',p:55,c:0}],
-  neumaticos:[{id:'n1',n:'Mount & Balance',p:100,c:0},{id:'n2',n:'Tire Repair (Patch/Plug)',p:25,c:0},{id:'n3',n:'Tire Rotation',p:35,c:0}],
-  general:[{id:'g1',n:'General Labor / Custom Job',p:0,c:0},{id:'g2',n:'Cabin Air Filter Replacement',p:30,c:0},{id:'g3',n:'Engine Air Filter Replacement',p:25,c:0},{id:'g4',n:'Wiper Blade Replacement',p:25,c:0}]
+  aceites:[{id:'a1',n:'Cambio de aceite y filtro — regular (5 qt)',p:100,c:0},{id:'a2',n:'Cambio de aceite y filtro — sintético (5 qt)',p:140,c:0}],
+  frenos:[{id:'f1',n:'Frenos delanteros — pastillas (par)',p:139,c:0},{id:'f2',n:'Frenos traseros — pastillas (par)',p:139,c:0},{id:'f3',n:'Frenos completos (delanteros y traseros)',p:200,c:0},{id:'f4',n:'Cambio de líquido de frenos (flush)',p:65,c:0}],
+  suspension:[{id:'s1',n:'Cambio de pieza de suspensión (amortiguador, bujes, rótula)',p:120,c:0},{id:'s2',n:'Cambio de eje / palanca (CV axle)',p:140,c:0},{id:'s3',n:'Alineamiento (se envía fuera)',p:75,c:0}],
+  ac:[{id:'ac1',n:'Servicio y recarga de A/C (aire acondicionado)',p:120,c:0},{id:'ac2',n:'Diagnóstico de A/C',p:65,c:0},{id:'ac3',n:'Cambio de pieza de A/C (compresor, condensador)',p:200,c:0}],
+  electrico:[{id:'e1',n:'Instalación de batería (limpieza de bornes incluida)',p:45,c:0},{id:'e2',n:'Cambio de alternador',p:180,c:0},{id:'e3',n:'Cambio de starter (motor de arranque)',p:160,c:0},{id:'e4',n:'Cambio de bujías',p:80,c:0},{id:'e5',n:'Escaneo computarizado (OBD-II)',p:60,c:0}],
+  motor:[{id:'m1',n:'Correa de tiempo (timing belt)',p:250,c:0},{id:'m2',n:'Cambio de bomba de agua',p:160,c:0},{id:'m3',n:'Cambio de coolant (flush)',p:85,c:0},{id:'m4',n:'Cambio de correa serpentina',p:75,c:0},{id:'m5',n:'Afinamiento (tune-up)',p:120,c:0}],
+  transmision:[{id:'t1',n:'Cambio de aceite de transmisión',p:120,c:0},{id:'t2',n:'Cambio de aceite de diferencial',p:85,c:0},{id:'t3',n:'Flush de dirección hidráulica (power steering)',p:65,c:0}],
+  diagnostico:[{id:'d1',n:'Diagnóstico computarizado (desde)',p:60,c:0},{id:'d2',n:'Inspección pre-compra (desde)',p:80,c:0},{id:'d3',n:'Diagnóstico eléctrico',p:95,c:0},{id:'d4',n:'Diagnóstico de ruido / manejo',p:55,c:0}],
+  neumaticos:[{id:'n1',n:'Montaje y balanceo de gomas',p:100,c:0},{id:'n2',n:'Reparación de goma (parcho)',p:25,c:0},{id:'n3',n:'Rotación de gomas',p:35,c:0}],
+  general:[{id:'g1',n:'Labor general (mínimo por visita)',p:60,c:0},{id:'g2',n:'Cambio de filtro de cabina',p:30,c:0},{id:'g3',n:'Cambio de filtro de aire del motor',p:25,c:0},{id:'g4',n:'Cambio de limpiabrisas (wipers)',p:25,c:0}]
 };
-var MC=[{id:'aceites',l:'Oil & Filter'},{id:'frenos',l:'Brakes'},{id:'suspension',l:'Suspension'},{id:'ac',l:'A/C'},{id:'electrico',l:'Electrical'},{id:'motor',l:'Engine'},{id:'transmision',l:'Transmission'},{id:'diagnostico',l:'Diagnostic'},{id:'neumaticos',l:'Tires'},{id:'general',l:'General'}];
+var MC=[{id:'aceites',l:'Aceite y filtro'},{id:'frenos',l:'Frenos'},{id:'suspension',l:'Suspensión'},{id:'ac',l:'A/C'},{id:'electrico',l:'Eléctrico'},{id:'motor',l:'Motor'},{id:'transmision',l:'Transmisión'},{id:'diagnostico',l:'Diagnóstico'},{id:'neumaticos',l:'Gomas'},{id:'general',l:'General'}];
 // Catálogo del taller: categorías y servicios propios (DB.catsCustom / DB.svcsCustom) se mezclan
 // con los de fábrica. TODO lector del catálogo debe usar allCats()/getSvcs(), nunca MC/MS directo.
 function allCats(){return MC.concat(DB.catsCustom||[]);}
+/* Texto para BUSCAR: minúsculas y sin acentos. En un taller nadie escribe "batería" con tilde
+   en el buscador — y sin esto "bateria" no encontraba "Batería", ni "ramon" a "Ramón". */
+function norm(s){
+  s=String(s==null?'':s).toLowerCase();
+  try{return s.normalize('NFD').replace(/[̀-ͯ]/g,'');}catch(e){return s;}
+}
 function getSvcs(cat){return (MS[cat]||[]).concat((DB.svcsCustom||[]).filter(function(s){return s.cat===cat;}));}
 
 var STEPS=[{id:'cliente',l:'Cliente'},{id:'fotos',l:'Fotos'},{id:'servicios',l:'Servicios'},{id:'estimado',l:'Estimado'},{id:'firma1',l:'Autorización'},{id:'inspeccion',l:'Inspección'},{id:'denegados',l:'Denegados'},{id:'firma2',l:'Firma Final'},{id:'cierre',l:'Cierre'}];
@@ -670,8 +693,18 @@ function registrarPago(o,monto,metodo){
   if(faltaLibro>0.005)o.pagos.push({id:'PG-mig-'+(o.id||'x')+'-'+o.pagos.length,
     ts:o.pagadoFecha||o.fecha||new Date().toISOString(),monto:faltaLibro,
     metodo:o.pago||'',dev:'anterior',mig:true});
+  /* NUNCA se apunta más de lo que se debe. Si te dan $500 por una cuenta de $111.50, lo que
+     ENTRÓ al taller son $111.50 y el resto es vuelto. Apuntando $500 la caja del día cierra
+     con $388.50 que no existen, el P&L (que cuenta el total de la orden) deja de cuadrar con
+     "Cobrado hoy", y no hay forma de saber cuál de los dos números está malo. Un cero de más
+     al teclear el monto era suficiente para eso. `cobrarYCerrar` ya recortaba; el abono no. */
+  var balAntes=Math.round((((o.total)||0)-sumaPagos(o))*100)/100;
+  var vuelto=0;
+  if(balAntes>=0&&monto>balAntes+0.005){vuelto=Math.round((monto-balAntes)*100)/100;monto=balAntes;}
+  if(!(monto>0))return null;
   var p={id:'PG-'+Date.now()+'-'+Math.floor(Math.random()*1000),ts:new Date().toISOString(),
          monto:Math.round(monto*100)/100,metodo:(metodo||o.pago||'').trim(),dev:deviceLabel()};
+  if(vuelto>0)p.vuelto=vuelto;
   o.pagos.push(p);
   o.abonado=sumaPagos(o);
   return p;
@@ -1396,7 +1429,7 @@ function aiFetch(msg,maxTokens){
 // sincroniza cuando hay sesión y señal. Sin sesión, todo funciona igual que antes.
 var SB_URL='https://pvsddtmgwmqcdcmuvhim.supabase.co';
 var SB_KEY='sb_publishable_RLIGlQ1gsNrh8tsB_ihWNA_8PazIEW2'; // clave pública (la protege RLS)
-var _sb=null,_sbChan=null,_syncTimer=null,_syncBusy=false,_syncOn=false,_syncApplying=false,_lastPushRev=0,_lastPullAt=0,_lastSyncErr='';
+var _sb=null,_sbChan=null,_sbChanA=null,_syncTimer=null,_syncBusy=false,_syncOn=false,_syncApplying=false,_lastPushRev=0,_lastPullAt=0,_lastSyncErr='';
 function deviceLabel(){var d=localStorage.getItem('sf_device');if(!d){d='disp-'+Math.random().toString(36).slice(2,6);try{localStorage.setItem('sf_device',d);}catch(e){}}return d;}
 function sbReady(){if(_sb)return _sb;if(typeof supabase==='undefined'||!supabase.createClient)return null;_sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sf_auth'}});return _sb;}
 function saveLocalOnly(){try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}}
@@ -1514,6 +1547,8 @@ async function syncPull(){
   }
   aplicarRemoto(res.data.data||{},res.data.rev||0);
   _lastPullAt=Date.now();_lastSyncErr='';schedulePhotoUpload();updSyncStatus('ok');
+  // Las aprobaciones que el cliente dio desde el link viven en su propia tabla: se bajan aquí.
+  try{aprobPull();}catch(e){}
 }
 function scheduleSyncPush(){if(!_syncOn||_syncApplying||DB._demo)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(syncPush,1500);}
 async function syncPush(){
@@ -1548,6 +1583,17 @@ function subscribeRealtime(){
         var row=p.new;if(!row||row.updated_by===self)return;if((row.rev||0)<=_lastPushRev)return;
         aplicarRemoto(row.data||{},row.rev||0);syncToast('Datos actualizados desde otro equipo ✓');
       }).subscribe();
+    /* Canal APARTE para las aprobaciones: si la tabla todavía no existe (falta correr el SQL),
+       la suscripción falla — y en el mismo canal se llevaría por delante la sincronización del
+       taller, que es lo que NO se puede romper. */
+    if(APROB_PUERTA===false)return;
+    try{
+      if(_sbChanA)c.removeChannel(_sbChanA);
+      _sbChanA=c.channel('aprob-'+uid)
+        .on('postgres_changes',{event:'*',schema:'public',table:'aprobaciones',filter:'owner=eq.'+uid},function(){
+          try{aprobPull();}catch(e){}
+        }).subscribe();
+    }catch(e){}
   });
 }
 function syncToast(msg){
@@ -1576,6 +1622,7 @@ async function shopLogout(){
   var c=sbReady();if(!c)return;
   if(!confirm('¿Cerrar sesión de sincronización en este equipo?\n\nTus datos siguen guardados en este dispositivo, solo deja de sincronizar.'))return;
   if(_sbChan){c.removeChannel(_sbChan);_sbChan=null;}
+  if(_sbChanA){try{c.removeChannel(_sbChanA);}catch(e){}_sbChanA=null;}
   _syncOn=false;await c.auth.signOut();updSyncStatus();
 }
 function syncBoot(){
@@ -2347,11 +2394,11 @@ function renderROSvcMenu(){
   if(activeCat==='__promos'&&!promosViv.length)activeCat='aceites';
   if(activeCat==='__recs'&&!rec.recs.length)activeCat='aceites';
   var cats=document.getElementById('ro-sc');if(cats)cats.innerHTML=(rec.recs.length?'<div class="cp'+(activeCat==='__recs'?' active':'')+'" onclick="activeCat=\'__recs\';renderROSvcMenu()">🔧 '+(rec.m/1000)+'k mi</div>':'')+(promosViv.length?'<div class="cp'+(activeCat==='__promos'?' active':'')+'" onclick="activeCat=\'__promos\';renderROSvcMenu()">🎁 Promos</div>':'')+(hasJobs?'<div class="cp'+(activeCat==='__jobs'?' active':'')+'" onclick="activeCat=\'__jobs\';renderROSvcMenu()">⭐ Guardados</div>':'')+allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderROSvcMenu()">'+cc.l+'</div>';}).join('');
-  var q=(document.getElementById('ro-sq')||{value:''}).value.toLowerCase();
+  var q=norm((document.getElementById('ro-sq')||{value:''}).value);
   var el=document.getElementById('ro-sl');if(!el)return;
   if(activeCat==='__recs'){
     el.innerHTML='<div style="font-size:11px;color:var(--gray-400);padding:2px 0 6px">Mantenimiento recomendado a las <b>'+rec.m.toLocaleString()+' millas</b>'+(RO.vehiculo.year?' ('+RO.vehiculo.year+' '+(RO.vehiculo.make||'')+')':'')+' — toca ➕ para añadir al estimado:</div>'+
-      rec.recs.filter(function(r){return !q||r.n.toLowerCase().includes(q);}).map(function(r,i){
+      rec.recs.filter(function(r){return !q||norm(r.n).includes(q);}).map(function(r,i){
         return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+r.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+r.p+'</span><button class="btn sm p" onclick="addSvcRO(\'rec-'+r.cada+'-'+i+'\',\''+r.n.replace(/'/g,'')+'\','+r.p+')" style="padding:5px 10px">+</button></div>';
       }).join('')+
       rec.anos.map(function(a){return '<div style="font-size:11px;color:var(--amber);padding:5px 0;border-top:1px dashed var(--gray-100)">⚠️ '+a+'</div>';}).join('')+
@@ -2359,20 +2406,33 @@ function renderROSvcMenu(){
     return;
   }
   if(activeCat==='__promos'){
-    el.innerHTML=promosViv.filter(function(p){return !q||p.n.toLowerCase().includes(q);}).map(function(p){
+    el.innerHTML=promosViv.filter(function(p){return !q||norm(p.n).includes(q);}).map(function(p){
       return '<div class="svc-row"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">🎁 '+p.n+'</div>'+(p.det?'<div style="font-size:10px;color:var(--gray-400)">'+p.det+'</div>':'')+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+(+p.p).toFixed(0)+'</span><button class="btn sm p" onclick="addPromoRO(\''+p.id+'\')" style="padding:5px 10px">+</button></div>';
     }).join('')||'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Ninguna promo con ese nombre.</div>';
     return;
   }
   if(activeCat==='__jobs'){
-    el.innerHTML=(DB.jobsCustom||[]).filter(function(j){return !q||j.n.toLowerCase().includes(q);}).map(function(j){
+    el.innerHTML=(DB.jobsCustom||[]).filter(function(j){return !q||norm(j.n).includes(q);}).map(function(j){
       var extra=[];if(j.laborHours)extra.push(j.laborHours+'h labor');if((j.parts||[]).length)extra.push(j.parts.length+' pieza'+(j.parts.length>1?'s':''));
       return '<div class="svc-row"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">'+j.n+'</div>'+(extra.length?'<div style="font-size:10px;color:var(--gray-400)">'+extra.join(' · ')+'</div>':'')+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+jobTotal(j).toFixed(0)+'</span><button class="btn sm p" onclick="addJobRO(\''+j.id+'\')" style="padding:5px 10px">+</button></div>';
     }).join('');
     return;
   }
-  var svcs=getSvcs(activeCat).filter(function(s){return !q||s.n.toLowerCase().includes(q);});
-  el.innerHTML=svcs.map(function(s){return '<div class="svc-row"><div style="font-size:12px;font-weight:700;flex:1">'+s.n+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('');
+  /* Una caja que dice "Buscar servicio" tiene que buscar en TODO el catálogo, no solo en la
+     categoría que está abierta. Antes, con "Aceite y filtro" abierto, escribir "freno" dejaba
+     el área en BLANCO: sin resultados y sin mensaje — parecía que la app se colgó. Ahora la
+     búsqueda barre todas las categorías y dice de cuál salió cada uno. */
+  var svcs;
+  if(q){
+    svcs=[];
+    allCats().forEach(function(c){
+      getSvcs(c.id).forEach(function(s){if(norm(s.n).includes(q))svcs.push({s:s,cat:c.l});});
+    });
+  }else{
+    svcs=getSvcs(activeCat).map(function(s){return {s:s,cat:''};});
+  }
+  el.innerHTML=svcs.map(function(x){var s=x.s;return '<div class="svc-row"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">'+s.n+'</div>'+(x.cat?'<div style="font-size:10px;color:var(--gray-400)">'+x.cat+'</div>':'')+'</div><span style="font-size:13px;font-weight:700;color:var(--red);margin-right:8px">$'+s.p+'</span><button class="btn sm p" onclick="addSvcRO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="padding:5px 10px">+</button></div>';}).join('')
+    ||'<div style="text-align:center;padding:14px 8px;font-size:12px;color:var(--gray-400)">Ningún servicio del catálogo se llama así.<br><button class="btn sm" onclick="addManualSvc()" style="margin-top:8px"><i class="ti ti-plus"></i> Añadirlo a mano</button></div>';
 }
 function addSvcRO(id,n,p){RO.servicios.push({id:id,uid:'svc-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:n,p:p,qty:1,ep:p,parts:[],laborHours:0});renderROSO();}
 function addPromoRO(pid){
@@ -3076,9 +3136,9 @@ function waListo(roId,preguntar){
 }
 function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());inp.value='';saveDB();renderGarage();}
 
-function renderOrdenes(){var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();var list=DB.ordenes.filter(function(o){if(!q)return true;var v=o.vehiculo||{};var hay=[o.cliente,o.id,v.tag,v.vin,v.make,v.model,v.year,o.empresa,o.techNotes,o.queja].filter(Boolean).join(' ').toLowerCase();return hay.includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
+function renderOrdenes(){var q=norm((document.getElementById('ord-q')||{value:''}).value);var list=DB.ordenes.filter(function(o){if(!q)return true;var v=o.vehiculo||{};var hay=norm([o.cliente,o.id,v.tag,v.vin,v.make,v.model,v.year,o.empresa,o.techNotes,o.queja].filter(Boolean).join(' '));return hay.includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
 
-function renderClientes(){var q=(document.getElementById('cli-q')||{value:''}).value.toLowerCase();var list=DB.clientes.filter(function(c){return !q||c.nombre.toLowerCase().includes(q)||(c.empresa||'').toLowerCase().includes(q);});var el=document.getElementById('clientes-body');if(!el)return;
+function renderClientes(){var q=norm((document.getElementById('cli-q')||{value:''}).value);var list=DB.clientes.filter(function(c){return !q||norm(c.nombre).includes(q)||norm(c.empresa||'').includes(q);});var el=document.getElementById('clientes-body');if(!el)return;
   var h=flotasHTML(q);
   if(!list.length&&!h){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin clientes. Se crean automáticamente al guardar una RO.</div>';return;}
   el.innerHTML=h+list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var total=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).reduce(function(s,o){return s+(o.total||0);},0);var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).length;var nv=(c.vehiculos||[]).length;return '<div onclick="openCliDetail(\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100);cursor:pointer"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+c.nombre+(c.empresa?' <span class="badge bb" style="font-size:9px">'+c.empresa+'</span>':'')+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+(nv?' · '+nv+' carro'+(nv>1?'s':''):'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div><i class="ti ti-chevron-right" style="color:var(--gray-300)"></i></div></div>';}).join('');
@@ -3101,7 +3161,7 @@ function flotaStats(emp){
   return {ords:ords,clientes:cls,vehiculos:Object.keys(tags).length,facturado:fact,pendiente:pend};
 }
 function flotasHTML(q){
-  var emps=flotaEmpresas().filter(function(e){return !q||e.toLowerCase().includes(q);});
+  var emps=flotaEmpresas().filter(function(e){return !q||norm(e).includes(q);});
   if(!emps.length)return '';
   return '<div style="padding:10px 16px 4px;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">🚛 Flotas / Empresas</div>'+emps.map(function(e){
     var st=flotaStats(e);
@@ -3218,7 +3278,7 @@ function newROForCli(cid){
 }
 
 function renderMenuCats(){var el=document.getElementById('menu-cats');if(!el)return;el.innerHTML=allCats().map(function(cc){return '<div class="cp'+(activeCat===cc.id?' active':'')+'" onclick="activeCat=\''+cc.id+'\';renderMenuSvcs()">'+cc.l+'</div>';}).join('');}
-function renderMenuSvcs(){renderMenuCats();var q=(document.getElementById('menu-q')||{value:''}).value.toLowerCase();var svcs=getSvcs(activeCat).filter(function(s){return !q||s.n.toLowerCase().includes(q);});var el=document.getElementById('menu-body');if(!el)return;el.innerHTML=svcs.map(function(s){var m=s.c>0?((s.p-s.c)/s.p*100):100;var parts=DB.serviceParts[s.id]||[];var partsCount=parts.length;var partsCost=parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-lg);padding:11px 13px;background:var(--white);margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="flex:1"><div style="font-size:13px;font-weight:700">'+s.n+'</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Precio: <strong style="color:var(--red)">$'+s.p+'</strong>'+(s.c>0?' · Costo base: $'+s.c+' · '+m.toFixed(0)+'%':'')+'</div>'+(partsCount>0?'<div style="font-size:11px;color:var(--green);margin-top:3px;font-weight:600"><i class="ti ti-package"></i> '+partsCount+' pieza'+(partsCount>1?'s':'')+' registrada'+(partsCount>1?'s':'')+' · $'+partsCost.toFixed(2)+' en costos</div>':'')+'</div></div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn sm" onclick="openPartsModal(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\')" style="flex:1;justify-content:center"><i class="ti ti-receipt"></i> Piezas'+(partsCount>0?' ('+partsCount+')':'')+'</button><button class="btn sm p" onclick="addMO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> Agregar</button></div></div>';}).join('')||'<div style="text-align:center;padding:20px;color:var(--gray-400)">Sin resultados.</div>';}
+function renderMenuSvcs(){renderMenuCats();var q=norm((document.getElementById('menu-q')||{value:''}).value);var svcs=q?allCats().reduce(function(a,c){return a.concat(getSvcs(c.id).filter(function(s){return norm(s.n).includes(q);}));},[]):getSvcs(activeCat);var el=document.getElementById('menu-body');if(!el)return;el.innerHTML=svcs.map(function(s){var m=s.c>0?((s.p-s.c)/s.p*100):100;var parts=DB.serviceParts[s.id]||[];var partsCount=parts.length;var partsCost=parts.reduce(function(sum,p){return sum+(p.cost*p.qty);},0);return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-lg);padding:11px 13px;background:var(--white);margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="flex:1"><div style="font-size:13px;font-weight:700">'+s.n+'</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Precio: <strong style="color:var(--red)">$'+s.p+'</strong>'+(s.c>0?' · Costo base: $'+s.c+' · '+m.toFixed(0)+'%':'')+'</div>'+(partsCount>0?'<div style="font-size:11px;color:var(--green);margin-top:3px;font-weight:600"><i class="ti ti-package"></i> '+partsCount+' pieza'+(partsCount>1?'s':'')+' registrada'+(partsCount>1?'s':'')+' · $'+partsCost.toFixed(2)+' en costos</div>':'')+'</div></div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn sm" onclick="openPartsModal(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\')" style="flex:1;justify-content:center"><i class="ti ti-receipt"></i> Piezas'+(partsCount>0?' ('+partsCount+')':'')+'</button><button class="btn sm p" onclick="addMO(\''+s.id+'\',\''+s.n.replace(/'/g,'')+'\','+s.p+')" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> Agregar</button></div></div>';}).join('')||'<div style="text-align:center;padding:20px;color:var(--gray-400)">Sin resultados.</div>';}
 function addMO(id,n,p){var ex=MO.find(function(o){return o.id===id;});if(ex){ex.qty++;ex.p=p;}else MO.push({id:id,n:n,p:p,qty:1});updMCC();renderMOItems();document.getElementById('menu-op').style.display='block';}
 function updMCC(){var c=MO.reduce(function(s,o){return s+o.qty;},0);var el=document.getElementById('mcc');if(el)el.textContent=c;}
 function renderMOItems(){var el=document.getElementById('menu-oi');if(!el)return;el.innerHTML=MO.map(function(o,i){return '<div class="oi"><span class="oi-n">'+o.n+(o.qty>1?' ×'+o.qty:'')+'</span><span style="font-weight:700;color:var(--red);margin-right:8px">$'+(o.p*o.qty).toFixed(2)+'</span><button onclick="MO.splice('+i+',1);updMCC();renderMOItems();" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px"><i class="ti ti-x"></i></button></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';var sub=MO.reduce(function(s,o){return s+o.p*o.qty;},0);var el2=document.getElementById('menu-tot');if(el2)el2.textContent='$'+(sub*1.115).toFixed(2);}
@@ -3875,7 +3935,7 @@ function openRODetail(roId){
   '</div>'+(o.queja?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400)">Queja:</span> '+o.queja+'</div>':'')+'</div></div>';
   // Técnico asignado + reloj de trabajo (tiempo real vs facturado)
   var horasReales=((o.relojSecs||0)+(o.reloj?Math.max(0,Math.round((Date.now()-new Date(o.reloj.in).getTime())/1000)):0))/3600;
-  var horasFact=(o.servicios||[]).reduce(function(s,sv){return s+(sv.laborHours||0)*(sv.qty||1);},0);
+  var horasFact=_horasFactDe(o);
   html+='<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico y tiempo</div><div class="cb">'+
     ((DB.tecnicos||[]).length?'<div class="fl" style="margin-bottom:3px">Técnico asignado</div><select onchange="asignarTec(\''+o.id+'\',this.value)">'+tecOptionsHTML(o.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade técnicos en Ajustes ⚙️ para asignar quién hace el trabajo.</div>')+
     ((DB.asesores||[]).length?'<div class="fl" style="margin:8px 0 3px">Asesor de servicio</div><select onchange="asignarAse(\''+o.id+'\',this.value)">'+aseOptionsHTML(o.asesor)+'</select>':'')+
@@ -3924,9 +3984,20 @@ function openRODetail(roId){
     html+='<div style="background:'+(desf?'var(--amber-light)':'var(--green-light)')+';border:1.5px solid '+(desf?'var(--amber)':'var(--green)')+';border-radius:var(--r-md);padding:11px 13px;margin-bottom:12px">'
       +'<div style="font-size:12.5px;font-weight:800;color:'+(desf?'var(--amber)':'var(--green)')+';margin-bottom:3px"><i class="ti ti-thumb-up"></i> ESTIMADO APROBADO POR EL CLIENTE</div>'
       +'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5">$'+((o.aprob.total||0).toFixed(2))+' · '+fechaCorta(o.aprob.ts)+' · vía '+E_(o.aprob.canal)+'</div>'
+      /* Aprobación que entró SOLA por el link: la sella el servidor, no el taller. Se muestra
+         quién la escribió y desde dónde, porque eso es justo lo que la hace valer en un reclamo. */
+      +(o.aprob.remota?'<div style="font-size:11.5px;color:var(--green);line-height:1.5;margin-top:3px"><i class="ti ti-lock-check"></i> La registró el cliente desde el link'+(o.aprob.nombre?' — <b>'+E_(o.aprob.nombre)+'</b>':'')+(o.aprob.ip?' · IP '+E_(o.aprob.ip):'')+' · hora del servidor</div>':'')
       +(desf?'<div style="font-size:11.5px;color:var(--amber);font-weight:700;margin-top:5px">⚠️ La orden cambió después de que aprobó (aprobó $'+((o.aprob.total||0).toFixed(2))+', ahora $'+((o.total||0).toFixed(2))+'). Vuelve a confirmarle antes de cobrar.</div><button class="btn sm full" onclick="aprobarEstimado(\''+o.id+'\')" style="margin-top:7px"><i class="ti ti-refresh"></i> Volvió a aprobar — actualizar</button>':'')
       +'</div>';
   }else if(o.estado!=='pagado'){
+    if(o.aprobRech){
+      html+='<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:var(--r-md);padding:11px 13px;margin-bottom:10px">'
+        +'<div style="font-size:12.5px;font-weight:800;color:var(--red);margin-bottom:3px"><i class="ti ti-thumb-down"></i> EL CLIENTE NO APROBÓ (desde el link)</div>'
+        +'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5">'+fechaCorta(o.aprobRech.ts)+(o.aprobRech.nombre?' · '+E_(o.aprobRech.nombre):'')+(o.aprobRech.nota?' · “'+E_(o.aprobRech.nota)+'”':'')+'<br>Llámalo antes de meterle mano.</div></div>';
+    }else if(o.aprobTok&&o.aprobTokFp===fpFactura(o)&&APROB_PUERTA!==false){
+      html+='<div style="background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--r-md);padding:10px 13px;margin-bottom:10px;font-size:11.5px;color:var(--blue);line-height:1.5">'
+        +'<i class="ti ti-clock"></i> <b>Esperando la aprobación del cliente</b> — le mandaste el link por $'+((o.total||0).toFixed(2))+'. Cuando le dé al botón, entra sola aquí.</div>';
+    }
     html+='<button class="btn full" onclick="aprobarEstimado(\''+o.id+'\')" style="margin-bottom:12px;background:var(--green-light);color:var(--green);border-color:var(--green);font-weight:700"><i class="ti ti-thumb-up"></i> El cliente aprobó el estimado ($'+((o.total||0).toFixed(2))+')</button>'
       +'<div style="font-size:11px;color:var(--gray-400);margin:-8px 0 12px;line-height:1.5">Queda con fecha y hora en el expediente. Es lo que te cubre si después dice que no autorizó el precio.</div>';
   }
@@ -4043,16 +4114,24 @@ function registrarAbono(roId){
   var v=prompt('Balance pendiente: $'+bal.toFixed(2)+'\n¿Cuánto abonó el cliente ahora? ($)');
   if(v===null)return;
   var amt=parseFloat(v);if(isNaN(amt)||amt<=0){alert('Monto inválido.');return;}
+  // Un cero de más al teclear no puede convertirse en plata que nunca entró.
+  if(amt>bal+0.005){
+    if(!confirm('El balance es $'+bal.toFixed(2)+' y escribiste $'+amt.toFixed(2)+'.\n\nAceptar = apunto $'+bal.toFixed(2)+' y los $'+(amt-bal).toFixed(2)+' quedan como vuelto para el cliente.\nCancelar = corregir el monto.'))return;
+    if(!(bal>0)){alert('Esta orden ya está saldada — no hay nada que cobrar.');return;}
+    // se pasa el monto tecleado a propósito: `registrarPago` apunta el balance y deja
+    // anotado el vuelto en el renglón, para que después se pueda reconstruir qué pasó
+  }
   var met=prompt('¿Cómo te pagó ese abono?\n(ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
   if(met===null)return;
   conFacturaEditable(roId,'registrar un abono de $'+amt.toFixed(2),function(o){
-    registrarPago(o,amt,met);
+    var pg=registrarPago(o,amt,met);
+    var apuntado=pg?pg.monto:0,vuelto=(pg&&pg.vuelto)||0;
     var saldada=o.abonado>=(o.total||0)-0.01;
     if(saldada){
       o.estado='pagado';o.pagadoFecha=new Date().toISOString();
       sellarFactura(o);   // saldada = cobrada del todo = factura sellada, igual que markPaid
     }
-    bita('abono',roId,'+$'+amt.toFixed(2)+' ('+(met||o.pago||'')+') · abonado $'+o.abonado.toFixed(2)+' de $'+((o.total||0).toFixed(2))+(saldada?' · SALDADA y SELLADA':''));
+    bita('abono',roId,'+$'+apuntado.toFixed(2)+' ('+(met||o.pago||'')+')'+(vuelto>0?' · recibió $'+amt.toFixed(2)+', vuelto $'+vuelto.toFixed(2):'')+' · abonado $'+o.abonado.toFixed(2)+' de $'+((o.total||0).toFixed(2))+(saldada?' · SALDADA y SELLADA':''));
     if(!saveDB())return false;
     if(saldada)alert('Balance saldado — orden PAGADA ✓\n\nLa factura quedó sellada.');
     openRODetail(roId);
@@ -4482,6 +4561,7 @@ function initAjustes(){
   document.getElementById('set-bk-token').value=bk.token||'';
   updBackupStatus();
   updSyncStatus();
+  try{aprobEstadoUI();}catch(e){}
   var svi=document.getElementById('set-video');if(svi)svi.value=DB.settings.videoIntro||'';
   var db=document.getElementById('demo-btn');
   if(db)db.innerHTML=DB._demo?'<i class="ti ti-door-exit"></i> Salir del demo (vuelven tus datos reales)':'<i class="ti ti-masks-theater"></i> Activar modo demo';
@@ -4639,10 +4719,10 @@ var INV_CATS=['Todos','Aceites','Filtros','Frenos','Suspensión','Eléctrico','M
 
 function renderInventario(){
   var el=document.getElementById('inventario-body');if(!el)return;
-  var q=(document.getElementById('inv-q')||{value:''}).value.toLowerCase();
+  var q=norm((document.getElementById('inv-q')||{value:''}).value);
   var items=DB.inventario.filter(function(i){
     var matchCat=_invCat==='Todos'||i.cat===_invCat;
-    var matchQ=!q||i.nombre.toLowerCase().includes(q)||(i.sku||'').toLowerCase().includes(q)||(i.brand||'').toLowerCase().includes(q);
+    var matchQ=!q||norm(i.nombre).includes(q)||norm(i.sku||'').includes(q)||norm(i.brand||'').includes(q);
     return matchCat&&matchQ;
   });
   // Stats bar
@@ -5239,12 +5319,207 @@ function shareStatus(roId){
     dn:(o.denegados||[]).filter(function(d){return !d.auto||d.confirmed;})
         .map(function(d){return {n:d.nombre||d.n||d.desc||'Recomendado',p:(d.precio!=null?d.precio:d.p)||0};}),
     tot:o.total||0,st:step};
+  /* APROBACIÓN QUE ENTRA SOLA: el link lleva un token de 128 bits. Se acuña aquí (sin esperar a
+     la red, porque en iOS abrir WhatsApp después de un `await` lo bloquea el navegador) y la fila
+     se publica en segundo plano. Si la puerta anónima no está puesta o falla, el link se manda
+     igual y el botón del cliente cae al WhatsApp de siempre — nunca se queda sin vía. */
+  if(APROB_PUERTA!==false&&!DB._demo&&_syncOn&&o.estado!=='pagado'){
+    var tokAnt=o.aprobTok,fpAnt=o.aprobTokFp;
+    snap.tk=aprobTokenDe(o);
+    if(o.aprobTok!==tokAnt&&!saveDB()){        // el guard bloqueó: no se manda un token que no quedó en disco
+      o.aprobTok=tokAnt;o.aprobTokFp=fpAnt;delete snap.tk;
+    }
+    if(snap.tk)aprobPublicar(o);
+  }
   var url=location.origin+location.pathname+'#s='+_b64e(JSON.stringify(snap));
   var msg='Hola '+snap.c+' 👋 Sigue el estado de tu '+snap.v+' aquí:\n'+url;
   var num=waNum(o.tel);
   if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');}
   else if(navigator.share){navigator.share({title:'Estado de tu reparación',text:msg,url:url}).catch(function(){});}
   else{prompt('Copia este link y envíaselo al cliente:',url);}
+}
+/* ============================================================================
+   APROBACIÓN REMOTA DEL ESTIMADO — el cliente aprueba DESDE EL LINK
+   ----------------------------------------------------------------------------
+   Antes: el botón "Aprobar presupuesto" del link abría un WhatsApp. La aprobación
+   se quedaba en el chat y el taller la registraba a mano — si el cliente después
+   dice "yo nunca autoricé eso", el rastro es un mensaje que se puede borrar y una
+   nota que escribió el propio taller.
+   Ahora: el cliente le da al botón y quien lo anota es el SERVIDOR — hora del
+   servidor, nombre que él escribió, IP y navegador, en una fila que ni el taller
+   puede reescribir después (trigger `aprob_guard` en supabase/aprobaciones.sql).
+   REGLAS DE DISEÑO:
+   · El token es de 128 bits y se RENUEVA si el presupuesto cambia: aprobar $500 no
+     puede valer como haber aprobado $900.
+   · El cliente NO toca ninguna tabla: solo dos funciones con freno de intentos.
+   · Si la puerta no está puesta (falta correr el SQL) o no hay señal, todo cae al
+     WhatsApp de siempre. Nada se rompe, nadie se queda sin aprobar.
+   ============================================================================ */
+var APROB_PUERTA=null;   // null = sin probar · true = la puerta responde · false = falta correr el SQL
+try{var _ap=localStorage.getItem('sf_aprob_puerta');if(_ap==='0')APROB_PUERTA=false;else if(_ap==='1')APROB_PUERTA=true;}catch(e){}
+var _aprobErr='';
+function aprobPuerta(v){
+  if(APROB_PUERTA===v)return;
+  APROB_PUERTA=v;
+  try{localStorage.setItem('sf_aprob_puerta',v?'1':'0');}catch(e){}
+  try{aprobEstadoUI();}catch(e){}
+}
+// ¿El error es "esa función no existe" (falta el SQL) o un problema pasajero de red?
+function aprobFaltaSQL(err){
+  var m=String((err&&(err.message||err.hint||err.code))||err||'');
+  return /PGRST202|could not find the function|does not exist|schema cache|relation .*aprobaciones/i.test(m);
+}
+function _aprobToken(){
+  var b=new Uint8Array(16),s='',vacio=true;
+  try{if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(b);}catch(e){}
+  for(var i=0;i<16;i++)if(b[i]){vacio=false;break;}
+  if(vacio)for(var j=0;j<16;j++)b[j]=Math.floor(Math.random()*256);
+  for(var k=0;k<16;k++)s+=('0'+b[k].toString(16)).slice(-2);
+  return s;
+}
+function aprobTokenDe(o){
+  var fp=fpFactura(o);
+  if(!o.aprobTok||o.aprobTokFp!==fp){o.aprobTok=_aprobToken();o.aprobTokFp=fp;}
+  return o.aprobTok;
+}
+// Publica (o actualiza) la fila que el cliente va a decidir. Fire-and-forget a propósito.
+async function aprobPublicar(o){
+  var c=sbReady();if(!c||!o||!o.aprobTok||DB._demo)return false;
+  try{
+    var sess=(await c.auth.getSession()).data.session;if(!sess)return false;
+    var v=o.vehiculo||{};
+    var r=await c.from('aprobaciones').upsert({
+      token:o.aprobTok,owner:sess.user.id,ro:o.id,
+      cliente:String(o.cliente||'').slice(0,80),
+      vehiculo:[v.year,v.make,v.model].filter(Boolean).join(' ').slice(0,60),
+      total:Math.round((o.total||0)*100)/100,
+      fp:o.aprobTokFp||fpFactura(o)
+    },{onConflict:'token'});
+    if(r.error){
+      // la fila ya está decidida y el servidor se niega a reescribirla: eso es que FUNCIONA
+      if(/aprobacion-decidida/i.test(r.error.message||'')){aprobPuerta(true);return true;}
+      if(aprobFaltaSQL(r.error))aprobPuerta(false);
+      _aprobErr=r.error.message||'';return false;
+    }
+    aprobPuerta(true);_aprobErr='';return true;
+  }catch(e){_aprobErr=String((e&&e.message)||e);return false;}
+}
+/* Baja las decisiones del cliente y las mete en el expediente. Corre pegado a `syncPull`
+   y por realtime. Idempotente: una decisión ya aplicada no se vuelve a anotar ni avisa dos veces. */
+async function aprobPull(){
+  var c=sbReady();if(!c||DB._demo)return;
+  var sess=null;try{sess=(await c.auth.getSession()).data.session;}catch(e){}
+  if(!sess)return;
+  var r;
+  try{
+    r=await c.from('aprobaciones').select('token,ro,total,fp,decision,decidido_at,nombre,nota,ip')
+        .eq('owner',sess.user.id).is('aplicado_at',null).not('decidido_at','is',null).limit(50);
+  }catch(e){return;}
+  if(r.error){if(aprobFaltaSQL(r.error))aprobPuerta(false);return;}
+  aprobPuerta(true);
+  var filas=r.data||[];if(!filas.length)return;
+  var marcar=[],avisos=[];
+  filas.forEach(function(f){
+    // Solo la aplica el equipo que tiene ESA orden con ESE token. Si el link ya se renovó
+    // (el presupuesto cambió), la decisión vieja no se cuela como aprobación del nuevo precio.
+    var o=(DB.ordenes||[]).find(function(x){return x.id===f.ro&&x.aprobTok===f.token;});
+    if(!o)return;
+    marcar.push(f.token);
+    var monto=Number(f.total)||0;
+    if(f.decision==='aprobado'){
+      if(o.aprob&&o.aprob.tok===f.token)return;
+      o.aprob={ts:f.decidido_at,canal:'link del cliente',total:monto,fp:f.fp||'',dev:'cliente',
+               tok:f.token,nombre:f.nombre||'',ip:f.ip||'',remota:true};
+      delete o.aprobRech;
+      bita('estimado-aprobado',o.id,'$'+monto.toFixed(2)+' DESDE EL LINK · '+(f.nombre||'sin nombre')+(f.ip?' · IP '+f.ip:''));
+      avisos.push('✅ '+(o.cliente||o.id)+' aprobó $'+monto.toFixed(2));
+    }else{
+      if(o.aprobRech&&o.aprobRech.tok===f.token)return;
+      o.aprobRech={ts:f.decidido_at,tok:f.token,nombre:f.nombre||'',nota:f.nota||''};
+      bita('estimado-rechazado',o.id,'el cliente NO aprobó $'+monto.toFixed(2)+' desde el link'+(f.nombre?' · '+f.nombre:''));
+      avisos.push('🚫 '+(o.cliente||o.id)+' NO aprobó el estimado');
+    }
+  });
+  if(avisos.length){
+    if(!saveDB())return;                        // guard bloqueó: se reintenta en el próximo pull
+    try{rerenderCurrent();}catch(e){}
+    try{syncToast(avisos[0]+(avisos.length>1?'  (+'+(avisos.length-1)+' más)':''));}catch(e){}
+  }
+  if(marcar.length){
+    try{await c.from('aprobaciones').update({aplicado_at:new Date().toISOString()}).in('token',marcar);}catch(e){}
+  }
+}
+// ---- Ajustes → estado de la puerta ----
+function aprobEstadoUI(){
+  var el=document.getElementById('aprob-estado');if(!el)return;
+  if(APROB_PUERTA===true)el.innerHTML='<span style="color:var(--green);font-weight:700"><i class="ti ti-lock-check"></i> Activa</span> — tus clientes pueden aprobar desde el link y entra solo en la orden.';
+  else if(APROB_PUERTA===false)el.innerHTML='<span style="color:var(--amber);font-weight:700"><i class="ti ti-alert-triangle"></i> Falta un paso</span> — hay que pegar el SQL una sola vez en Supabase → SQL Editor. Mientras tanto el botón del cliente sigue abriendo WhatsApp (como siempre).'+(_aprobErr?'<br><span style="color:var(--gray-400)">'+E_(_aprobErr)+'</span>':'');
+  else el.innerHTML='<span style="color:var(--gray-400)">Sin probar todavía.</span> Entra a Sincronización primero; se prueba sola en la próxima sincronización.';
+}
+async function aprobProbar(){
+  var c=sbReady();if(!c){alert('No se pudo cargar la nube. Revisa tu conexión.');return;}
+  try{
+    var r=await c.rpc('aprob_ver',{p_token:'0000000000000000'});
+    if(r.error){
+      if(aprobFaltaSQL(r.error)){aprobPuerta(false);alert('⚠️ Todavía falta correr el SQL en Supabase.\n\nToca "Copiar el SQL", pégalo en Supabase → SQL Editor → Run, y vuelve a probar.');return;}
+      alert('No se pudo probar: '+r.error.message);return;
+    }
+    aprobPuerta(true);
+    alert('✅ La puerta está puesta y responde.\n\nDesde ahora, cuando mandes "Compartir estado con cliente", el cliente puede aprobar con un toque y la aprobación entra sola en la orden.');
+  }catch(e){alert('No se pudo probar: '+((e&&e.message)||e));}
+}
+async function aprobCopiarSQL(){
+  var txt='';
+  try{var res=await fetch('supabase/aprobaciones.sql',{cache:'no-store'});if(res.ok)txt=await res.text();}catch(e){}
+  if(!txt){alert('No se pudo leer el archivo (necesitas señal).\n\nEstá en el repo: supabase/aprobaciones.sql');return;}
+  try{await navigator.clipboard.writeText(txt);alert('SQL copiado ✓\n\nAbre supabase.com → tu proyecto → SQL Editor → New query → pega → Run.\nDespués vuelve aquí y toca "Probar la puerta".');}
+  catch(e){prompt('Copia esto y pégalo en Supabase → SQL Editor:',txt);}
+}
+// ---- Lado del CLIENTE (la página del link) ----
+function aprobDecidido(v,dec){
+  var box=document.getElementById('apr-box');if(!box)return;
+  var f='';try{f=new Date(v.decidido_at).toLocaleString('es-PR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){f='';}
+  var ok=(dec||v.decision)==='aprobado';
+  box.style.borderColor=ok?'#1FA463':'#B82A20';
+  box.innerHTML='<div style="text-align:center;padding:6px 0">'
+    +'<div style="font-size:34px;line-height:1">'+(ok?'✅':'🚫')+'</div>'
+    +'<div style="font-weight:800;font-size:16px;margin-top:6px;color:'+(ok?'#1FA463':'#B82A20')+'">'+(ok?'Trabajo aprobado':'Marcado como NO aprobado')+'</div>'
+    +'<div style="font-size:13px;color:#555;margin-top:6px;line-height:1.5">'+(ok?'El taller ya lo recibió y puede empezar.':'El taller te va a llamar antes de hacer nada.')+'</div>'
+    +'<div style="font-size:11.5px;color:#888;margin-top:10px;border-top:1px solid #eee;padding-top:8px">'
+      +(v.nombre?'Por '+String(v.nombre).replace(/[<>&"]/g,'')+' · ':'')+(f||'')+(v.total!=null?' · $'+(Number(v.total)||0).toFixed(2):'')
+    +'</div></div>';
+}
+async function aprobDesdeLink(dec){
+  var d=window._aprobSnap||{};if(!d.tk)return;
+  var nom=(((document.getElementById('apr-nom')||{}).value)||'').trim();
+  if(dec==='aprobado'&&!nom){alert('Escribe tu nombre para dejar constancia de quién aprobó.');return;}
+  if(dec==='rechazado'&&!confirm('¿Marcar que NO apruebas el trabajo por ahora?\n\nEl taller te va a llamar antes de hacer nada.'))return;
+  var b=document.getElementById(dec==='aprobado'?'apr-btn':'apr-no'),txt=b?b.textContent:'';
+  if(b){b.disabled=true;b.textContent='Enviando…';}
+  var r=null;
+  try{var c=sbReady();if(c)r=await c.rpc('aprob_registrar',{p_token:d.tk,p_decision:dec,p_nombre:nom,p_nota:''});}
+  catch(e){r={error:{message:String((e&&e.message)||e)}};}
+  var v=(r&&r.data)||null;
+  if(v&&v.ok){aprobDecidido(v,dec);return;}
+  // No se pudo registrar: no se le dice que sí cuando fue que no. Se le da la vía que sí funciona.
+  if(b){b.disabled=false;b.textContent=txt;}
+  var err=(v&&v.err)||'red';
+  var por=err==='vencido'?'Este link ya venció.':err==='no'?'Este link ya no está activo.':err==='rate'?'Demasiados intentos, espera unos minutos.':'No hubo señal para registrar tu respuesta.';
+  var av=document.getElementById('apr-aviso');
+  if(!av){av=document.createElement('div');av.id='apr-aviso';var bx=document.getElementById('apr-box');if(bx)bx.appendChild(av);}
+  var msg='Apruebo el presupuesto de la orden '+(d.id||'')+' ($'+(Number(d.tot)||0).toFixed(2)+'). — '+(nom||d.c||'');
+  av.style.cssText='margin-top:10px;background:#FDECEA;border:1px solid #F2B8B2;border-radius:10px;padding:10px;font-size:12.5px;color:#B82A20;line-height:1.5';
+  av.innerHTML=por+' Mándalo por WhatsApp para que quede:'
+    +(d.ph?'<a href="https://wa.me/'+String(d.ph).replace(/\D/g,'')+'?text='+encodeURIComponent(msg)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;padding:12px;border-radius:10px;text-decoration:none;margin-top:8px">💬 Enviar por WhatsApp</a>':'');
+}
+async function aprobVerEstado(){
+  var d=window._aprobSnap||{};if(!d.tk)return;
+  try{
+    var c=sbReady();if(!c)return;
+    var r=await c.rpc('aprob_ver',{p_token:d.tk});
+    var v=(r&&r.data)||null;
+    if(v&&v.ok&&v.decidido_at)aprobDecidido(v,v.decision);
+  }catch(e){}
 }
 function renderCustomerStatus(){
   var E=function(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
@@ -5275,7 +5550,21 @@ function renderCustomerStatus(){
     desglose+='</div>';
   }
   var rec=(d.dn||[]).length?'<div style="margin-top:18px"><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#B82A20;margin-bottom:6px">Recomendado (opcional)</div>'+d.dn.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f2e0dd;font-size:13px;color:#555"><span>'+E(x.n)+'</span><span>'+M(x.p)+'</span></div>';}).join('')+'</div>':'';
-  var approve=d.ph?'<a href="https://wa.me/'+d.ph+'?text='+encodeURIComponent('Apruebo el presupuesto de la orden '+d.id+' ('+M(d.tot)+'). — '+d.c)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border-radius:12px;text-decoration:none;margin-top:10px">✓ Aprobar presupuesto</a><a href="https://wa.me/'+d.ph+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:12px;text-decoration:none;font-size:14px">💬 Escribir al taller</a>':'';
+  window._aprobSnap=d;
+  var approveWA=d.ph?'<a href="https://wa.me/'+d.ph+'?text='+encodeURIComponent('Apruebo el presupuesto de la orden '+d.id+' ('+M(d.tot)+'). — '+d.c)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border-radius:12px;text-decoration:none;margin-top:10px">✓ Aprobar presupuesto</a><a href="https://wa.me/'+d.ph+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:12px;text-decoration:none;font-size:14px">💬 Escribir al taller</a>':'';
+  /* Con token: el cliente aprueba AQUÍ y lo sella el servidor. Sin token (falta el SQL, no hay
+     sesión de nube, o la orden ya está pagada): el botón de siempre, que abre WhatsApp. */
+  var approve=approveWA;
+  if(d.tk){
+    approve='<div id="apr-box" style="background:#fff;border:2px solid #1FA463;border-radius:16px;padding:18px;margin-top:14px;box-shadow:0 8px 24px rgba(0,0,0,.06)">'
+      +'<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#1FA463;margin-bottom:6px">Autorización del trabajo</div>'
+      +'<div style="font-size:13.5px;color:#333;line-height:1.5;margin-bottom:12px">Para empezar necesitamos tu OK. Al aprobar autorizas el trabajo de arriba por <b>'+M(d.tot)+'</b> (IVU incluido). Queda registrado con fecha y hora.</div>'
+      +'<input id="apr-nom" value="'+E(d.c)+'" placeholder="Tu nombre completo" autocomplete="name" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;margin-bottom:10px">'
+      +'<button id="apr-btn" onclick="aprobDesdeLink(\'aprobado\')" style="display:block;width:100%;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border:0;border-radius:12px;font-size:15px">✓ Apruebo el trabajo</button>'
+      +'<button id="apr-no" onclick="aprobDesdeLink(\'rechazado\')" style="display:block;width:100%;background:none;color:#B82A20;font-weight:700;padding:11px;border:0;font-size:13px;margin-top:4px">No lo apruebo por ahora</button>'
+      +(d.ph?'<a href="https://wa.me/'+String(d.ph).replace(/\D/g,'')+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:6px;text-decoration:none;font-size:13.5px">💬 Tengo una pregunta</a>':'')
+      +'</div>';
+  }
   document.body.style.background='#F6F4F0';
   document.body.innerHTML='<div style="max-width:520px;margin:0 auto;padding:0 16px 40px;font-family:-apple-system,Helvetica,Arial,sans-serif;color:#12161C">'
     +'<div style="text-align:center;padding:26px 0 18px"><div style="font-family:Arial Black,sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px"><span style="color:#E23B2E">●</span> '+E(d.n)+'</div><div style="color:#888;font-size:12px;margin-top:2px">Estado de tu reparación</div></div>'
@@ -5288,6 +5577,8 @@ function renderCustomerStatus(){
     +'<div style="display:flex;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:2px solid #12161C;font-size:18px;font-weight:800"><span>Total</span><span>'+M(d.tot)+'</span></div>'
     +'</div>'+approve
     +'<div style="text-align:center;color:#aaa;font-size:11px;margin-top:22px">Presupuesto antes de trabajar · Garantía 30 días · '+E(d.n)+'</div></div>';
+  // Si ya lo aprobó antes (o desde otro teléfono), que vea el sello y no lo apruebe dos veces.
+  if(d.tk)aprobVerEstado();
 }
 
 // ============ TÉCNICOS (usuarios TEC-1, TEC-2… + reloj + comisiones) ============
@@ -5444,7 +5735,13 @@ function eqRange(){
   var mo=EQ_PERIOD==='mes1'?1:0;
   return [new Date(now.getFullYear(),now.getMonth()-mo,1),new Date(now.getFullYear(),now.getMonth()-mo+1,1)];
 }
-function _horasFactDe(o){return (o.servicios||[]).reduce(function(s,sv){return s+(sv.laborHours||0)*(sv.qty||1);},0);}
+/* HORAS FACTURADAS = las que se COBRARON, ni una más.
+   Antes esto multiplicaba las horas por la cantidad de la línea, pero la factura NO lo hace:
+   un renglón "Amortiguador ×2 · 1h" se cobra $100 de labor y el KPI contaba 2 horas. La misma
+   tarjeta de la orden llegaba a decir "Mano de obra: 1h × $100" y debajo "FACTURADAS 2.00 h",
+   y el $/hora del taller salía a la MITAD de lo real (ventas ÷ horas infladas). Manda la
+   factura: la hora que no se cobró no existe. */
+function _horasFactDe(o){return (o.servicios||[]).reduce(function(s,sv){return s+(sv.laborHours||0);},0);}
 function buildEquipoStats(){
   var r=eqRange(),ini=r[0],fin=r[1];
   var rate=DB.settings.laborRate||103;
@@ -5459,7 +5756,7 @@ function buildEquipoStats(){
   var ases=(DB.asesores||[]).map(function(a){
     var aor=ords.filter(function(o){return o.asesor===a.id;});
     var piezas=0,laborH=0;
-    aor.forEach(function(o){(o.servicios||[]).forEach(function(sv){(sv.parts||[]).forEach(function(p){piezas+=(p.sellPrice||0)*(p.qty||1);});laborH+=(sv.laborHours||0)*(sv.qty||1);});});
+    aor.forEach(function(o){(o.servicios||[]).forEach(function(sv){(sv.parts||[]).forEach(function(p){piezas+=(p.sellPrice||0)*(p.qty||1);});laborH+=(sv.laborHours||0);});});
     var vendido=aor.reduce(function(s,o){return s+(o.total||0);},0);
     var deneg=aor.reduce(function(s,o){return s+(o.denegados||[]).reduce(function(x,d){return x+(d.precio||0);},0);},0);
     var aprob=vendido/1.115;
