@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v30';
+var APP_V='v31';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -1751,7 +1751,16 @@ function unirAppendOnly(gana,pierde){
   // Nunca bajar lo recibido: si un lado trae un abono sin libro (equipo con versión vieja), se
   // conserva el mayor y el próximo cobro lo mete al libro (`registrarPago` lo respalda).
   if(Array.isArray(o.pagos)&&o.pagos.length){
-    o.abonado=Math.max(sumaPagos(o),(gana.abonado||0),(pierde.abonado||0));
+    /* OJO (arreglado 29-jul, lo encontro Codex): el `Math.max` existia para un equipo con version
+       vieja que traia `abonado` sin libro de pagos. Pero desde que hay DEVOLUCIONES (renglones
+       negativos), quedarse con el mayor rompe la regla de que `abonado` = suma de `pagos`:
+       el iPad marca una orden por garantia (pagos: +111.50 y -111.50 => $0) y el iPhone, que
+       todavia tiene la copia vieja, la sube a $111.50 otra vez. Despues `balanceRO` dice que no
+       debe nada y la factura se sella "pagada" sin que el cliente haya pagado.
+       Si el libro tiene devoluciones, el libro MANDA. */
+    var _hayDev=o.pagos.some(function(pg){return pg&&(pg.devolucion||(pg.monto||0)<0);});
+    o.abonado=_hayDev?sumaPagos(o)
+                     :Math.max(sumaPagos(o),(gana.abonado||0),(pierde.abonado||0));
   }
   return o;
 }
@@ -2950,7 +2959,9 @@ function dineroRO(o,rate){
   }
   // 3) Camino normal: subtotal, descuento, IVU.
   var d=o.descuento||0;
-  out.descAmt=r2(o.descTipo==='$'?Math.min(d,sub):sub*d/100);
+  // El descuento nunca puede pasar del subtotal. El de $ ya tenia tope; el de % no, asi que
+  // teclear 200 en vez de 20 daba un total NEGATIVO (-$111.50 sobre $100). Encontrado por Codex.
+  out.descAmt=r2(Math.min(o.descTipo==='$'?d:sub*d/100, sub));
   out.base=r2(sub-out.descAmt);
   out.ivu=r2(out.base*0.115);
   out.total=r2(out.base+out.ivu);
@@ -3111,8 +3122,33 @@ function saveRO(){
     var _gRO=DB.ordenes.find(function(x){return x.id===RO.id;});
     if(_gRO){
       var _falta=balanceRO(_gRO);
-      if(_falta>0&&!sinCargo(_gRO))registrarPago(_gRO,_falta,_gRO.pago);  // el cobro del día, fechado
-      if(!facturaSellada(_gRO))sellarFactura(_gRO);
+      var _yaCobrado=sumaPagos(_gRO);
+      /* 🚨 ANTES ESTO APUNTABA EL COBRO SOLO (lo encontro Codex, 29-jul).
+         En una orden NUEVA que se cierra pagada al final del asistente, eso esta bien: el dinero
+         se acaba de recibir. Pero si la orden YA tenia cobros y se reabre para SUBIRLE el precio,
+         apuntaba la diferencia como recibida sin que el cliente hubiera dado un peso: una orden de
+         $111.50 subida a $223 aparecia cobrada $223. Cuando ya hay dinero adentro, se pregunta. */
+      if(_falta>0&&!sinCargo(_gRO)){
+        var _apuntar=true;
+        if(_yaCobrado>0.005){
+          _apuntar=confirm('El total de '+_gRO.id+' es ahora $'+((_gRO.total||0).toFixed(2))+
+            ' y ya tenias $'+_yaCobrado.toFixed(2)+' cobrados.'+String.fromCharCode(10)+String.fromCharCode(10)+
+            '¿Ya recibiste los $'+_falta.toFixed(2)+' de diferencia?'+String.fromCharCode(10)+String.fromCharCode(10)+
+            'Aceptar = lo apunto como cobrado hoy.'+String.fromCharCode(10)+
+            'Cancelar = la orden queda PENDIENTE por esa diferencia.');
+        }
+        if(_apuntar)registrarPago(_gRO,_falta,_gRO.pago);
+        else{_gRO.estado='pendiente';RO.estado='pendiente';}
+      }
+      /* Y al reves: si el total BAJO por debajo de lo ya cobrado, ese dinero es del cliente. */
+      if(_yaCobrado-(_gRO.total||0)>0.005&&!sinCargo(_gRO)){
+        var _sobra=Math.round((_yaCobrado-(_gRO.total||0))*100)/100;
+        alert('El total de '+_gRO.id+' bajo a $'+((_gRO.total||0).toFixed(2))+
+          ' y ya le habias cobrado $'+_yaCobrado.toFixed(2)+'.'+String.fromCharCode(10)+String.fromCharCode(10)+
+          'DEVUELVELE $'+_sobra.toFixed(2)+'. Lo apunto como devolucion para que la caja cuadre.');
+        registrarDevolucion(_gRO,_sobra,_gRO.pago,'el total bajo despues de haber cobrado');
+      }
+      if(_gRO.estado==='pagado'&&!facturaSellada(_gRO))sellarFactura(_gRO);
     }
   }
   // Una orden sin cargo no puede quedarse con dinero del cliente adentro (ver `conciliarSinCargo`).
@@ -4855,8 +4891,23 @@ function closeFotoViewer(){document.getElementById('foto-viewer').style.display=
 function reExportPDF(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});
   if(!o){alert('Orden no encontrada.');return;}
+  /* 🚨 ESTO COPIABA LOS CAMPOS A MANO, UNO POR UNO, Y SE LE OLVIDABAN (arreglado 29-jul).
+     Faltaban `garantia`, `cortesia`, `descTipo`, `totalManual` y `sinIVU`, así que volver a
+     generar el PDF de una orden ya guardada le cambiaba el dinero AL CLIENTE:
+       · una orden por GARANTÍA se imprimía cobrando $111.50 en vez de $0.00
+       · un descuento de $10 se reinterpretaba como 10% ($214.70 → $203.40)
+       · un "precio final acordado" de $140 salía como $111.50
+     Cada campo nuevo que se le añada a una orden volvería a romper esto. La lista blanca se
+     cambia por una COPIA COMPLETA: si está en la orden, está en el PDF. */
   var savedRO=RO;
-  RO={id:o.id,fecha:o.fecha,cliente:o.cliente,tel:o.tel,email:o.email||'',vehiculo:o.vehiculo||{},queja:o.queja||'',insp:o.insp||{},servicios:(o.servicios||[]).map(function(sv){return{id:sv.id,n:sv.n||sv.nombre,ep:sv.ep||sv.precio,qty:sv.qty||1,parts:sv.parts||[],laborHours:sv.laborHours||0};}),denegados:o.denegados||[],descuento:o.descuento||0,pago:o.pago,estado:o.estado,abonado:o.abonado||0,nextDate:o.nextDate,techNotes:o.techNotes||'',total:o.total||0,sig1:o.sig1||false,sig2:o.sig2||false,sigData:o.sigData||{},sigTimes:o.sigTimes||{},fotos:o.fotos||[],terms:o.terms||null,auth1:o.auth1||null};
+  var copia;
+  try{copia=JSON.parse(JSON.stringify(o));}catch(e){alert('No pude preparar el PDF de esta orden.');return;}
+  // lo único que hay que normalizar: órdenes viejas guardaban el servicio como `nombre`/`precio`
+  copia.servicios=(copia.servicios||[]).map(function(sv){
+    sv.n=sv.n||sv.nombre; sv.ep=(sv.ep!=null?sv.ep:sv.precio); sv.qty=sv.qty||1;
+    sv.parts=sv.parts||[]; sv.laborHours=sv.laborHours||0; return sv;
+  });
+  RO=copia;
   exportPDF();
   RO=savedRO;
 }
@@ -5063,6 +5114,14 @@ function deleteRO(roId,motivo){
   if(idx<0)return false;
   var o=DB.ordenes[idx];
   if(!Array.isArray(DB.papelera))DB.papelera=[];
+  /* Si la orden tiene dinero cobrado, ese dinero SALE de la caja del dia al borrarla (el libro de
+     pagos se va con el expediente). Puede ser lo correcto (orden creada por error) o puede ser que
+     el efectivo este en su gaveta. No se decide por el: se le avisa con el numero. (Codex, 29-jul) */
+  var _cobrado=Math.round(sumaPagos(o)*100)/100;
+  if(_cobrado>0.005&&!confirm('OJO: '+roId+' tiene $'+_cobrado.toFixed(2)+' cobrados.'+String.fromCharCode(10)+String.fromCharCode(10)+
+      'Si la mandas a la papelera, ese dinero sale de la caja del dia y de tus ventas.'+String.fromCharCode(10)+
+      'Si el cliente te pago de verdad, devuelveselo o no la borres.'+String.fromCharCode(10)+String.fromCharCode(10)+
+      '¿Seguir y borrarla?'))return false;
   var copia;
   try{copia=JSON.parse(JSON.stringify(o));}catch(e){alert('No pude copiar la orden a la papelera — no se borró nada.');return false;}
   copia._delAt=new Date().toISOString();
