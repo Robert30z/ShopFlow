@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v23';
+var APP_V='v24';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -538,6 +538,17 @@ function allCats(){return MC.concat(DB.catsCustom||[]);}
 function norm(s){
   s=String(s==null?'':s).toLowerCase();
   try{return s.normalize('NFD').replace(/[̀-ͯ]/g,'');}catch(e){return s;}
+}
+/* EL MISMO CLIENTE, ESCRITO DE DOS MANERAS, ES EL MISMO CLIENTE (batch 25, 28-jul).
+   La ficha del cliente se unía ignorando mayúsculas (`autoSaveCli`), pero su historial, su
+   gasto acumulado, su contador de órdenes y su "última visita" se buscaban con match EXACTO
+   de texto (`o.cliente===c.nombre`). Resultado real: la 2da visita tecleada "ramón figueroa"
+   NO aparecía en su ficha — la app decía 1 orden / $156 cuando había gastado $311.09.
+   Una sola definición para "las órdenes de este cliente", que usan TODAS las pantallas. */
+function mismoCli(a,b){return norm(a).trim()===norm(b).trim();}
+function ordenesDeCli(nombre){
+  if(!nombre)return [];
+  return (DB.ordenes||[]).filter(function(o){return mismoCli(o.cliente,nombre);});
 }
 function getSvcs(cat){return (MS[cat]||[]).concat((DB.svcsCustom||[]).filter(function(s){return s.cat===cat;}));}
 
@@ -1077,7 +1088,46 @@ function normalizarDB(db){
   db.aseCounter=Math.max(typeof db.aseCounter==='number'?db.aseCounter:0,_maxIdNum(db.asesores,'ASE-'));
   try{migrarPagos(db);}catch(e){}
   try{repararCitasPisadas(db);}catch(e){}
+  try{fusionarClientesRepetidos(db);}catch(e){}
   return db;
+}
+/* FUSIONA LAS FICHAS QUE YA QUEDARON PARTIDAS (batch 25, 28-jul).
+   `autoSaveCli` unía por `toLowerCase()`, así que "Ramón Figueroa" y "Ramon Figueroa" (el acento
+   que se le cae al teclado del iPhone) creaban DOS fichas de la misma persona: los carros, el
+   teléfono y el historial repartidos entre las dos. Arreglar la unión evita que vuelva a pasar,
+   pero no repara lo que ya está en su equipo — la regla de siempre: ¿y lo que ya quedó mal?
+   Conservadora: solo fusiona cuando el nombre normalizado (sin acentos ni mayúsculas) es IDÉNTICO;
+   se queda con la ficha más vieja (la que él escribió bien la primera vez), une los carros sin
+   duplicar tablilla, rellena lo que estuviera vacío y respeta el recordatorio más adelantado.
+   Idempotente: si la nube devuelve la ficha repetida, la próxima carga la vuelve a tragar. */
+function fusionarClientesRepetidos(db){
+  db=db||DB;
+  var cl=db.clientes||[];if(cl.length<2)return 0;
+  var porNombre={},fuera=[],n=0;
+  cl.forEach(function(c){
+    if(!c||!c.nombre)return;
+    var k=norm(c.nombre).trim();if(!k)return;
+    var base=porNombre[k];
+    if(!base){porNombre[k]=c;return;}
+    // la más vieja manda (por fecha de creación; sin fecha, la que ya estaba)
+    var vieja=base,nueva=c;
+    if(base.creado&&c.creado&&c.creado<base.creado){vieja=c;nueva=base;porNombre[k]=c;}
+    (nueva.vehiculos||[]).forEach(function(v){
+      var dup=(vieja.vehiculos||[]).find(function(x){return (v.tag&&x.tag===v.tag)||(!v.tag&&!x.tag&&x.desc===v.desc);});
+      if(!dup)(vieja.vehiculos=vieja.vehiculos||[]).push(v);
+      else if(v.vin&&!dup.vin)dup.vin=v.vin;
+    });
+    if(!vieja.tel&&nueva.tel)vieja.tel=nueva.tel;
+    if(!vieja.email&&nueva.email)vieja.email=nueva.email;
+    if(!vieja.empresa&&nueva.empresa)vieja.empresa=nueva.empresa;
+    if(nueva.nextReminder&&(!vieja.nextReminder||nueva.nextReminder>vieja.nextReminder))vieja.nextReminder=nueva.nextReminder;
+    if(nueva.winbackAt&&(!vieja.winbackAt||nueva.winbackAt>vieja.winbackAt))vieja.winbackAt=nueva.winbackAt;
+    fuera.push(nueva.id);n++;
+  });
+  if(!n)return 0;
+  db.clientes=cl.filter(function(c){return !c||!c.id||fuera.indexOf(c.id)<0;});
+  try{bita('clientes-fusionados','',n+' ficha(s) repetidas del mismo cliente (mismo nombre con/sin acento) se unieron en una');}catch(e){}
+  return n;
 }
 /* REPARA LAS CITAS QUE LA NUBE RESUCITÓ (bug arreglado en el batch 23, 28-jul).
    Mientras `mergeDB` dejaba que la nube atrasada ganara, una cita que se convirtió en orden
@@ -2046,7 +2096,7 @@ function fillCliDatalists(){
 }
 function pickCli(name){
   var chips=document.getElementById('cli-veh-chips');
-  var c=DB.clientes.find(function(x){return x.nombre.toLowerCase()===(name||'').toLowerCase();});
+  var c=DB.clientes.find(function(x){return mismoCli(x.nombre,name);});
   if(!c){if(chips)chips.innerHTML='';return;}
   if(c.tel&&!RO.tel){RO.tel=c.tel;var t=document.getElementById('c-t');if(t)t.value=c.tel;}
   if(c.email&&!RO.email){RO.email=c.email;var e=document.getElementById('c-e');if(e)e.value=c.email;}
@@ -2829,7 +2879,7 @@ function saveRO(){
 }
 function autoSaveCli(){
   if(!RO.cliente)return;
-  var ex=DB.clientes.find(function(c){return c.nombre.toLowerCase()===RO.cliente.toLowerCase();});
+  var ex=DB.clientes.find(function(c){return mismoCli(c.nombre,RO.cliente);});
   var veh={tag:RO.vehiculo.tag||'',desc:(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim(),vin:RO.vehiculo.vin||''};
   var hasVeh=!!(veh.tag||veh.desc);
   if(!ex){
@@ -3274,7 +3324,7 @@ function renderOrdenes(){var q=norm((document.getElementById('ord-q')||{value:''
 function renderClientes(){var q=norm((document.getElementById('cli-q')||{value:''}).value);var list=DB.clientes.filter(function(c){return !q||norm(c.nombre).includes(q)||norm(c.empresa||'').includes(q);});var el=document.getElementById('clientes-body');if(!el)return;
   var h=flotasHTML(q);
   if(!list.length&&!h){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin clientes. Se crean automáticamente al guardar una RO.</div>';return;}
-  el.innerHTML=h+list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var total=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).reduce(function(s,o){return s+(o.total||0);},0);var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).length;var nv=(c.vehiculos||[]).length;return '<div onclick="openCliDetail(\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100);cursor:pointer"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+c.nombre+(c.empresa?' <span class="badge bb" style="font-size:9px">'+c.empresa+'</span>':'')+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+(nv?' · '+nv+' carro'+(nv>1?'s':''):'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div><i class="ti ti-chevron-right" style="color:var(--gray-300)"></i></div></div>';}).join('');
+  el.innerHTML=h+list.map(function(c){var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();var _oc=ordenesDeCli(c.nombre);var total=_oc.reduce(function(s,o){return s+(o.total||0);},0);var ords=_oc.length;var nv=(c.vehiculos||[]).length;return '<div onclick="openCliDetail(\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--gray-100);cursor:pointer"><div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0">'+ini+'</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+c.nombre+(c.empresa?' <span class="badge bb" style="font-size:9px">'+c.empresa+'</span>':'')+'</div><div style="font-size:11px;color:var(--gray-400)">'+(c.tel||'—')+' · '+ords+' orden'+(ords!==1?'es':'')+(nv?' · '+nv+' carro'+(nv>1?'s':''):'')+'</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--green)">$'+total.toFixed(0)+'</div><i class="ti ti-chevron-right" style="color:var(--gray-300)"></i></div></div>';}).join('');
 }
 // ============ CUENTAS DE FLOTA / EMPRESA ============
 function flotaEmpresas(){
@@ -3374,7 +3424,7 @@ function waFlota(emp){
 function openCliDetail(cid){
   var c=DB.clientes.find(function(x){return x.id===cid;});if(!c)return;
   var el=document.getElementById('clientes-body');if(!el)return;
-  var ords=DB.ordenes.filter(function(o){return o.cliente===c.nombre;}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
+  var ords=ordenesDeCli(c.nombre).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
   var total=ords.reduce(function(s,o){return s+(o.total||0);},0);
   var pend=ords.filter(function(o){return o.estado==='pendiente';}).reduce(function(s,o){return s+Math.max(0,(o.total||0)-(o.abonado||0));},0);
   var ini=c.nombre.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();
@@ -5236,7 +5286,9 @@ function getSeguimientos(){
   });
   DB.clientes.forEach(function(c){
     if(!c.tel||!waNum(c.tel))return;
-    var last=0;DB.ordenes.forEach(function(o){if(o.cliente===c.nombre){var t=new Date(o.fecha).getTime();if(t>last)last=t;}});
+    // OJO: con match exacto, una visita reciente tecleada distinto no contaba y la app le
+    // mandaba "hace tiempo no cotejamos su vehículo" a un cliente que vino la semana pasada.
+    var last=0;ordenesDeCli(c.nombre).forEach(function(o){var t=new Date(o.fecha).getTime();if(t>last)last=t;});
     if(!last)return;
     if(now-last>=180*D&&(!c.winbackAt||now-new Date(c.winbackAt).getTime()>90*D))out.push({type:'wb',c:c});
   });
