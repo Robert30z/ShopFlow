@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v27';
+var APP_V='v28';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -2188,7 +2188,7 @@ function initRO(){
     setTimeout(fillROInputs,140);
     return;
   }
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',cortesia:false,cortesiaMotivo:'',garantia:false,garantiaMotivo:'',garantiaRO:'',empresa:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',totalManual:'',cortesia:false,cortesiaMotivo:'',garantia:false,garantiaMotivo:'',garantiaRO:'',empresa:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=localDateStr(d);
   if(_citaPrefill)applyCitaPrefill();
   curStep=0;
@@ -2290,7 +2290,7 @@ function buildPane(id){
 
   if(id==='denegados')return '<div class="tb2"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Ítems en ROJO de la inspección aparecen aquí automáticamente.</span></div><div id="den-auto"></div><div class="card"><div class="ch">Agregar denegado</div><div class="cb"><div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div><div class="fr"><div class="fg"><div class="fl">Precio estimado</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente</option></select></div></div><div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas al 10%, riesgo de seguridad..."></textarea></div></div><button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button></div></div><div id="den-list"></div><div id="den-sig-w" style="display:none"><div class="card"><div class="ch">Firma — reconocimiento denegados</div><div class="cb"><div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">El cliente reconoce haber sido informado y decide no autorizar estos servicios.</div><canvas id="sig-den" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div></div>';
 
-  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="setCortesiaRO(this.checked)"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div style="margin-top:8px;background:var(--green-light);border:1.5px dashed var(--green);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-gar" style="width:auto" onchange="setGarantiaRO(this.checked)"> 🛡 Trabajo por GARANTÍA — se cubre una pieza o un trabajo anterior (cliente paga $0)</label><div id="est-gar-m-row" style="display:none;margin-top:8px"><input id="est-gar-m" placeholder="¿Qué se cubre? (obligatorio — ej: batería Duralast, invoice ADV-789012)" style="font-size:11px" oninput="RO.garantiaMotivo=this.value"><div class="fl" style="margin:7px 0 3px">Orden original (la que se está cubriendo)</div><select id="est-gar-ro" style="font-size:11px" onchange="RO.garantiaRO=this.value"></select><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Sale en la factura y en el link del cliente, va en columna aparte en el CSV del contable, y NO cuenta como cortesía ni como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
+  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-final-row" style="margin-top:10px;background:var(--blue-light);border:1.5px dashed var(--blue);border-radius:var(--r-md);padding:10px 12px"><div class="fl" style="margin-bottom:4px;color:var(--blue);font-weight:800">🤝 Precio final acordado con el cliente (todo incluido)</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px;font-weight:800;color:var(--blue)">$</span><input id="est-final" type="number" step="0.01" min="0" placeholder="ej: 140.00" style="flex:1;font-size:15px;font-weight:700" oninput="RO.totalManual=this.value;calcEst()"><button class="btn sm" onclick="limpiarPrecioFinal()" title="Volver al cálculo normal"><i class="ti ti-x"></i></button></div><div id="est-final-aviso" style="font-size:10px;color:var(--gray-500);margin-top:5px">Déjalo vacío para que la app calcule el total normal (subtotal + IVU).</div></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="setCortesiaRO(this.checked)"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div style="margin-top:8px;background:var(--green-light);border:1.5px dashed var(--green);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-gar" style="width:auto" onchange="setGarantiaRO(this.checked)"> 🛡 Trabajo por GARANTÍA — se cubre una pieza o un trabajo anterior (cliente paga $0)</label><div id="est-gar-m-row" style="display:none;margin-top:8px"><input id="est-gar-m" placeholder="¿Qué se cubre? (obligatorio — ej: batería Duralast, invoice ADV-789012)" style="font-size:11px" oninput="RO.garantiaMotivo=this.value"><div class="fl" style="margin:7px 0 3px">Orden original (la que se está cubriendo)</div><select id="est-gar-ro" style="font-size:11px" onchange="RO.garantiaRO=this.value"></select><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Sale en la factura y en el link del cliente, va en columna aparte en el CSV del contable, y NO cuenta como cortesía ni como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
   if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div>'+((DB.asesores||[]).length?'<div class="card"><div class="ch"><i class="ti ti-user-check"></i> Asesor de servicio</div><div class="cb"><select onchange="RO.asesor=this.value">'+aseOptionsHTML(RO.asesor)+'</select></div></div>':'')+'<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--ink)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
@@ -2852,6 +2852,7 @@ function buildEstSum(){
   var se=document.getElementById('est-estado');if(se)se.value=(RO.estado==='abierta'||RO.estado==='pendiente')?'pendiente':'pagado';
   var sp2=document.getElementById('est-pago');if(sp2&&RO.pago&&RO.pago!=='Cortesía')sp2.value=RO.pago;
   var dd=document.getElementById('est-desc');if(dd)dd.value=RO.descuento||0;
+  var fin=document.getElementById('est-final');if(fin)fin.value=(RO.totalManual==null?'':RO.totalManual);
   var dt2=document.getElementById('est-desc-t');if(dt2)dt2.value=RO.descTipo==='$'?'$':'%';
   var dm=document.getElementById('est-desc-m');if(dm)dm.value=RO.descMotivo||'';
   var ck=document.getElementById('est-cort');if(ck)ck.checked=!!RO.cortesia;
@@ -2868,6 +2869,12 @@ function buildEstSum(){
 }
 /* Cortesía y garantía se excluyen: las dos dejan el total en $0 pero por razones distintas, y
    marcarlas juntas dejaría al contable sin saber cuál fue. Al prender una se apaga la otra. */
+// Quita el precio fijado y devuelve la orden al cálculo normal (subtotal + IVU).
+function limpiarPrecioFinal(){
+  RO.totalManual='';
+  var f=document.getElementById('est-final');if(f)f.value='';
+  calcEst();
+}
 function setCortesiaRO(on){
   RO.cortesia=!!on;
   if(on&&RO.garantia){RO.garantia=false;RO.garantiaMotivo='';RO.garantiaRO='';
@@ -2905,24 +2912,74 @@ function llenarOrdenesGarantia(){
     }).join('');
   sel.value=RO.garantiaRO||'';
 }
+/* ---- EL DINERO DE UNA ORDEN, CALCULADO EN UN SOLO SITIO (batch 29, 29-jul) ----
+   Antes existían DOS matemáticas: `calcEst` para la orden en el asistente y `recalcROTotal` para
+   la orden ya guardada. Dos copias de la misma fórmula es exactamente el patrón que ha causado
+   media docena de bugs de caja este mes. Ahora las dos llaman aquí.
+
+   🆕 PRECIO FINAL ACORDADO (lo pidió Roberto): *"si ya le di precio al cliente me gustaría poner
+   el precio exacto que ya le di"*. En el taller se cotiza redondo y con todo incluido — "son $140"
+   — no "$125.56 más IVU". Si se escribe un precio final, ese ES el total, y de ahí se deriva el
+   subtotal (total ÷ 1.115) y el IVU, para que la factura y la planilla sigan cuadrando.
+   La diferencia contra lo que suman los renglones sale como una línea VISIBLE, "Ajuste acordado
+   con el cliente". Sin esa línea, el cliente suma los renglones de su factura y le da otro número
+   — y eso es justo lo que se acaba de verificar que no puede pasar. */
+function dineroRO(o,rate){
+  rate=rate||DB.settings.laborRate||103;
+  var svc=0,labor=0,piezas=0;
+  (o.servicios||[]).forEach(function(i){
+    svc+=(i.ep||0)*(i.qty||1);
+    labor+=(i.laborHours||0)*rate;
+    piezas+=(i.parts||[]).reduce(function(ps,p){return ps+((p.sellPrice||0)*(p.qty||0));},0);
+  });
+  var r2=function(n){return Math.round(n*100)/100;};
+  var sub=r2(svc+labor+piezas);
+  var out={svc:r2(svc),labor:r2(labor),piezas:r2(piezas),sub:sub,
+           descAmt:0,ajuste:0,base:sub,ivu:0,total:0,manual:false};
+  // 1) Sin cargo (cortesía o garantía) manda sobre todo lo demás: el cliente paga $0.
+  if(sinCargo(o)){ out.base=sub;out.ivu=0;out.total=0;return out; }
+  // 2) Precio final acordado: el total es el que él dio, y el resto se deriva de ahí.
+  var man=Number(o.totalManual);
+  if(o.totalManual!==''&&o.totalManual!=null&&isFinite(man)&&man>0){
+    out.manual=true;
+    out.total=r2(man);
+    out.base=r2(out.total/1.115);
+    out.ivu=r2(out.total-out.base);      // así base + IVU da EXACTO el precio que él prometió
+    out.ajuste=r2(out.base-sub);         // lo que se ajustó (puede ser negativo o positivo)
+    return out;
+  }
+  // 3) Camino normal: subtotal, descuento, IVU.
+  var d=o.descuento||0;
+  out.descAmt=r2(o.descTipo==='$'?Math.min(d,sub):sub*d/100);
+  out.base=r2(sub-out.descAmt);
+  out.ivu=r2(out.base*0.115);
+  out.total=r2(out.base+out.ivu);
+  return out;
+}
 function calcEst(){
   var rate=DB.settings.laborRate||103;
-  var svcTotal=0,laborTotal=0,partsTotal=0;
-  RO.servicios.forEach(function(i){
-    svcTotal+=(i.ep||0)*(i.qty||1);
-    laborTotal+=(i.laborHours||0)*rate;
-    partsTotal+=(i.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);
-  });
-  var sub=svcTotal+laborTotal+partsTotal;
+  var m=dineroRO(RO,rate);
+  var svcTotal=m.svc,laborTotal=m.labor,partsTotal=m.piezas;
+  var sub=m.sub,descAmt=m.descAmt,ivu=m.ivu,tot=m.total;
   var d=RO.descuento||0;
-  var descAmt=RO.descTipo==='$'?Math.min(d,sub):sub*d/100;
-  var ad=sub-descAmt;var ivu=ad*.115;var tot=ad+ivu;
-  RO.descValor=Math.round(descAmt*100)/100;
+  RO.descValor=descAmt;
+  RO.ajusteValor=m.ajuste;
   if(sinCargo(RO)){
-    var _v=Math.round(sub*100)/100;
-    RO.cortesiaValor=RO.cortesia?_v:0;RO.garantiaValor=RO.garantia?_v:0;ivu=0;tot=0;
+    var _v=sub;
+    RO.cortesiaValor=RO.cortesia?_v:0;RO.garantiaValor=RO.garantia?_v:0;
   }else{RO.cortesiaValor=0;RO.garantiaValor=0;}
   RO.total=tot;
+  var fr=document.getElementById('est-final-row');
+  if(fr){
+    var fi=document.getElementById('est-final');
+    if(fi&&document.activeElement!==fi)fi.value=(RO.totalManual==null?'':RO.totalManual);
+    var av=document.getElementById('est-final-aviso');
+    if(av)av.innerHTML=m.manual
+      ? ('Total fijado en <strong>$'+tot.toFixed(2)+'</strong>. Los renglones suman $'+sub.toFixed(2)+
+         ', así que en la factura sale un <strong>ajuste de '+(m.ajuste<0?'&minus;':'+')+'$'+Math.abs(m.ajuste).toFixed(2)+
+         '</strong> para que le cuadre al cliente. El descuento no se usa cuando fijas el precio.')
+      : 'Déjalo vacío para que la app calcule el total normal (subtotal + IVU).';
+  }
   var ss=document.getElementById('est-sub');if(ss)ss.textContent='$'+sub.toFixed(2);
   var iv=document.getElementById('est-ivu');if(iv)iv.textContent='$'+ivu.toFixed(2);
   var tf=document.getElementById('est-tot');if(tf)tf.textContent=sinCargo(RO)?('$0.00 '+iconoSinCargo(RO)):'$'+tot.toFixed(2);
@@ -2933,6 +2990,7 @@ function calcEst(){
     bd.innerHTML='<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Servicios/labor base</span><span>$'+svcTotal.toFixed(2)+'</span></div>'+
       (laborTotal>0?'<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Mano de obra ('+RO.servicios.reduce(function(s,i){return s+(i.laborHours||0);},0).toFixed(1)+'h @ $'+rate+')</span><span>$'+laborTotal.toFixed(2)+'</span></div>':'')+
       (partsTotal>0?'<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Piezas</span><span>$'+partsTotal.toFixed(2)+'</span></div>':'')+
+      (m.manual&&Math.abs(m.ajuste)>=0.005?'<div class="er" style="font-size:12px"><span style="color:var(--blue);font-weight:700">Ajuste acordado con el cliente</span><span style="color:var(--blue);font-weight:700">'+(m.ajuste<0?'− $':'+ $')+Math.abs(m.ajuste).toFixed(2)+'</span></div>':'')+
       (descAmt>0&&!sinCargo(RO)?'<div class="er" style="font-size:12px"><span style="color:var(--green)">Descuento'+(RO.descTipo==='$'?'':' ('+d+'%)')+'</span><span style="color:var(--green)">— $'+descAmt.toFixed(2)+'</span></div>':'')+
       (sinCargo(RO)?'<div class="er" style="font-size:12px"><span style="color:var(--blue);font-weight:700">'+iconoSinCargo(RO)+' '+(RO.garantia?'Garantía — sin costo':'Cortesía del taller')+'</span><span style="color:var(--blue);font-weight:700">— $'+sub.toFixed(2)+'</span></div>':'');
   }
@@ -3173,17 +3231,22 @@ function exportPDF(){
   });
 
   // Totals
+  // La factura sale de `dineroRO`, la MISMA función que la pantalla y el link del cliente.
   var disc=RO.descuento||0;
-  var discAmt=RO.descTipo==='$'?Math.min(disc,sub):sub*disc/100;
-  var subAfterDisc=sub-discAmt;
-  var ivu=subAfterDisc*.115;
-  var totalFinal=subAfterDisc+ivu;
-  if(sinCargo(RO)){ivu=0;totalFinal=0;}
+  var _pm=dineroRO(RO,rate);
+  var discAmt=_pm.descAmt;
+  var ivu=_pm.ivu;
+  var totalFinal=_pm.total;
 
   y+=2;doc.line(120,y,196,y);y+=4;
   doc.setFontSize(8);
   doc.text('Subtotal',120,y);doc.text('$'+sub.toFixed(2),196,y,{align:'right'});y+=4;
   if(sinCargo(RO)){doc.setFont(undefined,'bold');doc.text(motivoSinCargo(RO),120,y);doc.text('— $'+sub.toFixed(2),196,y,{align:'right'});doc.setFont(undefined,'normal');y+=4;}
+  else if(_pm.manual&&Math.abs(_pm.ajuste)>=0.005){
+    // El renglón que hace que la factura CUADRE cuando el precio se acordó redondo.
+    doc.text('Ajuste acordado con el cliente',120,y);
+    doc.text((_pm.ajuste<0?'- $':'+ $')+Math.abs(_pm.ajuste).toFixed(2),196,y,{align:'right'});y+=4;
+  }
   else if(discAmt>0){doc.text('Descuento'+(RO.descTipo==='$'?'':' ('+disc+'%)'),120,y);doc.text('— $'+discAmt.toFixed(2),196,y,{align:'right'});y+=4;}
   doc.text('IVU 11.5%',120,y);doc.text('$'+ivu.toFixed(2),196,y,{align:'right'});y+=4;
   doc.setFont(undefined,'bold');doc.setFontSize(10);
@@ -4371,10 +4434,11 @@ function openRODetail(roId){
   // imprime el PDF: servicios + mano de obra + piezas, menos el descuento. Antes esta
   // pantalla sumaba solo los servicios, así que en cualquier orden con labor o piezas
   // el "Subtotal" y el "IVU" salían por debajo y no cuadraban con el Total de al lado.
-  var svcOnly=(o.servicios||[]).reduce(function(s,sv){return s+((sv.ep||sv.precio||0)*(sv.qty||1));},0);
-  var sub=svcOnly+laborTotal+partsSell;
-  var descAmt=sinCargo(o)?0:(o.descValor||0);
-  var ivu=sinCargo(o)?0:(sub-descAmt)*0.115;
+  // (ahora sale de `dineroRO`, la misma función que usa el asistente y el PDF)
+  var _m=dineroRO(o,rate);
+  var sub=_m.sub;
+  var descAmt=sinCargo(o)?0:_m.descAmt;
+  var ivu=_m.ivu;
 
   var html='<div style="padding:14px 16px">';
   // Status banner
@@ -4457,6 +4521,7 @@ function openRODetail(roId){
     (o.servicios||[]).map(function(sv){var laborC=(sv.laborHours||0)*rate;return '<div style="padding:5px 0;border-bottom:1px solid var(--gray-100)"><div class="er" style="border:none;padding:2px 0"><span style="font-weight:700">'+(sv.n||sv.nombre)+((sv.qty||1)>1?' ×'+sv.qty:'')+'</span><span style="font-weight:700">$'+((sv.ep||sv.precio||0)*(sv.qty||1)).toFixed(2)+'</span></div>'+(sv.laborHours>0?'<div style="font-size:10px;color:var(--gray-400)">Mano de obra: '+sv.laborHours+'h × $'+rate+' = $'+laborC.toFixed(2)+'</div>':'')+'</div>';}).join('')+
     '<div class="er" style="margin-top:4px"><span>Subtotal</span><span>$'+sub.toFixed(2)+'</span></div>'+
     (o.cortesia?'<div class="er"><span style="color:var(--blue);font-weight:700">🤝 Cortesía del taller'+(o.cortesiaMotivo?' — '+o.cortesiaMotivo:'')+'</span><span style="color:var(--blue);font-weight:700">— $'+(o.cortesiaValor||sub).toFixed(2)+'</span></div>':'')+
+    (_m.manual&&Math.abs(_m.ajuste)>=0.005?'<div class="er"><span style="color:var(--blue);font-weight:700">Ajuste acordado con el cliente</span><span style="color:var(--blue);font-weight:700">'+(_m.ajuste<0?'− $':'+ $')+Math.abs(_m.ajuste).toFixed(2)+'</span></div>':'')+
     (o.garantia?'<div class="er"><span style="color:var(--green);font-weight:700">🛡 Garantía — sin costo'+(o.garantiaMotivo?' — '+o.garantiaMotivo:'')+(o.garantiaRO?' · orden original '+o.garantiaRO:'')+'</span><span style="color:var(--green);font-weight:700">— $'+(o.garantiaValor||sub).toFixed(2)+'</span></div>':'')+
     (!sinCargo(o)&&(o.descValor||0)>0?'<div class="er"><span style="color:var(--green)">Descuento'+(o.descTipo==='$'?'':' ('+(o.descuento||0)+'%)')+(o.descMotivo?' — '+o.descMotivo:'')+'</span><span style="color:var(--green)">— $'+(o.descValor||0).toFixed(2)+'</span></div>':'')+
     '<div class="er"><span>IVU (11.5%)</span><span>$'+(sinCargo(o)?'0.00':ivu.toFixed(2))+'</span></div>'+
@@ -5916,11 +5981,12 @@ function shareStatus(roId){
     subCli+=base+lab+pz;
     return {n:x.n,p:base+lab+pz,q:1,h:x.laborHours||0,pz:pz};
   });
-  var descCli=sinCargo(o)?0:(o.descValor||0);
-  var ivuCli=sinCargo(o)?0:Math.round((subCli-descCli)*0.115*100)/100;
+  var _cm=dineroRO(o);
+  var descCli=sinCargo(o)?0:_cm.descAmt;
+  var ivuCli=_cm.ivu;
   var snap={n:s.shopName||'Pit Stop',ph:waNum(s.shopPhone)||'',id:o.id,
     c:((o.cliente||'').split(' ')[0])||'Cliente',v:veh||'Tu vehículo',
-    sv:svCli,sub:Math.round(subCli*100)/100,desc:descCli,ivu:ivuCli,cort:!!o.cortesia,gar:!!o.garantia,garRO:o.garantiaRO||'',
+    sv:svCli,sub:Math.round(subCli*100)/100,desc:descCli,ivu:ivuCli,aj:_cm.manual?_cm.ajuste:0,cort:!!o.cortesia,gar:!!o.garantia,garRO:o.garantiaRO||'',
     // el nombre real del recomendado: el campo es `nombre` — leyendo `n`/`desc` salían todos
     // como la palabra "Recomendado" y el cliente no sabía qué le hacía falta.
     dn:(o.denegados||[]).filter(function(d){return !d.auto||d.confirmed;})
@@ -6152,6 +6218,7 @@ function renderCustomerStatus(){
     desglose+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">';
     desglose+=fila('Subtotal',M(d.sub));
     if(d.desc>0)desglose+=fila('Descuento','— '+M(d.desc),'#1FA463');
+    if(d.aj&&Math.abs(d.aj)>=0.005)desglose+=fila('Ajuste acordado',(d.aj<0?'— ':'+ ')+M(Math.abs(d.aj)),'#2196F3');
     if(d.cort)desglose+=fila('🤝 Cortesía del taller','— '+M(d.sub),'#2196F3');
     if(d.gar)desglose+=fila('🛡 Garantía — sin costo'+(d.garRO?' (orden '+E(d.garRO)+')':''),'— '+M(d.sub),'#2E7D32');
     desglose+=fila('IVU (11.5%)',M(d.ivu||0));
@@ -6492,17 +6559,15 @@ function renderJobsAdmin(){
 
 // ============ RECUPERAR TRABAJO DENEGADO (cliente aprobó después) ============
 function recalcROTotal(o){
-  var rate=DB.settings.laborRate||103,sub=0;
-  (o.servicios||[]).forEach(function(i){sub+=(i.ep||0)*(i.qty||1)+(i.laborHours||0)*rate+(i.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);});
-  var d=o.descuento||0;
-  var descAmt=o.descTipo==='$'?Math.min(d,sub):sub*d/100;
-  o.descValor=Math.round(descAmt*100)/100;
+  // Una sola matemática para las dos pantallas: ver `dineroRO`.
+  var m=dineroRO(o);
+  o.descValor=m.descAmt;
+  o.ajusteValor=m.ajuste;
   if(sinCargo(o)){
-    var _v=Math.round(sub*100)/100;
-    o.cortesiaValor=o.cortesia?_v:0;o.garantiaValor=o.garantia?_v:0;o.total=0;return;
+    o.cortesiaValor=o.cortesia?m.sub:0;o.garantiaValor=o.garantia?m.sub:0;o.total=0;return;
   }
   o.cortesiaValor=0;o.garantiaValor=0;
-  o.total=Math.round((sub-descAmt)*1.115*100)/100;
+  o.total=m.total;
 }
 function apruebaDen(roId,di){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
