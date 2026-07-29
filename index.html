@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v24';
+var APP_V='v25';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -787,6 +787,39 @@ function rangoHoy(){
    en el CSV del contable. Se decide aquí para que ninguna pantalla se quede fuera del acuerdo
    (el P&L contaba las abiertas y por eso no cuadraba con el CSV que él le manda al contable). */
 function esContable(o){return !!o&&o.estado!=='abierta';}
+/* SIN CARGO AL CLIENTE — dos razones DISTINTAS que no se pueden mezclar (batch 26, 28-jul).
+   🤝 CORTESÍA = el taller regala el trabajo (disculpa por una demora, buena fe).
+   🛡 GARANTÍA = se rehace un trabajo ya cobrado, o se cambia una pieza que falló dentro de
+      su garantía. Contablemente NO es lo mismo: la cortesía es un gasto de buena voluntad;
+      la garantía es un costo de calidad y muchas veces el suplidor repone la pieza.
+   Antes solo existía "cortesía", así que un cambio por garantía había que apuntarlo como
+   regalo y ensuciaba las finanzas. Una sola definición para "el cliente paga $0", y la
+   etiqueta la decide `motivoSinCargo` — así los dos casos salen separados en KPIs y CSV. */
+function sinCargo(o){return !!(o&&(o.cortesia||o.garantia));}
+function motivoSinCargo(o){return !o?'':(o.garantia?'GARANTÍA':(o.cortesia?'CORTESÍA DEL TALLER':''));}
+function iconoSinCargo(o){return !o?'':(o.garantia?'🛡':(o.cortesia?'🤝':''));}
+/* Hasta cuándo cubre la garantía de una pieza (la del fabricante que él revende).
+   `warrantyMonths` + la fecha de compra. Sin meses, no hay garantía que perseguir. */
+function garantiaHasta(p){
+  if(!p||!p.warrantyMonths)return '';
+  var base=p.date||'';if(!base)return '';
+  var d=dDia(base);if(isNaN(d.getTime()))return '';
+  d.setMonth(d.getMonth()+Number(p.warrantyMonths));
+  return localDateStr(d);
+}
+function garantiaVigente(p){var h=garantiaHasta(p);return h?(h>=localDateStr()):false;}
+function textoGarantiaPieza(p){
+  if(!p||!p.warrantyMonths)return '';
+  var m=Number(p.warrantyMonths);
+  var dur=m>=12&&m%12===0?((m/12)+(m===12?' año':' años')):(m+' meses');
+  var h=garantiaHasta(p);
+  return 'Garantía '+dur+(h?' — hasta '+dDia(h).toLocaleDateString('es-PR',{day:'numeric',month:'short',year:'numeric'}):'');
+}
+function etiquetaGarantiaPieza(p){
+  var t=textoGarantiaPieza(p);if(!t)return '';
+  var viva=garantiaVigente(p);
+  return '<br><span style="color:'+(viva?'var(--green)':'var(--gray-400)')+';font-weight:700">🛡 '+t+(viva?'':' (vencida)')+'</span>';
+}
 /* TODO lo que viaja entre equipos aparte de las órdenes. Las órdenes ya tenían resuelto quién gana
    al sincronizar (la edición más reciente); estas 13 listas NO — para un id presente en los dos
    lados la nube ganaba siempre y la edición fresca del equipo se perdía en silencio.
@@ -2063,7 +2096,7 @@ function initRO(){
     setTimeout(fillROInputs,140);
     return;
   }
-  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',cortesia:false,cortesiaMotivo:'',empresa:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
+  RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',cortesia:false,cortesiaMotivo:'',garantia:false,garantiaMotivo:'',garantiaRO:'',empresa:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=localDateStr(d);
   if(_citaPrefill)applyCitaPrefill();
   curStep=0;
@@ -2145,7 +2178,7 @@ function buildPane(id){
 
   if(id==='denegados')return '<div class="tb2"><i class="ti ti-alert-triangle" style="font-size:18px;flex-shrink:0"></i><span>Ítems en ROJO de la inspección aparecen aquí automáticamente.</span></div><div id="den-auto"></div><div class="card"><div class="ch">Agregar denegado</div><div class="cb"><div class="fr fr1"><div class="fg"><div class="fl">Servicio rechazado</div><input id="den-n" placeholder="Ej: Cambio de frenos traseros"></div></div><div class="fr"><div class="fg"><div class="fl">Precio estimado</div><input id="den-p" type="number" placeholder="0.00" step="0.01"></div><div class="fg"><div class="fl">Urgencia</div><select id="den-u"><option value="recomendado">Recomendado</option><option value="importante">Importante</option><option value="urgente">Urgente</option></select></div></div><div class="fr fr1"><div class="fg"><div class="fl">Nota técnica</div><textarea id="den-nota" placeholder="Ej: Pastillas al 10%, riesgo de seguridad..."></textarea></div></div><button class="btn a full" onclick="addDen()" style="margin-top:6px"><i class="ti ti-plus"></i> Registrar denegado</button></div></div><div id="den-list"></div><div id="den-sig-w" style="display:none"><div class="card"><div class="ch">Firma — reconocimiento denegados</div><div class="cb"><div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">El cliente reconoce haber sido informado y decide no autorizar estos servicios.</div><canvas id="sig-den" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" onclick="clearSig(\'sig-den\',\'sigDen\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-sigDen" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div></div>';
 
-  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="RO.cortesia=this.checked;calcEst();document.getElementById(\'est-cort-m-row\').style.display=this.checked?\'block\':\'none\'"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
+  if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="setCortesiaRO(this.checked)"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div style="margin-top:8px;background:var(--green-light);border:1.5px dashed var(--green);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-gar" style="width:auto" onchange="setGarantiaRO(this.checked)"> 🛡 Trabajo por GARANTÍA — se cubre una pieza o un trabajo anterior (cliente paga $0)</label><div id="est-gar-m-row" style="display:none;margin-top:8px"><input id="est-gar-m" placeholder="¿Qué se cubre? (obligatorio — ej: batería Duralast, invoice ADV-789012)" style="font-size:11px" oninput="RO.garantiaMotivo=this.value"><div class="fl" style="margin:7px 0 3px">Orden original (la que se está cubriendo)</div><select id="est-gar-ro" style="font-size:11px" onchange="RO.garantiaRO=this.value"></select><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Sale en la factura y en el link del cliente, va en columna aparte en el CSV del contable, y NO cuenta como cortesía ni como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
   if(id==='cierre')return '<div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div>'+((DB.asesores||[]).length?'<div class="card"><div class="ch"><i class="ti ti-user-check"></i> Asesor de servicio</div><div class="cb"><select onchange="RO.asesor=this.value">'+aseOptionsHTML(RO.asesor)+'</select></div></div>':'')+'<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--ink)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
@@ -2712,10 +2745,53 @@ function buildEstSum(){
   var ck=document.getElementById('est-cort');if(ck)ck.checked=!!RO.cortesia;
   var cm=document.getElementById('est-cort-m');if(cm)cm.value=RO.cortesiaMotivo||'';
   var cmr=document.getElementById('est-cort-m-row');if(cmr)cmr.style.display=RO.cortesia?'block':'none';
+  var gk=document.getElementById('est-gar');if(gk)gk.checked=!!RO.garantia;
+  var gm=document.getElementById('est-gar-m');if(gm)gm.value=RO.garantiaMotivo||'';
+  var gmr=document.getElementById('est-gar-m-row');if(gmr)gmr.style.display=RO.garantia?'block':'none';
+  llenarOrdenesGarantia();
   calcEst();
   var denConf=RO.denegados.filter(function(d){return !d.auto||(d.auto&&d.confirmed);});
   var de=document.getElementById('est-den');
   if(de&&denConf.length){var dt=denConf.reduce(function(s,d){return s+(d.precio||0);},0);de.innerHTML='<div style="background:var(--amber-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px"><div style="font-weight:700;color:var(--amber);margin-bottom:5px"><i class="ti ti-alert-triangle"></i> Recomendados no autorizados</div>'+denConf.map(function(d){return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>'+d.nombre+'</span><span>$'+(d.precio||0).toFixed(2)+'</span></div>';}).join('')+'<div style="border-top:1px solid rgba(0,0,0,.1);margin-top:5px;padding-top:5px;font-weight:700;display:flex;justify-content:space-between"><span>Total denegado</span><span>$'+dt.toFixed(2)+'</span></div></div>';}else if(de)de.innerHTML='';
+}
+/* Cortesía y garantía se excluyen: las dos dejan el total en $0 pero por razones distintas, y
+   marcarlas juntas dejaría al contable sin saber cuál fue. Al prender una se apaga la otra. */
+function setCortesiaRO(on){
+  RO.cortesia=!!on;
+  if(on&&RO.garantia){RO.garantia=false;RO.garantiaMotivo='';RO.garantiaRO='';
+    var gk=document.getElementById('est-gar');if(gk)gk.checked=false;
+    var gmr=document.getElementById('est-gar-m-row');if(gmr)gmr.style.display='none';}
+  var cmr=document.getElementById('est-cort-m-row');if(cmr)cmr.style.display=on?'block':'none';
+  calcEst();
+}
+function setGarantiaRO(on){
+  RO.garantia=!!on;
+  if(on&&RO.cortesia){RO.cortesia=false;RO.cortesiaMotivo='';
+    var ck=document.getElementById('est-cort');if(ck)ck.checked=false;
+    var cmr=document.getElementById('est-cort-m-row');if(cmr)cmr.style.display='none';}
+  var gmr=document.getElementById('est-gar-m-row');if(gmr)gmr.style.display=on?'block':'none';
+  if(on)llenarOrdenesGarantia();
+  calcEst();
+}
+/* Las órdenes anteriores de ESTE cliente, para amarrar la garantía a la que la originó.
+   Las de su mismo carro primero: es lo que casi siempre está cubriendo. */
+function llenarOrdenesGarantia(){
+  var sel=document.getElementById('est-gar-ro');if(!sel)return;
+  var tag=(RO.vehiculo&&RO.vehiculo.tag)||'';
+  var prev=ordenesDeCli(RO.cliente).filter(function(o){return o.id!==RO.id&&esContable(o);})
+    .sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
+  if(tag)prev.sort(function(a,b){
+    var at=((a.vehiculo||{}).tag||'')===tag?0:1,bt=((b.vehiculo||{}).tag||'')===tag?0:1;
+    return at-bt;
+  });
+  sel.innerHTML='<option value="">— sin orden anterior (pieza comprada aparte) —</option>'+
+    prev.map(function(o){
+      var v=(o.vehiculo||{}),d=new Date(o.fecha).toLocaleDateString('es-PR');
+      var pz=[];(o.servicios||[]).forEach(function(s){(s.parts||[]).forEach(function(p){if(p.name)pz.push(p.name);});});
+      var et=o.id+' · '+d+(v.tag?' · '+v.tag:'')+' · '+(pz.length?pz.slice(0,2).join(', '):(o.servicios||[]).map(function(s){return s.n;}).slice(0,2).join(', ')||'—');
+      return '<option value="'+o.id+'">'+et.replace(/"/g,'&quot;')+'</option>';
+    }).join('');
+  sel.value=RO.garantiaRO||'';
 }
 function calcEst(){
   var rate=DB.settings.laborRate||103;
@@ -2730,21 +2806,23 @@ function calcEst(){
   var descAmt=RO.descTipo==='$'?Math.min(d,sub):sub*d/100;
   var ad=sub-descAmt;var ivu=ad*.115;var tot=ad+ivu;
   RO.descValor=Math.round(descAmt*100)/100;
-  if(RO.cortesia){RO.cortesiaValor=Math.round(sub*100)/100;ivu=0;tot=0;}
-  else RO.cortesiaValor=0;
+  if(sinCargo(RO)){
+    var _v=Math.round(sub*100)/100;
+    RO.cortesiaValor=RO.cortesia?_v:0;RO.garantiaValor=RO.garantia?_v:0;ivu=0;tot=0;
+  }else{RO.cortesiaValor=0;RO.garantiaValor=0;}
   RO.total=tot;
   var ss=document.getElementById('est-sub');if(ss)ss.textContent='$'+sub.toFixed(2);
   var iv=document.getElementById('est-ivu');if(iv)iv.textContent='$'+ivu.toFixed(2);
-  var tf=document.getElementById('est-tot');if(tf)tf.textContent=RO.cortesia?'$0.00 🤝':'$'+tot.toFixed(2);
-  var dmr=document.getElementById('est-desc-m-row');if(dmr)dmr.style.display=(d>0&&!RO.cortesia)?'block':'none';
+  var tf=document.getElementById('est-tot');if(tf)tf.textContent=sinCargo(RO)?('$0.00 '+iconoSinCargo(RO)):'$'+tot.toFixed(2);
+  var dmr=document.getElementById('est-desc-m-row');if(dmr)dmr.style.display=(d>0&&!sinCargo(RO))?'block':'none';
   // breakdown
   var bd=document.getElementById('est-breakdown');
   if(bd){
     bd.innerHTML='<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Servicios/labor base</span><span>$'+svcTotal.toFixed(2)+'</span></div>'+
       (laborTotal>0?'<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Mano de obra ('+RO.servicios.reduce(function(s,i){return s+(i.laborHours||0);},0).toFixed(1)+'h @ $'+rate+')</span><span>$'+laborTotal.toFixed(2)+'</span></div>':'')+
       (partsTotal>0?'<div class="er" style="font-size:12px"><span style="color:var(--gray-500)">Piezas</span><span>$'+partsTotal.toFixed(2)+'</span></div>':'')+
-      (descAmt>0&&!RO.cortesia?'<div class="er" style="font-size:12px"><span style="color:var(--green)">Descuento'+(RO.descTipo==='$'?'':' ('+d+'%)')+'</span><span style="color:var(--green)">— $'+descAmt.toFixed(2)+'</span></div>':'')+
-      (RO.cortesia?'<div class="er" style="font-size:12px"><span style="color:var(--blue);font-weight:700">🤝 Cortesía del taller</span><span style="color:var(--blue);font-weight:700">— $'+sub.toFixed(2)+'</span></div>':'');
+      (descAmt>0&&!sinCargo(RO)?'<div class="er" style="font-size:12px"><span style="color:var(--green)">Descuento'+(RO.descTipo==='$'?'':' ('+d+'%)')+'</span><span style="color:var(--green)">— $'+descAmt.toFixed(2)+'</span></div>':'')+
+      (sinCargo(RO)?'<div class="er" style="font-size:12px"><span style="color:var(--blue);font-weight:700">'+iconoSinCargo(RO)+' '+(RO.garantia?'Garantía — sin costo':'Cortesía del taller')+'</span><span style="color:var(--blue);font-weight:700">— $'+sub.toFixed(2)+'</span></div>':'');
   }
   return tot;
 }
@@ -2769,7 +2847,7 @@ function roViewHTML(){
     return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--gray-100)"><span>'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>';
   }).join('')||'<div style="color:var(--gray-400)">Todavía sin servicios.</div>';
   var d=RO.descuento||0;var descAmt=RO.descTipo==='$'?Math.min(d,sub):sub*d/100;
-  var ad=sub-descAmt;var ivu=RO.cortesia?0:ad*.115;var tot=RO.cortesia?0:ad+ivu;
+  var ad=sub-descAmt;var ivu=sinCargo(RO)?0:ad*.115;var tot=sinCargo(RO)?0:ad+ivu;
   var denConf=(RO.denegados||[]).filter(function(x){return !x.auto||(x.auto&&x.confirmed);});
   var fotoN=(RO.fotos||[]).length;
   var sig1=!!((RO.sigData&&RO.sigData.sig1)||RO.sig1);
@@ -2796,9 +2874,9 @@ function roViewHTML(){
   h+='<div class="card" style="margin-bottom:10px"><div class="ch" style="font-size:13px"><i class="ti ti-tool"></i> Servicios</div><div class="cb" style="font-size:13px">'+svcRows+
     '<div style="border-top:2px solid var(--gray-200);margin-top:8px;padding-top:8px">'+
     '<div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>$'+sub.toFixed(2)+'</span></div>'+
-    (descAmt>0&&!RO.cortesia?'<div style="display:flex;justify-content:space-between;color:var(--green)"><span>Descuento</span><span>— $'+descAmt.toFixed(2)+'</span></div>':'')+
+    (descAmt>0&&!sinCargo(RO)?'<div style="display:flex;justify-content:space-between;color:var(--green)"><span>Descuento</span><span>— $'+descAmt.toFixed(2)+'</span></div>':'')+
     '<div style="display:flex;justify-content:space-between"><span>IVU 11.5%</span><span>$'+ivu.toFixed(2)+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;color:var(--red);margin-top:4px"><span>Total</span><span>'+(RO.cortesia?'$0.00 🤝':'$'+tot.toFixed(2))+'</span></div></div></div></div>';
+    '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;color:var(--red);margin-top:4px"><span>Total</span><span>'+(sinCargo(RO)?('$0.00 '+iconoSinCargo(RO)):'$'+tot.toFixed(2))+'</span></div></div></div></div>';
   // Denegados
   if(denConf.length){var dt=denConf.reduce(function(s,x){return s+(x.precio||0);},0);
     h+=_rowCard('<i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Recomendados no autorizados',
@@ -2843,10 +2921,14 @@ function saveRO(){
   if(!RO.cliente){alert('Agrega el nombre del cliente.');gotoStep(0);return;}
   if(!RO.servicios.length){alert('Agrega al menos un servicio.');gotoStep(2);return;}
   if(RO.cortesia&&!(RO.cortesiaMotivo||'').trim()){alert('Escribe el motivo de la cortesía — queda en el registro para el contable.');gotoStep(4);return;}
+  // La garantía sin decir QUÉ se está cubriendo no sirve de nada: ni para el contable, ni para
+  // reclamarle al suplidor, ni para defenderte si el cliente vuelve por tercera vez.
+  if(RO.garantia&&!(RO.garantiaMotivo||'').trim()){alert('Escribe qué se está cubriendo por garantía (pieza o trabajo) — queda en el registro y es lo que te sirve para reclamarle al suplidor.');gotoStep(4);return;}
   calcEst();RO.total=Math.round(RO.total*100)/100;
   var sel=document.getElementById('est-estado');
   if(sel)RO.estado=sel.value;else if(RO.estado==='abierta')RO.estado='pagado';
   if(RO.cortesia){RO.estado='pagado';RO.pago='Cortesía';}
+  if(RO.garantia){RO.estado='pagado';RO.pago='Garantía';}
   upsertRO();
   // El candado tiene que engancharse en el camino PRINCIPAL, no solo en "cobrar y cerrar" y
   // "marcar pagado": la mayoría de sus órdenes se cierran aquí mismo, al final del asistente.
@@ -2856,7 +2938,7 @@ function saveRO(){
     var _gRO=DB.ordenes.find(function(x){return x.id===RO.id;});
     if(_gRO){
       var _falta=balanceRO(_gRO);
-      if(_falta>0&&!_gRO.cortesia)registrarPago(_gRO,_falta,_gRO.pago);  // el cobro del día, fechado
+      if(_falta>0&&!sinCargo(_gRO))registrarPago(_gRO,_falta,_gRO.pago);  // el cobro del día, fechado
       if(!facturaSellada(_gRO))sellarFactura(_gRO);
     }
   }
@@ -2956,11 +3038,20 @@ function exportPDF(){
     // Sub-lines: parts
     if(s.parts&&s.parts.length){
       s.parts.forEach(function(p){
-        var partLabel='   Part: '+p.name+(p.qty>1?' x'+p.qty:'')+(p.partNum?'  [#'+p.partNum+']':'');
+        // decía "Part:" en inglés en la factura del cliente (mismo descuido que el catálogo)
+        var partLabel='   Pieza: '+p.name+(p.qty>1?' x'+p.qty:'')+(p.partNum?'  [#'+p.partNum+']':'');
         var pl=doc.splitTextToSize(partLabel,165);
         doc.text(pl,18,y);
         doc.text('$'+(p.sellPrice*p.qty).toFixed(2),196,y,{align:'right'});
         y+=pl.length*4;
+        // La garantía de la pieza IMPRESA en la factura: es el papel que el cliente guarda,
+        // y el que a él le sirve para reclamarle al suplidor años después.
+        var gt=textoGarantiaPieza(p);
+        if(gt){
+          doc.setFont(undefined,'bold');doc.setTextColor(20,110,60);
+          doc.text('      🛡 '+gt.replace('🛡 ','')+(p.receipt?'  ·  Invoice '+p.receipt:''),18,y);
+          doc.setFont(undefined,'normal');doc.setTextColor(80,80,80);y+=4;
+        }
       });
     }
     doc.setTextColor(0,0,0);doc.setFontSize(9);
@@ -2973,12 +3064,12 @@ function exportPDF(){
   var subAfterDisc=sub-discAmt;
   var ivu=subAfterDisc*.115;
   var totalFinal=subAfterDisc+ivu;
-  if(RO.cortesia){ivu=0;totalFinal=0;}
+  if(sinCargo(RO)){ivu=0;totalFinal=0;}
 
   y+=2;doc.line(120,y,196,y);y+=4;
   doc.setFontSize(8);
   doc.text('Subtotal',120,y);doc.text('$'+sub.toFixed(2),196,y,{align:'right'});y+=4;
-  if(RO.cortesia){doc.setFont(undefined,'bold');doc.text('CORTESÍA DEL TALLER',120,y);doc.text('— $'+sub.toFixed(2),196,y,{align:'right'});doc.setFont(undefined,'normal');y+=4;}
+  if(sinCargo(RO)){doc.setFont(undefined,'bold');doc.text(motivoSinCargo(RO),120,y);doc.text('— $'+sub.toFixed(2),196,y,{align:'right'});doc.setFont(undefined,'normal');y+=4;}
   else if(discAmt>0){doc.text('Descuento'+(RO.descTipo==='$'?'':' ('+disc+'%)'),120,y);doc.text('— $'+discAmt.toFixed(2),196,y,{align:'right'});y+=4;}
   doc.text('IVU 11.5%',120,y);doc.text('$'+ivu.toFixed(2),196,y,{align:'right'});y+=4;
   doc.setFont(undefined,'bold');doc.setFontSize(10);
@@ -2991,6 +3082,18 @@ function exportPDF(){
     doc.setFont(undefined,'bold');doc.setTextColor(20,60,140);
     doc.text('CORTESÍA DE '+((DB.settings.shopName||'PIT STOP').toUpperCase())+(RO.cortesiaMotivo?' — '+RO.cortesiaMotivo:''),18,y+2);
     doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');y+=12;
+  }
+  // El sello de garantía en la factura: es el papel que el cliente guarda y el que a ti te
+  // conviene tener si el suplidor pregunta. Incluye la orden original, así se amarran las dos.
+  if(RO.garantia){
+    doc.setFillColor(226,244,232);doc.rect(14,y-3,182,RO.garantiaRO?14:10,'F');
+    doc.setFont(undefined,'bold');doc.setTextColor(20,110,60);
+    doc.text('TRABAJO CUBIERTO POR GARANTIA — SIN COSTO AL CLIENTE',18,y+2);
+    doc.setFont(undefined,'normal');doc.setFontSize(8);
+    var _gl=(RO.garantiaMotivo||'');
+    if(RO.garantiaRO)_gl+=(_gl?'  ·  ':'')+'Orden original: '+RO.garantiaRO;
+    if(_gl){doc.text(doc.splitTextToSize(_gl,176)[0],18,y+7);y+=4;}
+    doc.setFontSize(9);doc.setTextColor(0,0,0);y+=12;
   }
   doc.text('Método: '+(RO.pago||'—')+'  ·  Estado: '+(RO.estado==='pagado'?'✓ PAGADO':'⏳ PENDIENTE'),14,y);y+=6;
   var _abo=RO.abonado||0;
@@ -3319,7 +3422,20 @@ function waListo(roId,preguntar){
 }
 function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());inp.value='';saveDB();renderGarage();}
 
-function renderOrdenes(){var q=norm((document.getElementById('ord-q')||{value:''}).value);var list=DB.ordenes.filter(function(o){if(!q)return true;var v=o.vehiculo||{};var hay=norm([o.cliente,o.id,v.tag,v.vin,v.make,v.model,v.year,o.empresa,o.techNotes,o.queja].filter(Boolean).join(' '));return hay.includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
+/* Texto por el que se puede encontrar una orden. Las PIEZAS entran aquí a propósito: sin esto,
+   dentro de 2 años un cliente vuelve con la batería mala y buscar su # de invoice no daba NADA —
+   había que acordarse del cliente o del carro para llegar al expediente. La garantía la reclamas
+   con ese número, así que tiene que ser buscable. */
+function textoBuscableRO(o){
+  var v=o.vehiculo||{},pz=[];
+  (o.servicios||[]).forEach(function(s){
+    pz.push(s.n);
+    (s.parts||[]).forEach(function(p){pz.push(p.name,p.partNum,p.supplier,p.receipt);});
+  });
+  return norm([o.cliente,o.id,v.tag,v.vin,v.make,v.model,v.year,o.empresa,o.techNotes,o.queja,
+               o.garantiaMotivo,o.garantiaRO].concat(pz).filter(Boolean).join(' '));
+}
+function renderOrdenes(){var q=norm((document.getElementById('ord-q')||{value:''}).value);var list=DB.ordenes.filter(function(o){if(!q)return true;return textoBuscableRO(o).includes(q);}).sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});var lbl=document.getElementById('ord-ct');if(lbl)lbl.textContent=list.length+' ord.';var el=document.getElementById('ordenes-body');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--gray-400)">Sin órdenes.</div>';return;}el.innerHTML=list.map(function(o){return roCardHTML(o);}).join('');}
 
 function renderClientes(){var q=norm((document.getElementById('cli-q')||{value:''}).value);var list=DB.clientes.filter(function(c){return !q||norm(c.nombre).includes(q)||norm(c.empresa||'').includes(q);});var el=document.getElementById('clientes-body');if(!el)return;
   var h=flotasHTML(q);
@@ -3696,7 +3812,7 @@ function openPartsModalRO(svcIdx){
   document.getElementById('pm-title').textContent='Piezas — '+svc.n;
   document.getElementById('pm-sub').textContent='Para esta orden específica';
   var d=document.getElementById('pp-date');if(d)d.value=localDateStr();
-  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt','pp-warr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
   var air=document.getElementById('ai-suggest-result');if(air){air.style.display='none';air.innerHTML='';}
   _editPartIdx=-1;setPartBtnLabel();
@@ -3714,7 +3830,7 @@ function renderPartsListRO(){
   el.innerHTML='<div class="st" style="margin-top:6px">Piezas registradas</div>'+parts.map(function(p,i){
     var tcost=p.cost*p.qty;var tsell=p.sellPrice*p.qty;var profit=tsell-tcost;
     return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--white)">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div><div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+'</div></div><button onclick="editPartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;margin-right:4px"><i class="ti ti-edit"></i></button><button onclick="deletePartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div><div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+etiquetaGarantiaPieza(p)+'</div></div><button onclick="editPartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;margin-right:4px"><i class="ti ti-edit"></i></button><button onclick="deletePartRO('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button></div>'+
       '<div style="display:flex;gap:6px;font-size:11px"><div style="flex:1;background:var(--red-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">COSTO</div><div style="color:var(--red);font-weight:700">$'+tcost.toFixed(2)+'</div></div><div style="flex:1;background:var(--blue-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">VENTA</div><div style="color:var(--blue);font-weight:700">$'+tsell.toFixed(2)+'</div></div><div style="flex:1;background:var(--green-light);border-radius:5px;padding:4px 6px;text-align:center"><div style="color:var(--gray-400);font-size:9px;font-weight:700">GANANCIA</div><div style="color:var(--green);font-weight:700">$'+profit.toFixed(2)+'</div></div></div>'+
     '</div>';
   }).join('');
@@ -3803,12 +3919,25 @@ function fillPartForm(p){
   document.getElementById('pp-sell').value=(p.sellPrice!=null?p.sellPrice:'');
   document.getElementById('pp-receipt').value=p.receipt||'';
   var d=document.getElementById('pp-date');if(d&&p.date)d.value=p.date;
+  var w=document.getElementById('pp-warr');if(w)w.value=p.warrantyMonths?String(p.warrantyMonths):'';
+  pintarVenceGarantia();
   calcPartProfit();
   var nm=document.getElementById('pp-name');if(nm){nm.scrollIntoView({behavior:'smooth',block:'center'});nm.focus();}
 }
+/* Pinta "Vence" en vivo mientras escoge los meses: sin ver la fecha, "5 anos" es una idea
+   abstracta; con la fecha en pantalla el cliente y el sabe hasta cuando esta cubierto. */
+function pintarVenceGarantia(){
+  var w=document.getElementById('pp-warr'),d=document.getElementById('pp-date'),out=document.getElementById('pp-warr-hasta');
+  if(!out)return;
+  var meses=Number(w&&w.value)||0;
+  var fecha=(d&&d.value)||localDateStr();
+  if(!meses){out.value='';out.placeholder='—';return;}
+  var h=garantiaHasta({warrantyMonths:meses,date:fecha});
+  out.value=h?dDia(h).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'}):'';
+}
 function editPartRO(i){var svc=RO.servicios[currentROPartIdx];if(!svc||!(svc.parts||[])[i])return;_editPartIdx=i;setPartBtnLabel();fillPartForm(svc.parts[i]);}
 function editPart(i){if(!currentPartService)return;var arr=DB.serviceParts[currentPartService.id]||[];if(!arr[i])return;_editPartIdx=i;setPartBtnLabel();fillPartForm(arr[i]);}
-function cancelEditPart(){_editPartIdx=-1;setPartBtnLabel();['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});document.getElementById('pp-qty').value='1';calcPartProfit();}
+function cancelEditPart(){_editPartIdx=-1;setPartBtnLabel();['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt','pp-warr'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});document.getElementById('pp-qty').value='1';calcPartProfit();}
 function openPartsModal(svcId,svcName){
   partsContext='menu';
   currentPartService={id:svcId,name:svcName};
@@ -3816,7 +3945,7 @@ function openPartsModal(svcId,svcName){
   document.getElementById('pm-sub').textContent=svcName;
   var d=document.getElementById('pp-date');if(d)d.value=localDateStr();
   // Clear inputs
-  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt','pp-warr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('pp-qty').value='1';
   var air2=document.getElementById('ai-suggest-result');if(air2){air2.style.display='none';air2.innerHTML='';}
   _editPartIdx=-1;setPartBtnLabel();
@@ -3872,7 +4001,8 @@ function savePart(){
     qty:qty,
     sellPrice:sell,
     receipt:document.getElementById('pp-receipt').value,
-    date:document.getElementById('pp-date').value||localDateStr()
+    date:document.getElementById('pp-date').value||localDateStr(),
+    warrantyMonths:Number(document.getElementById('pp-warr').value)||0
   };
   if(!DB.serviceParts[currentPartService.id])DB.serviceParts[currentPartService.id]=[];
   if(_editPartIdx>=0&&DB.serviceParts[currentPartService.id][_editPartIdx]){
@@ -3888,7 +4018,7 @@ function savePart(){
   _editPartIdx=-1;setPartBtnLabel();
   saveDB();
   // Clear form
-  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
+  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt','pp-warr'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
   clearModalFields();
   calcPartProfit();
@@ -3902,7 +4032,7 @@ function savePartRO(){
   var cost=parseFloat(document.getElementById('pp-cost').value)||0;
   var qty=parseInt(document.getElementById('pp-qty').value)||1;
   var sell=parseFloat(document.getElementById('pp-sell').value)||0;
-  var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||localDateStr()};
+  var part={name:name,partNum:document.getElementById('pp-num').value,supplier:document.getElementById('pp-sup').value,cost:cost,qty:qty,sellPrice:sell,receipt:document.getElementById('pp-receipt').value,date:document.getElementById('pp-date').value||localDateStr(),warrantyMonths:Number(document.getElementById('pp-warr').value)||0};
   if(!svc.parts)svc.parts=[];
   if(_editPartIdx>=0&&svc.parts[_editPartIdx]){
     var vieja=svc.parts[_editPartIdx];
@@ -3919,7 +4049,7 @@ function savePartRO(){
     if(ajustarInventario(name,part.partNum,-qty))saveDB();   // sale del estante
   }
   _editPartIdx=-1;setPartBtnLabel();
-  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt'].forEach(function(id){document.getElementById(id).value='';});
+  ['pp-name','pp-num','pp-sup','pp-cost','pp-sell','pp-receipt','pp-warr'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('pp-qty').value='1';
   clearModalFields();   // la pieza ya está guardada en la orden: el borrador sobra
   calcPartProfit();
@@ -3936,7 +4066,7 @@ function renderPartsList(){
     return '<div style="border:1.5px solid var(--gray-200);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--white)">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">'+
         '<div style="flex:1"><div style="font-size:12px;font-weight:700">'+p.name+(p.qty>1?' ×'+p.qty:'')+'</div>'+
-        '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+'</div></div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+(p.partNum?'#'+p.partNum:'')+(p.supplier?' · '+p.supplier:'')+(p.receipt?' · Recibo: '+p.receipt:'')+etiquetaGarantiaPieza(p)+'</div></div>'+
         '<button onclick="editPart('+i+')" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:16px;margin-right:4px"><i class="ti ti-edit"></i></button><button onclick="deletePart('+i+')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px"><i class="ti ti-trash"></i></button>'+
       '</div>'+
       '<div style="display:flex;gap:6px;font-size:11px">'+
@@ -4104,8 +4234,8 @@ function openRODetail(roId){
   // el "Subtotal" y el "IVU" salían por debajo y no cuadraban con el Total de al lado.
   var svcOnly=(o.servicios||[]).reduce(function(s,sv){return s+((sv.ep||sv.precio||0)*(sv.qty||1));},0);
   var sub=svcOnly+laborTotal+partsSell;
-  var descAmt=o.cortesia?0:(o.descValor||0);
-  var ivu=o.cortesia?0:(sub-descAmt)*0.115;
+  var descAmt=sinCargo(o)?0:(o.descValor||0);
+  var ivu=sinCargo(o)?0:(sub-descAmt)*0.115;
 
   var html='<div style="padding:14px 16px">';
   // Status banner
@@ -4188,9 +4318,10 @@ function openRODetail(roId){
     (o.servicios||[]).map(function(sv){var laborC=(sv.laborHours||0)*rate;return '<div style="padding:5px 0;border-bottom:1px solid var(--gray-100)"><div class="er" style="border:none;padding:2px 0"><span style="font-weight:700">'+(sv.n||sv.nombre)+((sv.qty||1)>1?' ×'+sv.qty:'')+'</span><span style="font-weight:700">$'+((sv.ep||sv.precio||0)*(sv.qty||1)).toFixed(2)+'</span></div>'+(sv.laborHours>0?'<div style="font-size:10px;color:var(--gray-400)">Mano de obra: '+sv.laborHours+'h × $'+rate+' = $'+laborC.toFixed(2)+'</div>':'')+'</div>';}).join('')+
     '<div class="er" style="margin-top:4px"><span>Subtotal</span><span>$'+sub.toFixed(2)+'</span></div>'+
     (o.cortesia?'<div class="er"><span style="color:var(--blue);font-weight:700">🤝 Cortesía del taller'+(o.cortesiaMotivo?' — '+o.cortesiaMotivo:'')+'</span><span style="color:var(--blue);font-weight:700">— $'+(o.cortesiaValor||sub).toFixed(2)+'</span></div>':'')+
-    (!o.cortesia&&(o.descValor||0)>0?'<div class="er"><span style="color:var(--green)">Descuento'+(o.descTipo==='$'?'':' ('+(o.descuento||0)+'%)')+(o.descMotivo?' — '+o.descMotivo:'')+'</span><span style="color:var(--green)">— $'+(o.descValor||0).toFixed(2)+'</span></div>':'')+
-    '<div class="er"><span>IVU (11.5%)</span><span>$'+(o.cortesia?'0.00':ivu.toFixed(2))+'</span></div>'+
-    '<div class="tot-bar"><span>Total</span><span>$'+(o.total||0).toFixed(2)+(o.cortesia?' 🤝':'')+'</span></div>'+
+    (o.garantia?'<div class="er"><span style="color:var(--green);font-weight:700">🛡 Garantía — sin costo'+(o.garantiaMotivo?' — '+o.garantiaMotivo:'')+(o.garantiaRO?' · orden original '+o.garantiaRO:'')+'</span><span style="color:var(--green);font-weight:700">— $'+(o.garantiaValor||sub).toFixed(2)+'</span></div>':'')+
+    (!sinCargo(o)&&(o.descValor||0)>0?'<div class="er"><span style="color:var(--green)">Descuento'+(o.descTipo==='$'?'':' ('+(o.descuento||0)+'%)')+(o.descMotivo?' — '+o.descMotivo:'')+'</span><span style="color:var(--green)">— $'+(o.descValor||0).toFixed(2)+'</span></div>':'')+
+    '<div class="er"><span>IVU (11.5%)</span><span>$'+(sinCargo(o)?'0.00':ivu.toFixed(2))+'</span></div>'+
+    '<div class="tot-bar"><span>Total</span><span>$'+(o.total||0).toFixed(2)+(sinCargo(o)?' '+iconoSinCargo(o):'')+'</span></div>'+
     '<div style="margin-top:8px;font-size:12px;color:var(--gray-400)">Método de pago: '+(o.pago||'—')+'</div>'+
   '</div></div>';
   // Aprobación del cliente — evidencia de que dijo que sí, y por cuánto
@@ -4432,7 +4563,9 @@ function waRecibo(roId){
   var veh=vehTxt(o,'');
   var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
     'Su orden '+o.id+(veh?' ('+veh+')':'')+' está lista.\n'+
-    (o.cortesia?'Total: $0.00 — CORTESÍA DEL TALLER 🤝':'Total: $'+(o.total||0).toFixed(2)+(o.estado==='pagado'?' — PAGADO ✓':' — pendiente de pago ('+(o.pago||'ATH Móvil')+')'))+'\n\n'+
+    (o.garantia?'Total: $0.00 — CUBIERTO POR GARANTÍA 🛡'+(o.garantiaRO?' (orden original '+o.garantiaRO+')':''):
+     o.cortesia?'Total: $0.00 — CORTESÍA DEL TALLER 🤝':
+     'Total: $'+(o.total||0).toFixed(2)+(o.estado==='pagado'?' — PAGADO ✓':' — pendiente de pago ('+(o.pago||'ATH Móvil')+')'))+'\n\n'+
     'El recibo en PDF se lo comparto en el próximo mensaje. ¡Gracias por confiar en nosotros!';
   waSend(o.tel,msg);
 }
@@ -5356,8 +5489,10 @@ function renderKPIs(){
   // ya había dado $100 de $223 seguía saliendo debiendo $223 aquí mientras el home y el cierre de
   // caja decían $123. Mismo bug que se arregló en el home el 27-jul; esta pantalla se quedó fuera.
   var pend=porCobrarTotal(ords);
-  var totDesc=0,totCort=0,nCort=0;
-  o90.forEach(function(o){totDesc+=(o.descValor||0);if(o.cortesia){nCort++;totCort+=(o.cortesiaValor||0);}});
+  var totDesc=0,totCort=0,nCort=0,totGar=0,nGar=0;
+  o90.forEach(function(o){totDesc+=(o.descValor||0);
+    if(o.cortesia){nCort++;totCort+=(o.cortesiaValor||0);}
+    if(o.garantia){nGar++;totGar+=(o.garantiaValor||0);}});
   // ingresos por semana — 8 ventanas de 7 días terminando hoy
   var weeks=[],i;
   for(i=7;i>=0;i--){
@@ -5408,7 +5543,8 @@ function renderKPIs(){
       '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">Descuentos</div><div style="font-size:15px;font-weight:700;color:var(--amber)">$'+totDesc.toFixed(0)+'</div></div>'+
       '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">Cortesías</div><div style="font-size:15px;font-weight:700;color:var(--blue)">'+nCort+'</div></div>'+
       '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">Costo cortesías</div><div style="font-size:15px;font-weight:700;color:var(--blue)">$'+totCort.toFixed(0)+'</div></div>'+
-    '</div><div style="font-size:10px;color:var(--gray-400);margin-top:6px">Lo que el taller dejó de cobrar — vigílalo para que las promos y disculpas no se coman la ganancia.</div></div></div>'+
+      '<div style="flex:1;text-align:center;background:var(--gray-50);border-radius:var(--r-sm);padding:7px"><div style="font-size:10px;color:var(--gray-400);font-weight:700">🛡 Garantías</div><div style="font-size:15px;font-weight:700;color:var(--green)">'+nGar+(totGar?' · $'+totGar.toFixed(0):'')+'</div></div>'+
+    '</div><div style="font-size:10px;color:var(--gray-400);margin-top:6px">Lo que el taller dejó de cobrar — vigílalo para que las promos y disculpas no se coman la ganancia. Las garantías van aparte: esas son costo de calidad, y muchas veces el suplidor te repone la pieza.</div></div></div>'+
     '</div>';
 }
 
@@ -5594,11 +5730,11 @@ function shareStatus(roId){
     subCli+=base+lab+pz;
     return {n:x.n,p:base+lab+pz,q:1,h:x.laborHours||0,pz:pz};
   });
-  var descCli=o.cortesia?0:(o.descValor||0);
-  var ivuCli=o.cortesia?0:Math.round((subCli-descCli)*0.115*100)/100;
+  var descCli=sinCargo(o)?0:(o.descValor||0);
+  var ivuCli=sinCargo(o)?0:Math.round((subCli-descCli)*0.115*100)/100;
   var snap={n:s.shopName||'Pit Stop',ph:waNum(s.shopPhone)||'',id:o.id,
     c:((o.cliente||'').split(' ')[0])||'Cliente',v:veh||'Tu vehículo',
-    sv:svCli,sub:Math.round(subCli*100)/100,desc:descCli,ivu:ivuCli,cort:!!o.cortesia,
+    sv:svCli,sub:Math.round(subCli*100)/100,desc:descCli,ivu:ivuCli,cort:!!o.cortesia,gar:!!o.garantia,garRO:o.garantiaRO||'',
     // el nombre real del recomendado: el campo es `nombre` — leyendo `n`/`desc` salían todos
     // como la palabra "Recomendado" y el cliente no sabía qué le hacía falta.
     dn:(o.denegados||[]).filter(function(d){return !d.auto||d.confirmed;})
@@ -5831,6 +5967,7 @@ function renderCustomerStatus(){
     desglose+=fila('Subtotal',M(d.sub));
     if(d.desc>0)desglose+=fila('Descuento','— '+M(d.desc),'#1FA463');
     if(d.cort)desglose+=fila('🤝 Cortesía del taller','— '+M(d.sub),'#2196F3');
+    if(d.gar)desglose+=fila('🛡 Garantía — sin costo'+(d.garRO?' (orden '+E(d.garRO)+')':''),'— '+M(d.sub),'#2E7D32');
     desglose+=fila('IVU (11.5%)',M(d.ivu||0));
     desglose+='</div>';
   }
@@ -6174,8 +6311,11 @@ function recalcROTotal(o){
   var d=o.descuento||0;
   var descAmt=o.descTipo==='$'?Math.min(d,sub):sub*d/100;
   o.descValor=Math.round(descAmt*100)/100;
-  if(o.cortesia){o.cortesiaValor=Math.round(sub*100)/100;o.total=0;return;}
-  o.cortesiaValor=0;
+  if(sinCargo(o)){
+    var _v=Math.round(sub*100)/100;
+    o.cortesiaValor=o.cortesia?_v:0;o.garantiaValor=o.garantia?_v:0;o.total=0;return;
+  }
+  o.cortesiaValor=0;o.garantiaValor=0;
   o.total=Math.round((sub-descAmt)*1.115*100)/100;
 }
 function apruebaDen(roId,di){
@@ -6204,18 +6344,20 @@ function apruebaDen(roId,di){
 function buildContableCSV(ym){
   var p=ym.split('-'),y=+p[0],m=+p[1];
   var esc=function(v){v=String(v==null?'':v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  var rows=['ORDENES '+ym,'Fecha,Orden,Cliente,Estado,Pago,Tecnico,Asesor,Subtotal,IVU,Total,Descuento,Cortesia'];
-  var tS=0,tI=0,tT=0,tD=0,tC=0;
+  // Cortesia y Garantia van en COLUMNAS SEPARADAS: el contable no las trata igual (una es
+  // buena voluntad, la otra costo de calidad, y la de garantia muchas veces la repone el suplidor).
+  var rows=['ORDENES '+ym,'Fecha,Orden,Cliente,Estado,Pago,Tecnico,Asesor,Subtotal,IVU,Total,Descuento,Cortesia,Garantia'];
+  var tS=0,tI=0,tT=0,tD=0,tC=0,tW=0;
   DB.ordenes.forEach(function(o){
     if(o.estado==='abierta')return;
     var d=new Date(o.fecha);if(d.getFullYear()!==y||d.getMonth()!==m-1)return;
     // Un ingreso marcado SIN IVU va completo al subtotal: fingir un IVU que no se cobro le
     // mete a la planilla dinero que Hacienda no recibio.
     var tot=o.total||0,sub=o.sinIVU?tot:tot/1.115,ivu=tot-sub;tS+=sub;tI+=ivu;tT+=tot;
-    var dv=o.descValor||0,cv=o.cortesia?(o.cortesiaValor||0):0;tD+=dv;tC+=cv;
-    rows.push([d.toLocaleDateString('es-PR'),o.id,esc(o.cliente),o.estado,esc(o.pago||''),esc(tecName(o.tecnico)),esc(aseName(o.asesor)),sub.toFixed(2),ivu.toFixed(2),tot.toFixed(2),dv.toFixed(2),cv?esc(cv.toFixed(2)+' ('+(o.cortesiaMotivo||'')+')'):''].join(','));
+    var dv=o.descValor||0,cv=o.cortesia?(o.cortesiaValor||0):0,gv=o.garantia?(o.garantiaValor||0):0;tD+=dv;tC+=cv;tW+=gv;
+    rows.push([d.toLocaleDateString('es-PR'),o.id,esc(o.cliente),o.estado,esc(o.pago||''),esc(tecName(o.tecnico)),esc(aseName(o.asesor)),sub.toFixed(2),ivu.toFixed(2),tot.toFixed(2),dv.toFixed(2),cv?esc(cv.toFixed(2)+' ('+(o.cortesiaMotivo||'')+')'):'',gv?esc(gv.toFixed(2)+' ('+(o.garantiaMotivo||'')+(o.garantiaRO?' / '+o.garantiaRO:'')+')'):''].join(','));
   });
-  rows.push(',,,,,,TOTAL,'+tS.toFixed(2)+','+tI.toFixed(2)+','+tT.toFixed(2)+','+tD.toFixed(2)+','+tC.toFixed(2));
+  rows.push(',,,,,,TOTAL,'+tS.toFixed(2)+','+tI.toFixed(2)+','+tT.toFixed(2)+','+tD.toFixed(2)+','+tC.toFixed(2)+','+tW.toFixed(2));
   rows.push('');rows.push('GASTOS '+ym);rows.push('Fecha,Descripcion,Categoria,Monto');
   var tG=0;
   (DB.gastos||[]).forEach(function(g){
@@ -6692,7 +6834,9 @@ document.addEventListener('click',hideSplash,{once:true});
               </div>
             </div>
           </div>
-          <div class="fr"><div class="fg"><div class="fl"># Recibo / invoice</div><input id="pp-receipt" placeholder="ADV-789012"></div><div class="fg"><div class="fl">Fecha compra</div><input id="pp-date" type="date"></div></div>
+          <div class="fr"><div class="fg"><div class="fl"># Recibo / invoice</div><input id="pp-receipt" placeholder="ADV-789012"></div><div class="fg"><div class="fl">Fecha compra</div><input id="pp-date" type="date" onchange="pintarVenceGarantia()"></div></div>
+          <div class="fr"><div class="fg"><div class="fl">Garantía de la pieza</div><select id="pp-warr" onchange="pintarVenceGarantia()"><option value="">Sin garantía</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">1 año</option><option value="24">2 años</option><option value="36">3 años</option><option value="60">5 años</option><option value="84">7 años</option><option value="120">10 años</option></select></div><div class="fg"><div class="fl">Vence</div><input id="pp-warr-hasta" disabled placeholder="—" style="background:var(--gray-50)"></div></div>
+          <div style="font-size:10px;color:var(--gray-400);margin:-2px 0 8px">La garantía sale en la factura del cliente. El # de invoice es con lo que le reclamas al suplidor — se puede buscar después desde Órdenes.</div>
           <div class="calc-result" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:var(--gray-50);border-radius:var(--r-sm);padding:9px 10px;margin:4px 0 8px;text-align:center;border:1px solid var(--gray-200)">
             <div><div style="font-size:9px;font-weight:700;color:var(--gray-400);text-transform:uppercase">Costo total</div><div style="font-size:14px;font-weight:700;color:var(--red)" id="pp-tcost">$0.00</div></div>
             <div><div style="font-size:9px;font-weight:700;color:var(--gray-400);text-transform:uppercase">Venta total</div><div style="font-size:14px;font-weight:700;color:var(--blue)" id="pp-tsell">$0.00</div></div>
