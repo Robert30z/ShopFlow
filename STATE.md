@@ -2,7 +2,33 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-28)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-29)
+
+**Estado: TODO EN VIVO Y VERDE.** SW **v28**, suite **36 archivos / 697 checks / 0 fallos**
+(local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
+
+**🆕 BATCH 29 — PRECIO FINAL ACORDADO (lo pidio EL).** *"si ya le di precio al cliente me
+gustaria poder poner el precio exacto que ya le di."* En el taller se cotiza redondo y con todo
+incluido ("son $140"), no "$125.56 mas IVU". Campo nuevo en el estimado: **"Precio final acordado
+con el cliente (todo incluido)"**. Ese numero ES el total, y de ahi se derivan subtotal
+(total / 1.115) e IVU, para que la factura y la planilla sigan cuadrando.
+⭐ **Lo que hace que no sea un parche:** fijar el total a mano rompe la factura si no se dice
+nada, porque el cliente suma los renglones y le da otro numero. La diferencia sale como linea
+**VISIBLE, "Ajuste acordado con el cliente"**, en las CINCO superficies: estimado, detalle del RO,
+PDF, link de WhatsApp y CSV del contable. Renglones + ajuste + IVU = el precio prometido, al centavo.
+**Precedencia probada:** garantia/cortesia > precio fijado > descuento (fijar el precio ignora el
+descuento a proposito).
+🔧 **Arreglo de fondo del mismo batch:** existian DOS matematicas del dinero (`calcEst` para
+el asistente y `recalcROTotal` para la orden guardada) mas copias sueltas en el detalle, el PDF y el
+link del cliente. **Ahora las cinco llaman a `dineroRO()`**, una sola definicion.
+Prueba: `test/precio-final.js` (29 checks), con los bordes: vacio, cero, texto basura, negativo,
+con descuento encima y con garantia encima.
+⚠️ **1 fallo mio que la prueba cazo:** meti comillas simples dentro de una cadena de comillas
+simples en el HTML del campo y **la app no arrancaba** (splash pegado). Se arreglo sacando el
+`onclick` a una funcion (`limpiarPrecioFinal`). Verificar SIEMPRE con `node --check` sobre el script
+extraido despues de tocar HTML dentro de strings de JS.
+
+## 🚦 (historico) cierre del 2026-07-29 (batches 25-28)
 
 **Estado: TODO EN VIVO Y VERDE.** SW **v27**, suite **35 archivos / 668 checks / 0 fallos**
 (local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
@@ -98,7 +124,7 @@ que le pregunta lo MISMO a tres pantallas e **inyecta el estado ya danado en dis
 la reparacion tras recargar.
 
 **LO QUE LE TOCA A ROBERTO — sin cambios, sigue igual que el cierre anterior** (ver la lista de
-abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v27)**, **rotar
+abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v28)**, **rotar
 el PAT de Supabase** y sacar la API key de Anthropic.
 
 **QUEDA EXPUESTO (nuevo de estos batches):**
@@ -232,7 +258,7 @@ desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-28 (batches 25-27: el cliente que vuelve + garantia + aviso de garantia + 3 bugs de inventario/cobro)
+## Last updated: 2026-07-29 (batches 25-29: cliente que vuelve, garantia+aviso, devolucion/vuelto, precio final acordado) (antes 25-27: el cliente que vuelve + garantia + aviso de garantia + 3 bugs de inventario/cobro)
 ## version visible, la nube ya no pisa lo fresco, respaldo verificado con orden real)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
