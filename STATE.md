@@ -2,7 +2,33 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-29)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-30)
+
+**Estado: TODO EN VIVO Y VERDE.** SW **v30**, suite **37 archivos / 706 checks / 0 fallos**
+(local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
+
+**🆕 BATCH 30 — LOS MENSAJES AL CLIENTE LE SEMBRABAN UNA DUDA QUE NO TENIA.**
+🚨 **Lo cazo EL, y tenia toda la razon.** El seguimiento automatico decia *"Si nota algo raro,
+aviseme"*, y el que le salio a una clienta decia *"¿como quedaste con el servicio? **Si algo no te
+gusto** me avisas"* + *"**y si quedaste contenta**, nos ayudarias un monton..."*. Eso le siembra al
+cliente la idea de que algo pudo salir mal justo cuando el trabajo quedo bien.
+**Esa clienta ni contesto y no dejo resena.**
+Sus palabras: *"yo nunca te he dicho algo asi a ti, dimelo en la cara ESTA PROHIBIDO, es una falta
+de respeto, y todo lo que sea similar NO VA NUNCA"* · *"un error de dinero o lo que sea cuesta
+reputacion tambien, y un cliente que deje un mal review es horrendo"*.
+**La causa estaba DENTRO de la app** (`waFollowUp`), asi que le salia automatico a TODOS.
+- Los **11 mensajes** que la app le manda al cliente reescritos en SU voz: abren `Saludos [Nombre]!!`
+  y cierran `Quedo al pendiente` 🏁 (antes tenian un 👋 y una llave que no son suyos).
+- El **seguimiento es ahora SU PROPIO TEXTO**, palabra por palabra: junta seguimiento y resena en un
+  solo mensaje, que es como el lo hace.
+- Matiz que EL marco: *"si todo quedo bien y esta satisfecho, me ayudaria un review"* **SI va**
+  (enmarca en positivo). Lo prohibido es invitar a la queja.
+⭐ **EL GUARDIAN: `test/mensajes-al-cliente.js`** renderiza CADA mensaje al cliente y falla si trae
+frases que siembran duda, arrogancia, o basura tecnica. No puede volver a pasar en silencio.
+🚨 **REGLA NUEVA SUYA, NO NEGOCIABLE:** *"cuando vayas a escribirle a un cliente directo espera
+por mi aprobacion por favor"*. Ver memoria `feedback-aprobacion-mensajes-cliente`.
+
+## 🚦 (historico) cierre del 2026-07-29 (batches 25-29)
 
 **Estado: TODO EN VIVO Y VERDE.** SW **v28**, suite **36 archivos / 697 checks / 0 fallos**
 (local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
@@ -124,7 +150,7 @@ que le pregunta lo MISMO a tres pantallas e **inyecta el estado ya danado en dis
 la reparacion tras recargar.
 
 **LO QUE LE TOCA A ROBERTO — sin cambios, sigue igual que el cierre anterior** (ver la lista de
-abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v28)**, **rotar
+abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v30)**, **rotar
 el PAT de Supabase** y sacar la API key de Anthropic.
 
 **QUEDA EXPUESTO (nuevo de estos batches):**
@@ -258,7 +284,7 @@ desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-29 (batches 25-29: cliente que vuelve, garantia+aviso, devolucion/vuelto, precio final acordado) (antes 25-27: el cliente que vuelve + garantia + aviso de garantia + 3 bugs de inventario/cobro)
+## Last updated: 2026-07-29 (batches 25-30: mensajes al cliente en su voz + guardian; antes 25-29: cliente que vuelve, garantia+aviso, devolucion/vuelto, precio final acordado) (antes 25-27: el cliente que vuelve + garantia + aviso de garantia + 3 bugs de inventario/cobro)
 ## version visible, la nube ya no pisa lo fresco, respaldo verificado con orden real)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
