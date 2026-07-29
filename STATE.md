@@ -2,7 +2,62 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 18-24)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 25-26)
+
+**Estado: TODO EN VIVO Y VERDE.** SW **v25**, suite **31 archivos / 583 checks / 0 fallos**
+(local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
+
+**🆕 BATCH 26 — GARANTIA (se lo pregunto EL, con una clienta real de hoy).** Le instalo una
+bateria con **5 anos de garantia del fabricante pero A TRAVES DE EL** (el la compro y la revendio).
+Pregunto dos cosas; las dos estaban rotas:
+1. 🐛 *"¿puedo ver la informacion que entre en la pieza para reclamar la garantia?"* — el dato SI
+   se guardaba (# invoice, suplidor, # parte, fecha), pero **el buscador NO llegaba a las piezas**:
+   miraba cliente, RO, tablilla, VIN, marca/modelo, empresa, notas y queja. Buscar `ADV-789012`
+   daba **CERO**. La garantia se reclama con ese numero. Ahora `textoBuscableRO` indexa nombre de
+   pieza, # de parte, suplidor e invoice.
+2. 🐛 *"¿como pongo en el invoice que fue una garantia?"* — **no se podia**. Solo existia "Cortesia
+   del taller", que contablemente es otra cosa (buena voluntad vs costo de calidad, y la garantia
+   muchas veces la repone el suplidor).
+Lo construido: **garantia de la PIEZA** (meses 3m–10a + vencimiento calculado, en vivo en el
+formulario, verde/gris en la lista, **impresa en la factura** con su invoice) · **orden por
+GARANTIA** (casilla en el estimado, $0 sin IVU, amarrada a la orden original — el selector ofrece
+las ordenes anteriores de ESE cliente, las de su carro primero — sellada en PDF, WhatsApp y pagina
+del cliente) · **se excluye con cortesia** · **columna Garantia APARTE en el CSV del contable** +
+tarjeta en KPIs. Fix de la CLASE: `sinCargo()`/`motivoSinCargo()` reemplazan los ~20 sitios que
+preguntaban `o.cortesia` para poner el total en $0. De paso: la factura decia **"Part:" en ingles**.
+Prueba: `test/garantia.js` (28 checks) — la venta de hoy y el reclamo 3 anos despues.
+
+**🆕 BATCH 25 — EL CLIENTE QUE VUELVE: su historial se partia.** Salio de correr **DOS ordenes del
+MISMO cliente** escribiendo el nombre como lo escribe un ser humano. La ficha se unia ignorando
+mayusculas (`autoSaveCli`/`pickCli`) pero **el historial, el gasto acumulado, el contador de
+ordenes y la "ultima visita" se buscaban con match EXACTO** (`o.cliente===c.nombre`):
+- 2da visita tecleada "ramon figueroa" ⇒ la app decia **1 orden / $156 cuando habia gastado
+  $311.09** en 2 visitas, y la 2da NO salia en su ficha.
+- "Ultima visita" apuntaba a la vieja ⇒ el **win-back le mandaba "hace tiempo no cotejamos su
+  vehiculo" por WhatsApp a un cliente que vino la semana pasada**.
+- Con el acento caido ("Ramon" vs "Ramón") se creaba **una FICHA DUPLICADA**, con los carros y el
+  telefono repartidos entre las dos.
+Fix de la CLASE: `mismoCli`/`ordenesDeCli`, una sola definicion para las 4 pantallas.
+**¿Y lo que ya quedo mal?** `fusionarClientesRepetidos` corre en cada carga (junto a `migrarPagos`
+y `repararCitasPisadas`): se queda con la ficha mas vieja, une los carros sin duplicar tablilla,
+rellena lo vacio, respeta el recordatorio mas adelantado, deja renglon en la bitacora. Idempotente
+y conservadora (NO junta a "Ramón Figueroa Jr."). Prueba: `test/cliente-repetido.js` (18 checks),
+que le pregunta lo MISMO a tres pantallas e **inyecta el estado ya danado en disco** para verificar
+la reparacion tras recargar.
+
+**LO QUE LE TOCA A ROBERTO — sin cambios, sigue igual que el cierre anterior** (ver la lista de
+abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v25)**, **rotar
+el PAT de Supabase** y sacar la API key de Anthropic.
+
+**QUEDA EXPUESTO (nuevo de estos batches):**
+- La fusion de fichas repetidas **se deshace si la nube trae la ficha borrada** (`mergeDB` conserva
+  lo que solo existe de un lado, igual que la papelera): la proxima carga la vuelve a tragar, asi
+  que el nunca ve dos, pero la fila fantasma puede seguir viajando entre equipos.
+- La garantia de la pieza **no avisa sola** cuando esta por vencer ni cuando un cliente vuelve con
+  una pieza aun cubierta — hay que buscarla. Es el siguiente paso natural.
+- El SQL de aprobaciones **sigue sin correrse contra la base real** (falta el PAT).
+
+## 🚦 (historico) cierre del 2026-07-28 (batches 18-24)
 
 **🆕 BATCH 24 — LA CITA DE AMANDA SE REPARA SOLA.** Arreglar el merge (batch 23) evita que vuelva
 a pasar pero **NO reparaba la cita que ya quedo mal** — Roberto abrio el iPad en v22 y la cita
@@ -125,7 +180,7 @@ desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-28 (batches 18-24: aprobacion remota, 7 bugs, AI, la caja cuadra,
+## Last updated: 2026-07-28 (batches 25-26: el cliente que vuelve + garantia de piezas y ordenes)
 ## version visible, la nube ya no pisa lo fresco, respaldo verificado con orden real)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
