@@ -192,6 +192,8 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       <div id="home-citas"></div>
       <div class="st">Notificaciones</div>
       <div id="home-notifs"></div>
+      <button class="btn full" onclick="cerrarElDia()" style="margin-top:14px;background:var(--navy,#0B1F3A);color:#fff;border-color:var(--navy,#0B1F3A);padding:13px"><i class="ti ti-moon"></i> &nbsp;Cerrar el día</button>
+      <div style="font-size:10px;color:var(--gray-400);text-align:center;margin-top:5px">Cuadra la caja, revisa que el respaldo corrió, y te dice qué quedó suelto.</div>
       <div class="st">Seguimientos</div>
       <div id="home-segs"></div>
     </div>
@@ -490,7 +492,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v32';
+var APP_V='v33';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -4779,6 +4781,84 @@ function registrarAbono(roId){
    trabajo. Antes la única salida era reabrir el wizard de 9 pasos, así que las órdenes se quedaban
    abiertas... y una orden abierta NO cuenta en ninguna finanza (ni ventas, ni IVU, ni técnico, ni
    por cobrar). O sea: trabajo cobrado que no aparecía en ningún número. */
+/* ============ CERRAR EL DIA (lo pidio Roberto, 29-jul) ============
+   No es un resumen bonito: es el chequeo que lo PARA si algo quedo mal. Cada cosa que revisa
+   salio de algo que le paso de verdad:
+     · el respaldo — el 26-jul estuvo DOS DIAS atendiendo clientes sin que corriera y nadie se lo dijo
+     · la caja por metodo — para que cuente el efectivo del bolsillo contra lo que dice la app
+     · ordenes abiertas — no cuentan en NINGUNA pantalla de finanzas, se quedan invisibles
+     · carros en el garage — se quedaban "en trabajo" para siempre
+     · seguimientos y resenas — su hueco #1 es que tiene 0 resenas
+   Devuelve el objeto ademas de pintarlo, para poder probarlo. */
+function resumenDelDia(){
+  var h0=new Date();h0.setHours(0,0,0,0);
+  var fin=new Date(h0.getTime()+86400000);
+  var hoyStr=localDateStr();
+  var caja=cobradoEnRango(h0,fin);
+  var deHoy=(DB.ordenes||[]).filter(function(o){var d=new Date(o.fecha);return d>=h0&&d<fin;});
+  var vendidoHoy=deHoy.filter(esContable).reduce(function(a,o){return a+(o.total||0);},0);
+  var abiertas=(DB.ordenes||[]).filter(function(o){return o.estado==='abierta';});
+  var enGarage=(DB.garage||[]).filter(function(g){return g.estado!=='entregado';});
+  var porCobrar=porCobrarTotal(DB.ordenes);
+  var gastosHoy=(DB.gastos||[]).filter(function(g){return g.fecha===hoyStr;})
+                  .reduce(function(a,g){return a+(g.monto||0);},0);
+  var segs=[];try{segs=getSeguimientos();}catch(e){}
+  var citasManana=(DB.citas||[]).filter(function(c){
+    return c.estado==='agendada'&&c.fecha===localDateStr(new Date(Date.now()+86400000));});
+  // El respaldo: lo unico que separa un mal dia de perderlo todo
+  var bk=(DB.settings&&DB.settings.backup)||{};
+  var ultimo=bk.last?new Date(bk.last):null;
+  var respaldoHoy=!!(ultimo&&ultimo>=h0);
+  var horasSinRespaldo=ultimo?Math.floor((Date.now()-ultimo.getTime())/3600000):null;
+  var avisos=[];
+  if(!bk.token||!bk.repo)avisos.push({n:'critico',t:'El respaldo en la nube NO esta configurado. Todo vive solo en este equipo.'});
+  else if(!respaldoHoy)avisos.push({n:'critico',t:'El respaldo NO ha corrido hoy'+(horasSinRespaldo!=null?' (llevan '+horasSinRespaldo+' horas sin subir nada)':'')+'. Ve a Ajustes y toca "Respaldar ahora".'});
+  if(_discoCorrupto)avisos.push({n:'critico',t:'Los datos de este equipo se leyeron danados al abrir. NO sigas trabajando hasta restaurar.'});
+  if(abiertas.length)avisos.push({n:'ojo',t:abiertas.length+' orden(es) quedaron ABIERTAS: no cuentan en tus ventas ni en lo que te deben. ('+abiertas.map(function(o){return o.id;}).join(', ')+')'});
+  if(enGarage.length)avisos.push({n:'ojo',t:enGarage.length+' carro(s) siguen en el garage sin entregar.'});
+  if(porCobrar>0.005)avisos.push({n:'ojo',t:'Te deben $'+porCobrar.toFixed(2)+' en total.'});
+  var pendSeg=segs.filter(function(x){return x.type==='fu'||x.type==='rev';}).length;
+  if(pendSeg)avisos.push({n:'plata',t:pendSeg+' cliente(s) esperan seguimiento o que les pidas la resena. Ahi esta tu proxima resena.'});
+  if(citasManana.length)avisos.push({n:'info',t:'Manana tienes '+citasManana.length+' cita(s).'});
+  return {caja:caja,vendidoHoy:Math.round(vendidoHoy*100)/100,ordenesHoy:deHoy.length,
+          gastosHoy:Math.round(gastosHoy*100)/100,
+          netoHoy:Math.round((caja.total-gastosHoy)*100)/100,
+          abiertas:abiertas.length,enGarage:enGarage.length,
+          porCobrar:Math.round(porCobrar*100)/100,respaldoHoy:respaldoHoy,
+          horasSinRespaldo:horasSinRespaldo,citasManana:citasManana.length,
+          seguimientos:pendSeg,avisos:avisos,
+          todoBien:avisos.filter(function(a){return a.n==='critico';}).length===0};
+}
+function cerrarElDia(){
+  var r=resumenDelDia();
+  var L=String.fromCharCode(10);
+  var t='';
+  t+='CIERRE DEL '+new Date().toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long'}).toUpperCase()+L+L;
+  t+='Ordenes de hoy: '+r.ordenesHoy+L;
+  t+='Vendido hoy: $'+r.vendidoHoy.toFixed(2)+L;
+  t+='COBRADO hoy: $'+r.caja.total.toFixed(2)+L;
+  var met=Object.keys(r.caja.porMetodo||{});
+  if(met.length){
+    t+=L+'Cuenta esto contra lo que tienes encima:'+L;
+    met.forEach(function(m){t+='   '+m+': $'+r.caja.porMetodo[m].toFixed(2)+L;});
+  }
+  if(r.gastosHoy>0.005){t+=L+'Gastos de hoy: $'+r.gastosHoy.toFixed(2)+L+'Neto del dia: $'+r.netoHoy.toFixed(2)+L;}
+  if(r.avisos.length){
+    t+=L+'------------------------------'+L;
+    r.avisos.forEach(function(a){
+      var ic=a.n==='critico'?'🛑':(a.n==='ojo'?'⚠️':(a.n==='plata'?'💵':'📅'));
+      t+=L+ic+' '+a.t+L;
+    });
+  }
+  t+=L+'------------------------------'+L;
+  t+=r.todoBien?(L+'✅ Todo lo importante quedo bien. Buen trabajo hoy.'+L)
+               :(L+'🛑 Hay algo que atender ANTES de cerrar. Lo de arriba con 🛑 no puede esperar a manana.'+L);
+  alert(t);
+  try{bita('cierre-dia','','cobrado $'+r.caja.total.toFixed(2)+' · vendido $'+r.vendidoHoy.toFixed(2)+
+    ' · '+r.ordenesHoy+' ordenes · respaldo hoy: '+(r.respaldoHoy?'si':'NO')+
+    (r.avisos.length?' · '+r.avisos.length+' aviso(s)':''));saveDB();}catch(e){}
+  return r;
+}
 function cobrarYCerrar(roId){
   var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return;
   var total=o.total||0;
