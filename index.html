@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v29';
+var APP_V='v30';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -3593,10 +3593,10 @@ function waListo(roId,preguntar){
   var bal=balanceRO(o);
   if(preguntar&&!confirm('¿Le aviso a '+(o.cliente||'el cliente')+' por WhatsApp que '+veh+' está listo?'))return;
   var s=DB.settings||{};
-  waSend(o.tel,'Saludos '+(o.cliente||'')+' 👋 le saluda '+(s.shopName||'Pit Stop')+'.\n\n'+
+  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+(s.shopName||'Pit Stop')+'.\n\n'+
     '✅ '+veh+' ya está LISTO'+(o.id?' (orden '+o.id+')':'')+'.\n'+
     (bal>0.005?'Balance a pagar al recoger: $'+bal.toFixed(2)+(s.ath?' — ATH Móvil '+s.ath:'')+'\n':'Ya está saldado, no debe nada. ✓\n')+
-    '\n¿Cuándo le queda bien recogerlo? Si necesita que se lo lleve, avíseme. 🔧');
+    '\n¿Cuándo le queda bien recogerlo? Si prefiere, con gusto se lo llevo.\n\nQuedo al pendiente 🏁');
   o.avisoListo=new Date().toISOString();
   bita('aviso-listo',roId,'se le avisó al cliente que el carro está listo');
   saveDB();
@@ -4803,7 +4803,7 @@ function waRecibo(roId){
     (o.garantia?'Total: $0.00 — CUBIERTO POR GARANTÍA 🛡'+(o.garantiaRO?' (orden original '+o.garantiaRO+')':''):
      o.cortesia?'Total: $0.00 — CORTESÍA DEL TALLER 🤝':
      'Total: $'+(o.total||0).toFixed(2)+(o.estado==='pagado'?' — PAGADO ✓':' — pendiente de pago ('+(o.pago||'ATH Móvil')+')'))+'\n\n'+
-    'El recibo en PDF se lo comparto en el próximo mensaje. ¡Gracias por confiar en nosotros!';
+    'El recibo en PDF se lo comparto en el próximo mensaje. Muchas gracias por confiar en nosotros.\n\nQuedo al pendiente 🏁';
   waSend(o.tel,msg);
 }
 /* Aviso de garantía por vencer. El tono es de SERVICIO, no de alarma: no se le siembra al cliente
@@ -4815,17 +4815,17 @@ function waGarantia(roId,pieza){
   if(!g){alert('No encuentro esa garantía en la orden.');return;}
   var veh=vehTxt(o,'su vehículo');
   var hasta=dDia(g.hasta).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'});
-  var msg='Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
     'Le escribo para recordarle que la '+g.pieza+' que le instalamos en '+veh+' está cubierta por garantía hasta el '+hasta+'.\n\n'+
-    'Si desea, con gusto le hacemos una revisión sin costo antes de esa fecha para dejarlo tranquilo. Vamos hasta donde usted esté 🚗🔧';
+    'Si desea, con mucho gusto se la reviso sin costo antes de esa fecha. Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁';
   waSend(o.tel,msg);
 }
 function waRemind(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var veh=vehTxt(o,'su vehículo');
   var fecha=o.nextDate?new Date(o.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long'}):'pronto';
-  var msg='Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
-    'Le toca el mantenimiento de '+veh+' ('+fecha+'). ¿Le coordino una cita esta semana?\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+    'Le escribo para recordarle que a '+veh+' le toca su mantenimiento ('+fecha+'). ¿Le coordino una cita esta semana? Voy hasta donde usted esté, su casa o su trabajo.\n\nQuedo al pendiente 🏁'+
     'Vamos hasta donde usted esté 🚗🔧';
   waSend(o.tel,msg);
 }
@@ -5622,7 +5622,7 @@ function waCita(id){
   var f='';try{f=new Date(c.fecha+'T'+(c.hora||'09:00')).toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long'});}catch(e){f=c.fecha;}
   var msg='Saludos '+c.cliente+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
     'Confirmando su cita: *'+f+' a las '+(c.hora||'')+'*'+(c.servicio?'\nServicio: '+c.servicio:'')+(c.vehiculo?'\nVehículo: '+c.vehiculo:'')+(c.direccion?'\nLugar: '+c.direccion:'')+
-    '\n\n¿La mantenemos? Si necesita cambiarla, avíseme por aquí. ¡Gracias!';
+    '\n\n¿La mantenemos? Si necesita moverla, con gusto se la cuadro para otro día.\n\nQuedo al pendiente 🏁';
   waSend(c.tel,msg);
 }
 function citaToRO(id){var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;_citaPrefill=c;go('ro');}
@@ -5711,18 +5711,18 @@ function renderHomeSegs(){
 function waFollowUp(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
-  waSend(o.tel,'Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n¿Cómo ha corrido '+veh+' después del servicio? Si nota algo raro, avíseme y lo cotejo sin compromiso. ¡Gracias por la confianza! 🔧');
+  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nUn mensaje de seguimiento por aquí para saber cómo sigue todo con '+veh+'. Si todo quedó bien y está satisfecho con el trabajo, me ayudaría muchísimo un review:\n'+((DB.settings.reviewLink||'').trim())+'\n\nY no dude en llamarme para cualquier cosa que necesite del carro.\n\n¡Gracias por confiar en Pit Stop!\n\nQuedo al pendiente 🏁');
   o.segFu=new Date().toISOString();saveDB();renderHomeSegs();
 }
 function waReview(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var link=(DB.settings.reviewLink||'').trim();
-  waSend(o.tel,'¡Gracias por confiar en '+(DB.settings.shopName||'Pit Stop')+', '+(o.cliente||'')+'! 🙌\n\nSi quedó contento con el servicio, ¿me regala una reseña? Ayuda muchísimo a un negocio local:\n'+link);
+  waSend(o.tel,'¡Gracias por confiar en '+(DB.settings.shopName||'Pit Stop')+', '+(o.cliente||'')+'! 🙌\n\nMuchas gracias por confiar en nosotros. Si me hace el favor de dejarnos una reseña nos ayuda muchísimo: es un negocio que apenas está creciendo, y una línea suya hace que otra persona se anime a escribirnos. Le toma un minuto:\n'+link);
   o.segRev=new Date().toISOString();saveDB();renderHomeSegs();
 }
 function waWinback(cliId){
   var c=DB.clientes.find(function(x){return x.id===cliId;});if(!c)return;
-  waSend(c.tel,'Saludos '+c.nombre+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nHace tiempo no cotejamos su vehículo. ¿Le coordino un mantenimiento esta semana? Vamos hasta donde usted esté. 🔧');
+  waSend(c.tel,'Saludos '+c.nombre+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nHace tiempo no le damos servicio a su vehículo y me acordé de usted. ¿Le coordino un mantenimiento esta semana? Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁');
   c.winbackAt=new Date().toISOString();saveDB();renderHomeSegs();
 }
 
@@ -5817,14 +5817,14 @@ function waDVI(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var s=inspSummary(o);
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
-  var msg='📋 *Inspección de '+veh+'* — '+(DB.settings.shopName||'Pit Stop')+'\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+'📋 Aquí le dejo la inspección de '+veh+':\n\n'+
     '✅ En buen estado: '+s.g.length+' punto'+(s.g.length!==1?'s':'')+'\n';
   if(s.a.length)msg+='\n⚠️ *Atención pronto:*\n'+s.a.map(function(x){return '• '+x;}).join('\n')+'\n';
   if(s.r.length)msg+='\n🔴 *CRÍTICO — requiere servicio:*\n'+s.r.map(function(x){return '• '+x;}).join('\n')+'\n';
   var denP=(o.denegados||[]).filter(function(d){return (!d.auto||d.confirmed)&&(d.precio||0)>0;});
   if(denP.length)msg+='\n💵 Presupuesto de lo pendiente:\n'+denP.map(function(d){return '• '+d.nombre+': $'+(d.precio||0).toFixed(2);}).join('\n')+'\n';
   if((o.inspGeneral||'').trim())msg+='\n📝 Notas: '+o.inspGeneral.trim()+'\n';
-  msg+='\nResponda este mensaje y coordinamos. 🔧';
+  msg+='\n\nCualquier duda me escribe con confianza y se lo explico.\n\nQuedo al pendiente 🏁';
   waSend(o.tel,msg);
 }
 function sharePDFDoc(doc,fname,title){
@@ -5958,7 +5958,7 @@ function waCobro(roId){
     'Balance pendiente de la orden '+o.id+': *$'+bal.toFixed(2)+'*\n\n'+
     (ath?'💳 ATH Móvil: '+ath+'\n':'')+
     (card?'💳 Tarjeta (Visa/MC/Amex): '+card+'\n':'')+
-    'También aceptamos efectivo'+(ath||card?'':' y ATH Móvil')+'. ¡Gracias!';
+    'También aceptamos efectivo'+(ath||card?'':' y ATH Móvil')+'. Muchas gracias por su confianza.\n\nQuedo al pendiente 🏁';
   waSend(o.tel,msg);
 }
 
@@ -6640,12 +6640,12 @@ function waDenied(roId){
   if(!den.length)return;
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
   var lineas=den.map(function(d){return '• '+d.nombre+' — $'+(d.precio||0).toFixed(2);}).join('\n');
-  waSend(o.tel,'Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nCuando atendimos '+veh+' quedaron pendientes estos trabajos que le recomendé:\n'+lineas+'\n\n¿Le coordino una cita esta semana para resolverlos? Vamos hasta donde usted esté. 🔧');
+  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nCuando atendimos '+veh+' quedaron pendientes estos trabajos que le recomendé:\n'+lineas+'\n\n¿Le coordino una cita esta semana para resolverlos? Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁');
   o.segDen=new Date().toISOString();saveDB();renderHomeSegs();
 }
 function waCitaRem(citaId){
   var c=DB.citas.find(function(x){return x.id===citaId;});if(!c)return;
-  waSend(c.tel,'Saludos '+c.cliente+' 👋 le recuerda '+(DB.settings.shopName||'Pit Stop')+':\n\n📅 Su cita es MAÑANA a las '+(c.hora||'')+(c.servicio?' — '+c.servicio:'')+(c.vehiculo?' ('+c.vehiculo+')':'')+'.\n\n¿Confirmamos? Si necesita moverla, avíseme sin problema. 🔧');
+  waSend(c.tel,'Saludos '+c.cliente+'!! Le recuerda '+(DB.settings.shopName||'Pit Stop')+':\n\n📅 Su cita es MAÑANA a las '+(c.hora||'')+(c.servicio?' — '+c.servicio:'')+(c.vehiculo?' ('+c.vehiculo+')':'')+'.\n\n¿Confirmamos? Si necesita moverla, con gusto se la cuadro para otro día.\n\nQuedo al pendiente 🏁');
   c.remAt=new Date().toISOString();saveDB();renderHomeSegs();
 }
 
