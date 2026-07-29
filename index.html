@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v25';
+var APP_V='v26';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -819,6 +819,59 @@ function etiquetaGarantiaPieza(p){
   var t=textoGarantiaPieza(p);if(!t)return '';
   var viva=garantiaVigente(p);
   return '<br><span style="color:'+(viva?'var(--green)':'var(--gray-400)')+';font-weight:700">🛡 '+t+(viva?'':' (vencida)')+'</span>';
+}
+/* TODAS las piezas con garantía que ha vendido, con su orden y su carro al lado.
+   Es la lista que contesta las dos preguntas que importan:
+     · "este cliente que acaba de llegar, ¿trae algo todavía cubierto?" (no le cobres una pieza
+        que el suplidor repone gratis)
+     · "¿a quién se le vence pronto?" (avísale antes, no después)
+   `dias` = cuántos días faltan para que venza (negativo = ya venció). */
+function garantiasPiezas(filtro){
+  filtro=filtro||{};
+  var hoy=localDateStr(),out=[];
+  (DB.ordenes||[]).forEach(function(o){
+    if(!o||o.estado==='abierta')return;
+    if(filtro.cliente&&!mismoCli(o.cliente,filtro.cliente))return;
+    var tag=((o.vehiculo||{}).tag||'');
+    if(filtro.tag&&norm(tag)!==norm(filtro.tag))return;
+    (o.servicios||[]).forEach(function(s){
+      (s.parts||[]).forEach(function(p){
+        var h=garantiaHasta(p);if(!h)return;
+        var dias=Math.round((dDia(h)-dDia(hoy))/86400000);
+        out.push({roId:o.id,cliente:o.cliente,tel:o.tel||'',tag:tag,
+          vehiculo:((o.vehiculo||{}).year+' '+(o.vehiculo||{}).make+' '+(o.vehiculo||{}).model).trim(),
+          pieza:p.name,partNum:p.partNum||'',supplier:p.supplier||'',receipt:p.receipt||'',
+          hasta:h,dias:dias,vigente:dias>=0,meses:Number(p.warrantyMonths)||0});
+      });
+    });
+  });
+  out.sort(function(a,b){return a.hasta<b.hasta?-1:1;});
+  return out;
+}
+// Las que vencen dentro de `dias` (por defecto 60) y todavía no han vencido.
+function garantiasPorVencer(dias){
+  dias=(typeof dias==='number')?dias:60;
+  return garantiasPiezas().filter(function(g){return g.vigente&&g.dias<=dias;});
+}
+// La tarjeta de garantías en la ficha del cliente: vigentes arriba, vencidas abajo en gris
+// (las vencidas también importan — explican por qué esta vez sí se cobra).
+function garantiasCliHTML(nombre){
+  var gs=garantiasPiezas({cliente:nombre});
+  if(!gs.length)return '';
+  var vivas=gs.filter(function(g){return g.vigente;}),muertas=gs.filter(function(g){return !g.vigente;});
+  var fila=function(g){
+    var col=g.vigente?(g.dias<=60?'var(--amber)':'var(--green)'):'var(--gray-400)';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:700">'+g.pieza+'</span>'+
+      '<span style="font-weight:700;color:'+col+';white-space:nowrap">'+(g.vigente?(g.dias+' días'):'vencida')+'</span></div>'+
+      '<div style="font-size:10px;color:var(--gray-400)">'+(g.tag?g.tag+' · ':'')+'hasta '+dDia(g.hasta).toLocaleDateString('es-PR',{day:'numeric',month:'short',year:'numeric'})+
+      ' · <span onclick="openRODetail(\''+g.roId+'\')" style="color:var(--blue);cursor:pointer;font-weight:700">'+g.roId+'</span>'+
+      (g.receipt?' · invoice '+g.receipt:'')+(g.supplier?' · '+g.supplier:'')+'</div></div>';
+  };
+  return '<div class="card"><div class="ch"><i class="ti ti-shield-check"></i> Garantías ('+vivas.length+' vigente'+(vivas.length!==1?'s':'')+')</div><div class="cb">'+
+    vivas.map(fila).join('')+muertas.map(fila).join('')+
+    (vivas.length?'<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Si vuelve por una vigente, no se la cobres: márcala como 🛡 Trabajo por GARANTÍA y reclámale al suplidor con ese invoice.</div>':'')+
+  '</div></div>';
 }
 /* TODO lo que viaja entre equipos aparte de las órdenes. Las órdenes ya tenían resuelto quién gana
    al sincronizar (la edición más reciente); estas 13 listas NO — para un id presente en los dos
@@ -2078,8 +2131,15 @@ function renderHome(){
   document.getElementById('h-ords').textContent=DB.ordenes.length;
   var notifs=[];
   DB.ordenes.forEach(function(o){if(!o.nextDate)return;var d=new Date(o.nextDate);var diff=Math.floor((d-now)/86400000);if(diff>=0&&diff<=14)notifs.push({t:o.cliente+' — mantenimiento en '+diff+'d',c:diff<=3?'var(--red)':'var(--amber)',id:o.id,tel:o.tel}); });
+  /* GARANTÍAS POR VENCER. Aviso a 60 días: le da tiempo de decirle al cliente "si nota algo,
+     tráigalo ANTES de que se venza". Después de vencida el reclamo ya no existe y lo que era
+     una pieza gratis del suplidor se convierte en una pelea o en un gasto suyo. */
+  garantiasPorVencer(60).forEach(function(g){
+    notifs.push({t:'🛡 '+g.cliente+' — garantía de '+g.pieza+' vence en '+g.dias+'d ('+dDia(g.hasta).toLocaleDateString('es-PR',{day:'numeric',month:'short',year:'numeric'})+')',
+      c:g.dias<=15?'var(--red)':'var(--green)',id:g.roId,tel:g.tel,gar:g.pieza});
+  });
   var nel=document.getElementById('home-notifs');
-  nel.innerHTML=notifs.length?notifs.map(function(n){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+n.c+'"><div style="font-size:12px;font-weight:600;flex:1">'+n.t+'</div>'+(n.tel?'<button onclick="waRemind(\''+n.id+'\')" style="background:#25D366;border:none;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-brand-whatsapp"></i> Recordar</button>':'')+'</div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin notificaciones pendientes.</div>';
+  nel.innerHTML=notifs.length?notifs.map(function(n){return '<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--white);border-radius:var(--r-md);margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid '+n.c+'"><div style="font-size:12px;font-weight:600;flex:1">'+n.t+'</div>'+(n.tel?'<button onclick="'+(n.gar?'waGarantia(\''+n.id+'\',\''+String(n.gar).replace(/'/g,'')+'\')':'waRemind(\''+n.id+'\')')+'" style="background:#25D366;border:none;color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-brand-whatsapp"></i> '+(n.gar?'Avisar':'Recordar')+'</button>':'')+'</div>';}).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:4px 0">Sin notificaciones pendientes.</div>';
   // Update inventory label
   var invLbl=document.getElementById('home-inv-lbl');
   if(invLbl){var low=DB.inventario.filter(function(i){return i.qty<=i.min;}).length;invLbl.innerHTML=DB.inventario.length+' items'+(low>0?' · <span style="color:var(--red);font-weight:700">'+low+' bajo stock</span>':'');}
@@ -2135,6 +2195,26 @@ function pickCli(name){
   if(c.email&&!RO.email){RO.email=c.email;var e=document.getElementById('c-e');if(e)e.value=c.email;}
   if(c.empresa&&!RO.empresa){RO.empresa=c.empresa;var em=document.getElementById('c-emp');if(em)em.value=c.empresa;}
   if(chips)chips.innerHTML=(c.vehiculos||[]).length?'<div class="fl" style="margin-bottom:4px">🚗 Carros de '+c.nombre.split(' ')[0]+' — toca uno para usarlo</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+c.vehiculos.map(function(v,i){return '<button class="btn sm" onclick="useCliVeh(\''+c.id+'\','+i+')" style="font-size:11px">'+(v.desc||'—')+(v.tag?' · '+v.tag:'')+'</button>';}).join('')+'</div>':'';
+  pintarAvisoGarantia(c.nombre);
+}
+/* EL AVISO QUE TE AHORRA PLATA: este cliente todavía trae piezas cubiertas.
+   Sale al escribir su nombre en la orden nueva, ANTES de cotizarle nada — cobrarle una pieza
+   que el suplidor repone gratis es dinero regalado, y el cliente que se entera después
+   se va con la sensación de que le cobraron de más. */
+function pintarAvisoGarantia(nombre){
+  var box=document.getElementById('cli-garantias');if(!box)return;
+  var gs=garantiasPiezas({cliente:nombre}).filter(function(g){return g.vigente;});
+  if(!gs.length){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML='<div style="background:var(--green-light);border:1.5px solid var(--green);border-radius:var(--r-md);padding:9px 11px;margin-top:8px">'+
+    '<div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:5px"><i class="ti ti-shield-check"></i> Este cliente tiene '+gs.length+' pieza'+(gs.length>1?'s':'')+' EN GARANTÍA</div>'+
+    gs.map(function(g){
+      return '<div style="font-size:11px;padding:3px 0;border-top:1px solid rgba(0,0,0,.06)">'+
+        '<strong>'+g.pieza+'</strong>'+(g.tag?' · '+g.tag:'')+'<br>'+
+        '<span style="color:var(--gray-500)">Cubierta hasta '+dDia(g.hasta).toLocaleDateString('es-PR',{day:'numeric',month:'short',year:'numeric'})+
+        ' ('+g.dias+' días) · orden '+g.roId+(g.receipt?' · invoice '+g.receipt:'')+(g.supplier?' · '+g.supplier:'')+'</span></div>';
+    }).join('')+
+    '<div style="font-size:10px;color:var(--gray-500);margin-top:6px">Si viene por una de estas, no se la cobres: márcala como <strong>🛡 Trabajo por GARANTÍA</strong> en el estimado y reclámale al suplidor con ese invoice.</div></div>';
 }
 function useCliVeh(cid,i){
   var c=DB.clientes.find(function(x){return x.id===cid;});if(!c)return;
@@ -2164,7 +2244,7 @@ function buildPanes(){
 }
 
 function buildPane(id){
-  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" list="cli-dl" placeholder="Juan García" oninput="RO.cliente=this.value;pickCli(this.value)"><datalist id="cli-dl"></datalist></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Empresa / flota (opcional — agrupa órdenes y genera estado de cuenta)</div><input id="c-emp" list="emp-dl" placeholder="Ej: Pest Control Rivera" oninput="RO.empresa=this.value"><datalist id="emp-dl"></datalist></div></div><div id="cli-veh-chips" style="margin-top:4px"></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase();if(this.value.length===17)decodeVIN(this.value)"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
+  if(id==='cliente')return '<div class="card"><div class="ch"><i class="ti ti-user"></i> Cliente</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Nombre</div><input id="c-n" list="cli-dl" placeholder="Juan García" oninput="RO.cliente=this.value;pickCli(this.value)"><datalist id="cli-dl"></datalist></div><div class="fg"><div class="fl">Teléfono</div><input id="c-t" type="tel" placeholder="787-000-0000" oninput="RO.tel=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Email</div><input id="c-e" type="email" placeholder="juan@email.com" oninput="RO.email=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Empresa / flota (opcional — agrupa órdenes y genera estado de cuenta)</div><input id="c-emp" list="emp-dl" placeholder="Ej: Pest Control Rivera" oninput="RO.empresa=this.value"><datalist id="emp-dl"></datalist></div></div><div id="cli-veh-chips" style="margin-top:4px"></div><div id="cli-garantias" style="display:none"></div></div></div><div class="card"><div class="ch"><i class="ti ti-car"></i> Vehículo</div><div class="cb"><div class="fr fr3"><div class="fg"><div class="fl">Año</div><input id="v-y" type="number" placeholder="2020" oninput="RO.vehiculo.year=this.value"></div><div class="fg"><div class="fl">Marca</div><input id="v-ma" placeholder="Toyota" oninput="RO.vehiculo.make=this.value"></div><div class="fg"><div class="fl">Modelo</div><input id="v-mo" placeholder="Corolla" oninput="RO.vehiculo.model=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Tablilla</div><input id="v-t" placeholder="ABC-123" oninput="RO.vehiculo.tag=this.value"></div><div class="fg"><div class="fl">Color</div><input id="v-c" placeholder="Blanco" oninput="RO.vehiculo.color=this.value"></div></div><div class="fr"><div class="fg"><div class="fl">Odómetro entrada</div><input id="v-o1" type="number" placeholder="45000" oninput="RO.vehiculo.odoIn=this.value"></div><div class="fg"><div class="fl">Odómetro salida</div><input id="v-o2" type="number" placeholder="45003" oninput="RO.vehiculo.odoOut=this.value"></div></div><div class="fr fr1"><div class="fg"><div class="fl">Número de serie (VIN)</div><div style="display:flex;gap:6px"><input id="v-vin" placeholder="1HGBH41JXMN109186" maxlength="17" style="flex:1;font-family:monospace;letter-spacing:.05em;text-transform:uppercase" oninput="RO.vehiculo.vin=this.value.toUpperCase();this.value=this.value.toUpperCase();if(this.value.length===17)decodeVIN(this.value)"><button class="btn sm blue" onclick="openVINScanner()" title="Escanear QR del VIN"><i class="ti ti-qrcode"></i> QR</button></div><div id="vin-decode-info" style="display:none;margin-top:5px;font-size:10px;color:var(--blue);line-height:1.5;background:var(--blue-light);padding:6px 8px;border-radius:var(--r-sm)"></div></div></div><div class="fr fr1"><div class="fg"><div class="fl">Queja del cliente</div><textarea id="v-q" placeholder="El cliente reporta que..." oninput="RO.queja=this.value"></textarea></div></div></div></div>';
 
   if(id==='fotos'){return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:12px"><i class="ti ti-shield-check" style="font-size:18px;flex-shrink:0"></i><span>Documenta el estado del vehículo ANTES de comenzar. Con la <strong>cámara rápida</strong> tiras varias fotos seguidas sin salir ni darle guardar.</span></div><button class="btn g full" onclick="openCamera()" style="margin-bottom:8px;justify-content:center"><i class="ti ti-camera" style="font-size:20px"></i>&nbsp; Cámara rápida (varias seguidas)</button><label class="btn blue full" style="cursor:pointer;margin-bottom:14px;justify-content:center"><i class="ti ti-photo" style="font-size:20px"></i>&nbsp; Subir de la galería<input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)"></label><div id="photo-count-lbl" style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Sin fotos todavía</div><div id="photo-grid-dyn" class="photo-grid"></div>';}
 
@@ -3559,6 +3639,7 @@ function openCliDetail(cid){
     '<div class="card"><div class="ch"><i class="ti ti-car"></i> Carros ('+(c.vehiculos||[]).length+')</div><div class="cb">'+
       ((c.vehiculos||[]).map(function(v){return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span style="font-weight:700">🚗 '+(v.desc||'—')+'</span><span style="color:var(--gray-400)">'+(v.tag||'')+(v.vin?' · VIN '+v.vin.slice(-6):'')+'</span></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin carros registrados — se añaden solos con cada orden.</div>')+
     '</div></div>'+
+    garantiasCliHTML(c.nombre)+
     '<div class="card"><div class="ch"><i class="ti ti-clipboard-list"></i> Historial</div><div class="cb">'+
       (ords.map(function(o){return '<div onclick="openRODetail(\''+o.id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;font-size:12px"><div><span style="font-weight:700">'+o.id+'</span> <span style="color:var(--gray-400)">'+new Date(o.fecha).toLocaleDateString('es-PR')+'</span></div><div><span style="font-weight:700;margin-right:6px">$'+(o.total||0).toFixed(2)+'</span><span class="badge '+(o.estado==='pagado'?'bg':o.estado==='abierta'?'bb':'ba')+'">'+o.estado+'</span></div></div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin órdenes todavía.</div>')+
     '</div></div>'+
@@ -3851,6 +3932,22 @@ function ajustarInventario(nombre,partNum,delta){
   inv.qty=Math.max(0,(inv.qty||0)+delta);
   return inv;
 }
+/* MISMO BUG, HERMANO MAYOR (batch 27, 28-jul): borrar UNA pieza ya devolvía el stock desde el
+   27-jul, pero **borrar la ORDEN COMPLETA no devolvía nada**. Escenario real: haces la orden al
+   cliente equivocado, metes 4 bujías (el estante baja de 10 a 6), borras la orden — y el estante
+   se queda en 6 para siempre aunque las bujías nunca salieron de la gaveta. Al revés al restaurar:
+   si vuelve el expediente, la pieza vuelve a estar usada y hay que descontarla otra vez.
+   `signo` = -1 descuenta (la orden consume), +1 devuelve (la orden deja de existir). */
+function moverInventarioDeRO(o,signo){
+  var n=0;
+  ((o||{}).servicios||[]).forEach(function(s){
+    (s.parts||[]).forEach(function(p){
+      if(!p||!p.name)return;
+      if(ajustarInventario(p.name,p.partNum,signo*(Number(p.qty)||1)))n++;
+    });
+  });
+  return n;
+}
 function deletePartRO(i){
   if(!confirm('¿Eliminar esta pieza?'))return;
   var p=(RO.servicios[currentROPartIdx].parts||[])[i];
@@ -4006,14 +4103,19 @@ function savePart(){
   };
   if(!DB.serviceParts[currentPartService.id])DB.serviceParts[currentPartService.id]=[];
   if(_editPartIdx>=0&&DB.serviceParts[currentPartService.id][_editPartIdx]){
+    // El camino del catálogo NO ajustaba el estante al editar (el de la orden sí desde el 27-jul):
+    // cambiar de 1 a 3 descontaba 1 solo. Mismo trato que en `savePartRO`, con la misma función.
+    var vieja=DB.serviceParts[currentPartService.id][_editPartIdx];
     DB.serviceParts[currentPartService.id][_editPartIdx]=part; // EDITAR la pieza existente
+    if(String((vieja||{}).name||'').toLowerCase()===String(name).toLowerCase()){
+      ajustarInventario(name,part.partNum,((vieja||{}).qty||1)-qty);
+    }else{
+      ajustarInventario((vieja||{}).name,(vieja||{}).partNum,+(((vieja||{}).qty)||1));
+      ajustarInventario(name,part.partNum,-qty);
+    }
   }else{
     DB.serviceParts[currentPartService.id].push(part);
-    // Auto-deduct from inventory silently — solo al AGREGAR, no al editar
-    if(DB.inventario.length>0){
-      var inv=DB.inventario.find(function(i){return i.nombre.toLowerCase()===name.toLowerCase()||(part.partNum&&i.sku===part.partNum);});
-      if(inv){inv.qty=Math.max(0,inv.qty-qty);}
-    }
+    ajustarInventario(name,part.partNum,-qty);   // sale del estante (una sola definición)
   }
   _editPartIdx=-1;setPartBtnLabel();
   saveDB();
@@ -4082,6 +4184,9 @@ function renderPartsList(){
 function deletePart(i){
   if(!currentPartService)return;
   if(!confirm('¿Eliminar esta pieza?'))return;
+  // Devolver al estante, igual que `deletePartRO`: si la pieza sale de la lista, no se gastó.
+  var p=(DB.serviceParts[currentPartService.id]||[])[i];
+  if(p)ajustarInventario(p.name,p.partNum,+(Number(p.qty)||1));
   DB.serviceParts[currentPartService.id].splice(i,1);
   if(DB.serviceParts[currentPartService.id].length===0)delete DB.serviceParts[currentPartService.id];
   saveDB();renderPartsList();
@@ -4491,11 +4596,23 @@ function cobrarYCerrar(roId){
   var o=(DB.ordenes||[]).find(function(x){return x.id===roId;});if(!o)return;
   var total=o.total||0;
   if(total<=0&&!confirm('Esta orden tiene total $0.00.\n\n¿Cerrarla así de todos modos?'))return;
-  var m=prompt('Cerrar '+o.id+' — '+(o.cliente||'')+'\nTotal: $'+total.toFixed(2)+
+  /* EL DIÁLOGO TIENE QUE PEDIR EL BALANCE, NO EL TOTAL (batch 27, 28-jul).
+     Si el cliente ya abonó, el total y lo que debe son números DISTINTOS. Antes los dos prompts
+     enseñaban el TOTAL y proponían el total como "pagó todo": una orden de $390.25 con $223 ya
+     abonados le decía a Roberto que cobrara $390.25 cuando solo le debían $167.25. La caja no se
+     rompía (`recibeAhora` topa en el balance), pero él le habría cobrado $223 de más A LA CLIENTA
+     EN LA PUERTA — el peor sitio para enterarse. Lo mismo que pasó el 27-jul con el "por cobrar". */
+  var yaAbonado=Math.max(0,o.abonado||0);
+  var debe=Math.max(0,total-yaAbonado);
+  var lineaAbono=yaAbonado>0.005?('\nYa abonó: $'+yaAbonado.toFixed(2)+'   ·   DEBE: $'+debe.toFixed(2)):'';
+  var m=prompt('Cerrar '+o.id+' — '+(o.cliente||'')+'\nTotal: $'+total.toFixed(2)+lineaAbono+
                '\n\n¿Cómo pagó? (ATH Móvil / Cash / Tarjeta / Zelle / Cheque)',o.pago||'ATH Móvil');
   if(m===null)return;
-  var recStr=prompt('¿Cuánto recibiste?\n\nDéjalo como está si pagó todo ($'+total.toFixed(2)+').\n'+
-                    'Si abonó una parte, escribe lo que te dio.',total.toFixed(2));
+  var recStr=prompt('¿Cuánto recibiste AHORA?\n\n'+
+                    (yaAbonado>0.005
+                      ? 'Esta orden es de $'+total.toFixed(2)+' y ya te abonó $'+yaAbonado.toFixed(2)+'.\nLe queda por pagar $'+debe.toFixed(2)+' — no le cobres el total otra vez.\n'
+                      : 'Déjalo como está si pagó todo ($'+debe.toFixed(2)+').\n')+
+                    'Si abonó una parte, escribe lo que te dio.',debe.toFixed(2));
   if(recStr===null)return;
   var rec=parseFloat(String(recStr).replace(/[^0-9.]/g,''));
   if(isNaN(rec)||rec<0){alert('No entendí ese monto — no cambié nada.');return;}
@@ -4514,9 +4631,15 @@ function cobrarYCerrar(roId){
   bita('orden-cerrada',roId,antes+' → '+o.estado+' · '+o.pago+' · recibido $'+o.abonado.toFixed(2)+' de $'+total.toFixed(2)+(o.estado==='pagado'?' · SELLADA':''));
   if(!saveDB())return;
   var falta=Math.max(0,total-o.abonado);
+  // El aviso dice lo que entró AHORA por ese método, no el total de la orden: si $223 entraron
+  // ayer por ATH y hoy recibió $167.25 en efectivo, decir "$390.25 por Cash" le descuadra la caja.
   alert(o.estado==='pagado'
-    ? '✓ '+o.id+' cobrada y cerrada.\n\n$'+total.toFixed(2)+' por '+o.pago+'.\nYa cuenta en tus ventas del día.'
-    : '✓ '+o.id+' cerrada con abono.\n\nRecibido $'+o.abonado.toFixed(2)+' — queda un balance de $'+falta.toFixed(2)+'.\nAparece en "por cobrar" hasta que la completes.');
+    ? '✓ '+o.id+' cobrada y cerrada.\n\nRecibido ahora: $'+recibeAhora.toFixed(2)+' por '+o.pago+'.'+
+      (yaAbonado>0.005?'\n(Ya tenía $'+yaAbonado.toFixed(2)+' abonados — total $'+total.toFixed(2)+'.)':'')+
+      '\nYa cuenta en tus ventas del día.'
+    : '✓ '+o.id+' cerrada con abono.\n\nRecibido ahora: $'+recibeAhora.toFixed(2)+' por '+o.pago+'.\n'+
+      'Lleva $'+o.abonado.toFixed(2)+' de $'+total.toFixed(2)+' — queda un balance de $'+falta.toFixed(2)+'.\n'+
+      'Aparece en "por cobrar" hasta que la completes.');
   openRODetail(roId);
 }
 /* EL CARRO TIENE QUE SALIR DEL GARAGE CUANDO SE COBRA — por CUALQUIERA de los dos caminos.
@@ -4567,6 +4690,20 @@ function waRecibo(roId){
      o.cortesia?'Total: $0.00 — CORTESÍA DEL TALLER 🤝':
      'Total: $'+(o.total||0).toFixed(2)+(o.estado==='pagado'?' — PAGADO ✓':' — pendiente de pago ('+(o.pago||'ATH Móvil')+')'))+'\n\n'+
     'El recibo en PDF se lo comparto en el próximo mensaje. ¡Gracias por confiar en nosotros!';
+  waSend(o.tel,msg);
+}
+/* Aviso de garantía por vencer. El tono es de SERVICIO, no de alarma: no se le siembra al cliente
+   la idea de que la pieza va a fallar ni de que algo salió mal. Se le recuerda que está cubierto
+   y se le ofrece una revisión — que es exactamente lo que le conviene a los dos. */
+function waGarantia(roId,pieza){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var g=garantiasPiezas({cliente:o.cliente}).filter(function(x){return x.roId===roId&&(!pieza||x.pieza===pieza);})[0];
+  if(!g){alert('No encuentro esa garantía en la orden.');return;}
+  var veh=vehTxt(o,'su vehículo');
+  var hasta=dDia(g.hasta).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'});
+  var msg='Saludos '+(o.cliente||'')+' 👋 le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+    'Le escribo para recordarle que la '+g.pieza+' que le instalamos en '+veh+' está cubierta por garantía hasta el '+hasta+'.\n\n'+
+    'Si desea, con gusto le hacemos una revisión sin costo antes de esa fecha para dejarlo tranquilo. Vamos hasta donde usted esté 🚗🔧';
   waSend(o.tel,msg);
 }
 function waRemind(roId){
@@ -4821,7 +4958,9 @@ function deleteRO(roId,motivo){
   DB.papelera.push(copia);
   DB.ordenes.splice(idx,1);
   DB.garage=(DB.garage||[]).filter(function(g){return g.roId!==roId;});
-  bita('orden-a-papelera',roId,(o.cliente||'')+' · $'+((o.total||0).toFixed(2))+' · '+((o.fotos||[]).length)+' fotos');
+  // Las piezas vuelven al estante: si la orden no existe, esas piezas no se gastaron.
+  var _inv=moverInventarioDeRO(o,+1);
+  bita('orden-a-papelera',roId,(o.cliente||'')+' · $'+((o.total||0).toFixed(2))+' · '+((o.fotos||[]).length)+' fotos'+(_inv?' · '+_inv+' pieza(s) devueltas al inventario':''));
   if(!saveDB())return false;
   alert('Orden movida a la PAPELERA.\n\nNo se borró nada: está en Ajustes → Papelera y la puedes restaurar completa, con fotos y firma.');
   go('historial');
@@ -4841,7 +4980,9 @@ function restaurarDePapelera(roId){
   DB.ordenes.push(o);
   gar.forEach(function(g){if(!(DB.garage||[]).some(function(x){return x.id===g.id;}))(DB.garage=DB.garage||[]).push(g);});
   DB.papelera.splice(idx,1);
-  bita('orden-restaurada',roId,(o.cliente||'')+' · '+((o.fotos||[]).length)+' fotos');
+  // La orden vuelve a existir ⇒ sus piezas vuelven a estar usadas: se descuentan otra vez.
+  var _inv=moverInventarioDeRO(o,-1);
+  bita('orden-restaurada',roId,(o.cliente||'')+' · '+((o.fotos||[]).length)+' fotos'+(_inv?' · '+_inv+' pieza(s) descontadas del inventario':''));
   if(!saveDB())return false;
   alert('Orden '+roId+' restaurada completa.');
   openRODetail(roId);
