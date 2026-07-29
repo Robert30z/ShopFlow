@@ -140,6 +140,31 @@ const ev = (pg, code) => pg.evaluate('(async()=>{' + code + '})()');
   yes('#4 El aviso le dice CUÁNTO dinero sale de la caja',
       dialogos.some(d => /111\.50/.test(d) && /caja del dia|caja del día/i.test(d)), dialogos.slice(-1));
 
+
+  // ================= #6 (2da ronda) — DISCO CORRUPTO: LA APP ARRANCABA VACIA =================
+  // Es la forma exacta del desastre del 26-jul. Si `sf_v1` se lee danado, antes la app seguia como
+  // taller nuevo y el primer guardado escribia ese vacio encima.
+  await ev(page, `
+    var o={id:'RO-77',cliente:'Cliente Real',tel:'787-555-7777',estado:'pagado',total:200,
+      fecha:new Date().toISOString(),vehiculo:{make:'Honda'},servicios:[{n:'X',ep:100,qty:1,parts:[]}],
+      denegados:[],insp:{},fotos:[]};
+    DB.ordenes=[o]; saveDB({force:true});
+    // se corrompe el disco como lo haria Safari al cortar el archivo
+    var bueno=localStorage.getItem('sf_v1');
+    localStorage.setItem('sf_v1', bueno.slice(0, Math.floor(bueno.length/2)));
+    return 1;`);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(1800);
+  const corrupto = await ev(page, `
+    var claves=Object.keys(localStorage).filter(function(k){return k.indexOf('sf_v1_corrupto_')===0;});
+    return { ordenes:(DB.ordenes||[]).length, marcado:!!_discoCorrupto,
+             guardadoCopia:claves.length, guardaAhora:saveDB() };`);
+  yes('⭐ La app AVISA que el disco se leyo danado, no arranca callada', corrupto.marcado, corrupto);
+  is('⭐ Guarda el texto danado aparte (no se pierde nada)', corrupto.guardadoCopia, 1);
+  is('⭐⭐ Y BLOQUEA los guardados para no escribir el vacio encima', corrupto.guardaAhora, false);
+  yes('El aviso le dice que restaure', dialogos.some(d => /DA[ÑN]ADOS|danados/i.test(d) && /Restaurar/i.test(d)),
+      dialogos.filter(d => /danad|dañad/i.test(d)).slice(0, 1));
+
   yes('Sin errores de JavaScript', errs.length === 0, errs);
 
   console.log('\nHALLAZGOS DE CODEX — ' + pass + ' pass / ' + fail + ' fail');

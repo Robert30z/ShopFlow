@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v31';
+var APP_V='v32';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -1123,6 +1123,14 @@ function reconciliarDisco(){
 // ---- EL ÚNICO CAMINO DE ESCRITURA ----
 function saveDB(opts){
   opts=opts||{};
+  /* Mientras el disco se haya leido danado, NO se escribe nada: escribir seria consolidar la
+     perdida encima de lo unico que queda. Solo `force` (restaurar/importar) puede pasar. */
+  if(_discoCorrupto&&!opts.force){
+    try{alert('🛑 No guardo nada porque los datos de este equipo se leyeron danados al abrir.'+SALTO+SALTO+
+      'Lo que habia esta a salvo, guardado aparte.'+SALTO+
+      'Ve a Ajustes -> Restaurar (snapshot, nube o respaldo) antes de seguir trabajando.');}catch(e){}
+    return false;
+  }
   // Antes de mirar nada: ¿escribió otra ventana de la app mientras tanto?
   if(!DB._demo){try{reconciliarDisco();}catch(e){}}
   if(!opts.force&&!DB._demo){
@@ -1269,7 +1277,36 @@ function repararCitasPisadas(db){
   if(n)try{bita('citas-reparadas','',n+' cita(s) que la nube habia devuelto a "agendada" se cerraron con su orden');}catch(e){}
   return n;
 }
-function loadDB(){try{var s=localStorage.getItem('sf_v1');if(s)DB=JSON.parse(s);normalizarDB(DB);}catch(e){try{normalizarDB(DB);}catch(e2){}}
+/* 🚨 SI EL DISCO ESTA CORRUPTO, LA APP NO PUEDE ARRANCAR COMO TALLER NUEVO (arreglado 29-jul,
+   lo encontro Codex). Antes: si `JSON.parse` fallaba (Safari corta el archivo, cierre sucio, cuota),
+   el catch normalizaba un DB VACIO y la app seguia como si nunca hubiera habido un cliente. El
+   primer guardado escribia ese vacio encima y consolidaba la perdida — y el guard tampoco protestaba
+   porque su censo de arranque tambien estaba vacio. Es la forma exacta del desastre del 26-jul.
+   Ahora: el texto corrupto se GUARDA aparte (nunca se pierde), se bloquean los guardados, y se le
+   dice en pantalla que restaure. */
+var SALTO=String.fromCharCode(10);
+var _discoCorrupto=null;
+var _avisoFotoIDB=false;
+function loadDB(){
+  var crudo=null;
+  try{
+    crudo=localStorage.getItem('sf_v1');
+    if(crudo)DB=JSON.parse(crudo);
+    normalizarDB(DB);
+  }catch(e){
+    if(crudo&&String(crudo).length>2){
+      _discoCorrupto={ts:new Date().toISOString(),bytes:String(crudo).length,error:String(e&&e.message||e)};
+      try{localStorage.setItem('sf_v1_corrupto_'+Date.now(),crudo);}catch(e3){}
+      try{
+        alert('🛑 LOS DATOS DE ESTE EQUIPO SE LEYERON DAÑADOS.'+SALTO+SALTO+
+          'NO se borro nada: lo que habia quedo guardado aparte tal como estaba.'+SALTO+
+          'Para protegerte, la app NO va a guardar nada hasta que restaures.'+SALTO+SALTO+
+          'Ve a Ajustes y usa "Restaurar" (snapshot, nube o respaldo de GitHub).'+SALTO+
+          'Si no estas seguro, avisale a Claude ANTES de tocar nada.');
+      }catch(e4){}
+    }
+    try{normalizarDB(DB);}catch(e2){}
+  }
   // Una orden que está en la papelera no puede seguir viva en la lista activa: si dos equipos
   // se sincronizan, mergeDB la resucitaría (une por id) y reaparecería un expediente borrado.
   reconciliarPapelera();
@@ -1365,7 +1402,18 @@ function storePhoto(dataURL){
   var id='ph-'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
   var t=new Date().toISOString();
   _photoCache[id]=dataURL;
-  photoPut(id,dataURL,t).catch(function(){});
+  /* 🚨 ANTES ESTO SE TRAGABA EL ERROR (lo encontro Codex). En navegacion privada IndexedDB no
+     existe: la orden guardaba la REFERENCIA de la foto pero los bytes no se escribian nunca, y al
+     recargar la foto habia desaparecido sin que nadie se enterara. Las fotos son su evidencia. */
+  photoPut(id,dataURL,t).catch(function(){
+    if(!_avisoFotoIDB){
+      _avisoFotoIDB=true;
+      try{alert('⚠️ Este navegador no esta guardando las fotos en el equipo (suele pasar en modo privado).'+SALTO+SALTO+
+        'Las fotos que tomes ahora solo viven mientras la pagina este abierta.'+SALTO+
+        'Abre la app en una ventana NORMAL antes de seguir documentando el trabajo.');}catch(e){}
+    }
+    try{bita('foto-sin-guardar','', 'IndexedDB no acepto la foto '+id+' (¿modo privado?)');}catch(e){}
+  });
   schedulePhotoUpload(); // sube a la nube si hay sesión (si no, se queda local y sube luego)
   return {id:id,t:t};
 }
