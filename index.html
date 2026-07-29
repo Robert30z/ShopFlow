@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v26';
+var APP_V='v27';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -727,6 +727,38 @@ function registrarPago(o,monto,metodo){
   o.pagos.push(p);
   o.abonado=sumaPagos(o);
   return p;
+}
+/* DEVOLUCIÓN — el renglón que faltaba (batch 28, 28-jul).
+   Encontrado probando: cobrar una orden y DESPUÉS marcarla cortesía o garantía (pasa de verdad —
+   cobras, y luego te enteras de que la pieza estaba cubierta). El total bajaba a $0 pero los $223
+   se quedaban en el libro de pagos: "Cierre de hoy — Vendido $0.00 · Cobrado $223.00". Ninguna
+   pantalla mentía por su cuenta y aun así el día no cuadraba, y encima ese dinero es del cliente:
+   hay que devolvérselo. Un renglón NEGATIVO en el mismo libro lo deja cuadrado y auditable —
+   nunca se borra un cobro, se le pone su contrapartida. */
+function registrarDevolucion(o,monto,metodo,motivo){
+  if(!o||!(monto>0))return null;
+  if(!Array.isArray(o.pagos))o.pagos=[];
+  var p={id:'DV-'+Date.now()+'-'+Math.floor(Math.random()*1000),ts:new Date().toISOString(),
+         monto:-Math.round(monto*100)/100,metodo:(metodo||o.pago||'').trim(),
+         dev:deviceLabel(),devolucion:true,motivo:(motivo||'').trim()};
+  o.pagos.push(p);
+  o.abonado=sumaPagos(o);
+  return p;
+}
+/* Una orden SIN CARGO (cortesía o garantía) no puede tener dinero del cliente adentro.
+   Se llama al guardar: si quedó dinero cobrado, se avisa y se registra la devolución. */
+function conciliarSinCargo(o){
+  if(!o||!sinCargo(o))return 0;
+  var cobrado=Math.round(sumaPagos(o)*100)/100;
+  if(cobrado<=0.005)return 0;
+  var etiqueta=o.garantia?'por GARANTÍA':'como CORTESÍA';
+  alert('⚠️ Esta orden ya tenía $'+cobrado.toFixed(2)+' cobrados y la estás dejando '+etiqueta+' (total $0).\n\n'+
+        'Ese dinero es del cliente: DEVUÉLVESELO.\n\n'+
+        'Lo registro como devolución para que la caja del día cuadre y quede el rastro.');
+  registrarDevolucion(o,cobrado,o.pago,'orden dejada '+etiqueta);
+  o.estado='pagado';o.pagadoFecha=o.pagadoFecha||new Date().toISOString();
+  bita('devolucion',o.id,'$'+cobrado.toFixed(2)+' devueltos — la orden quedó '+etiqueta);
+  return cobrado;
 }
 // Las órdenes de antes del libro entran con un renglón por lo que ya estaba cobrado, fechado con
 // el día del pago. Sin esto el historial de caja se vería en cero.
@@ -3022,6 +3054,8 @@ function saveRO(){
       if(!facturaSellada(_gRO))sellarFactura(_gRO);
     }
   }
+  // Una orden sin cargo no puede quedarse con dinero del cliente adentro (ver `conciliarSinCargo`).
+  if(sinCargo(RO)){try{conciliarSinCargo(DB.ordenes.find(function(x){return x.id===RO.id;}));}catch(e){}}
   autoSaveCli();
   cerrarCitaDeRO(DB.ordenes.find(function(x){return x.id===RO.id;}));
   if(!DB.garage.find(function(g){return g.roId===RO.id;})){
@@ -4620,6 +4654,17 @@ function cobrarYCerrar(roId){
   o.pago=(m||o.pago||'ATH Móvil').trim();
   // Lo que entra AHORA es un renglón del libro de pagos, con su hora y su método.
   var recibeAhora=Math.max(0,Math.min(rec,total-(o.abonado||0)));
+  /* SI LE DIERON DE MÁS, HAY QUE DECÍRSELO (batch 28, 28-jul). `registrarPago` ya recortaba al
+     balance y hasta guardaba el `vuelto` en el renglón — pero en pantalla no salía por ningún
+     lado: él tecleaba $150 sobre una cuenta de $111.50 y la app contestaba "Recibido $111.50"
+     sin mencionar los $38.50. Si no le da el vuelto, su gaveta cierra con dinero que el libro
+     no conoce y no hay forma de saber de dónde salió. */
+  var vueltoAhora=Math.round(Math.max(0,rec-recibeAhora)*100)/100;
+  if(vueltoAhora>0.005){
+    alert('💵 Te dio $'+rec.toFixed(2)+' y esta cuenta es de $'+(total-(o.abonado||0)).toFixed(2)+'.\n\n'+
+          'DEVUÉLVELE $'+vueltoAhora.toFixed(2)+' de vuelto.\n\n'+
+          'Al taller le entran $'+recibeAhora.toFixed(2)+' — eso es lo que apunto en la caja.');
+  }
   if(recibeAhora>0)registrarPago(o,recibeAhora,o.pago);
   if((o.abonado||0)>=total-0.005){
     o.estado='pagado';o.pagadoFecha=new Date().toISOString();
