@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v28';
+var APP_V='v29';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -3016,8 +3016,11 @@ function roViewHTML(){
     var lineT=(s.ep||0)*(s.qty||1)+laborC+partsC;sub+=lineT;
     return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--gray-100)"><span>'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>';
   }).join('')||'<div style="color:var(--gray-400)">Todavía sin servicios.</div>';
-  var d=RO.descuento||0;var descAmt=RO.descTipo==='$'?Math.min(d,sub):sub*d/100;
-  var ad=sub-descAmt;var ivu=sinCargo(RO)?0:ad*.115;var tot=sinCargo(RO)?0:ad+ivu;
+  // Esta vista tenía su propia matemática y se quedaba fuera de cualquier cosa nueva
+  // (con el precio final acordado enseñaba un total distinto al del estimado). Ahora usa `dineroRO`.
+  var d=RO.descuento||0;
+  var _vm=dineroRO(RO,rate);
+  var descAmt=_vm.descAmt,ivu=_vm.ivu,tot=_vm.total;
   var denConf=(RO.denegados||[]).filter(function(x){return !x.auto||(x.auto&&x.confirmed);});
   var fotoN=(RO.fotos||[]).length;
   var sig1=!!((RO.sigData&&RO.sigData.sig1)||RO.sig1);
@@ -3509,7 +3512,8 @@ function workOrderPDF(){
     if(det.length)doc.text(det.join('  ·  '),18,y);
     doc.setTextColor(0,0,0);doc.setFontSize(9);y+=6;
   });
-  var subT=(RO.auth1?RO.auth1.total:Math.round(woTotal*1.115*100)/100);
+  // El total de la orden de trabajo también tiene que respetar el precio final acordado.
+  var subT=(RO.auth1?RO.auth1.total:dineroRO(RO,woRate).total);
   doc.setDrawColor(11,31,58);doc.line(120,y,196,y);y+=5;
   doc.setFont(undefined,'bold');doc.setFontSize(11);
   doc.text('TOTAL ESTIMADO (con IVU):',120,y,{align:'left'});y+=6;

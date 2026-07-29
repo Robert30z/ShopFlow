@@ -150,6 +150,21 @@ let cola = [];
   num('⭐ Pero la GARANTÍA manda sobre el precio fijado (el cliente paga $0)', bordes.conGarantia, 0);
   num('El ajuste se calcula bien hacia arriba también', bordes.gAjuste, Math.round((200 / 1.115 - 100) * 100) / 100);
 
+
+  // ---------- LAS VISTAS QUE SE QUEDABAN FUERA ----------
+  // La vista previa del asistente y la orden de trabajo tenian su propia matematica.
+  // Con el precio fijado ensenaban un total distinto al del estimado.
+  const vistas = await ev(page, `
+    var o=DB.ordenes[0];
+    RO=JSON.parse(JSON.stringify(o));
+    var m=dineroRO(RO);
+    var wo=null; try{ workOrderPDF(); wo='ok'; }catch(e){ wo='ERR '+e.message; }
+    closeROView&&closeROView();
+    var vista=document.body.innerText;
+    return { total:m.total, wo:wo, tiene140:/140\.00/.test(vista) };`);
+  num('La vista previa del asistente usa el mismo total', vistas.total, 140);
+  yes('La orden de trabajo no revienta con precio fijado', !/^ERR/.test(String(vistas.wo)), vistas.wo);
+
   yes('Sin errores de JavaScript en toda la corrida', errs.length === 0, errs);
 
   console.log('\nPRECIO FINAL ACORDADO — ' + pass + ' pass / ' + fail + ' fail');
