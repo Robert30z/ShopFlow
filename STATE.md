@@ -2,7 +2,58 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-30)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-33)
+
+**Estado: TODO EN VIVO Y VERDE.** SW **v33**, suite **39 archivos / 753 checks / 0 fallos**
+(local Y en vivo), `live == repo`. Working tree limpio y pusheado.
+
+**🆕 BATCH 33 — BOTON "CERRAR EL DIA" (lo pidio EL).** No es un resumen bonito: es un chequeo
+que lo PARA si algo quedo mal, y cada cosa que revisa salio de algo que le paso de verdad.
+**El respaldo** (si no corrio hoy lo dice con las horas — el 26-jul estuvo DOS DIAS sin respaldo y
+la app nunca se lo dijo) · **la caja POR METODO** para contar el bolsillo · **ordenes abiertas con
+su numero** (dinero invisible: no cuentan en ninguna pantalla) · **carros sin entregar** · **lo que
+le deben** · **seguimientos/resenas pendientes** (su hueco #1) · **citas de manana**.
+Solo dice "todo quedo bien" si no hay nada critico. Queda anotado en la bitacora.
+Prueba: `test/cerrar-el-dia.js` (23 checks).
+
+**🆕 BATCHES 31-32 — AUDITORIAS INDEPENDIENTES CON CODEX (idea suya, y valieron).**
+Roberto instalo el plugin de Codex (OpenAI) y lo puso a auditar el codigo que yo acababa de
+escribir. **Encontro 9 defectos reales que a mi se me fueron**, auditando yo mismo toda la noche.
+Los de dinero (batch 31):
+1. 🐛 **Re-generar el PDF le cambiaba el dinero al cliente.** `reExportPDF` copiaba los campos
+   A MANO y se le olvidaban `garantia`, `cortesia`, `descTipo`, `totalManual`: **una orden por
+   garantia se reimprimia cobrando $111.50 en vez de $0.00**, y un descuento de $10 pasaba a 10%.
+   Ahora copia la orden COMPLETA.
+2. 🐛 **Reabrir una orden pagada y subirle el precio inventaba un cobro** ($111.50 -> $223
+   aparecia cobrada $223). Ahora pregunta con los numeros; y si el total BAJA, registra devolucion.
+3. 🐛 **El merge rompia "abonado = suma de pagos"** (`Math.max` resucitaba dinero devuelto).
+4. 🐛 **Borrar una orden cobrada** se llevaba la caja del dia sin avisar.
+5. 🐛 **El descuento porcentual no tenia tope** (200% => total de -$111.50).
+Los de datos (batch 32):
+6. 🚨 **DISCO CORRUPTO = LA APP ARRANCABA VACIA.** Si `JSON.parse(sf_v1)` fallaba, el catch
+   normalizaba un DB vacio y seguia como taller nuevo; el primer guardado consolidaba la perdida y
+   el guard no protestaba porque su censo tambien estaba vacio. **Es la forma exacta del desastre
+   del 26-jul.** Ahora: el texto danado se guarda aparte, `saveDB` RECHAZA escribir, y le dice que
+   restaure.
+7. 🚨 **Foto fantasma en modo privado:** `photoPut().catch(()=>{})` se tragaba el error, la
+   orden guardaba la referencia y los bytes nunca existian. Ahora avisa y lo anota.
+Prueba: `test/hallazgos-codex.js` (24 checks).
+💡 **LECCION:** mis pruebas heredaron mi punto ciego — `precio-final.js` probaba `exportPDF()`
+directo y **nunca `reExportPDF()`, que es el boton que el toca**. Una segunda opinion independiente
+encuentra lo que uno no puede ver de su propio trabajo. **Vale la pena correr Codex en cada batch.**
+
+⏭ **PENDIENTES DE LA AUDITORIA DE CODEX (verificados como reales, todavia SIN arreglar):**
+- Dos equipos sin sincronizar pueden crear **el mismo numero de RO** y el merge se come uno de los
+  dos expedientes (ids correlativos usados como identidad).
+- `syncPush` hace **escritura ciega** sin control de version: una orden creada en un equipo puede
+  desaparecer de la nube si el otro escribe despues.
+- **Restaurar de la papelera** puede deshacerse si llega un pull con la papelera vieja.
+- Una **firma se puede sustituir** sin romper el sello (`fpFactura` no incluye `sigData`).
+- La **purga borra las fotos ANTES** de confirmar que el guardado funciono.
+- La **bitacora "append-only" se poda** a los 4,000 eventos sin avisar.
+- **Texto del cliente se concatena crudo en `innerHTML`** (nombre con `<img onerror=...>` ejecuta).
+
+## 🚦 (historico) cierre del 2026-07-29 (batches 25-30)
 
 **Estado: TODO EN VIVO Y VERDE.** SW **v30**, suite **37 archivos / 706 checks / 0 fallos**
 (local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
@@ -150,7 +201,7 @@ que le pregunta lo MISMO a tres pantallas e **inyecta el estado ya danado en dis
 la reparacion tras recargar.
 
 **LO QUE LE TOCA A ROBERTO — sin cambios, sigue igual que el cierre anterior** (ver la lista de
-abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v30)**, **rotar
+abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v33)**, **rotar
 el PAT de Supabase** y sacar la API key de Anthropic.
 
 **QUEDA EXPUESTO (nuevo de estos batches):**
