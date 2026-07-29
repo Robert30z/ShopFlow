@@ -2,10 +2,37 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 25-26)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 25-27)
 
-**Estado: TODO EN VIVO Y VERDE.** SW **v25**, suite **31 archivos / 583 checks / 0 fallos**
+**Estado: TODO EN VIVO Y VERDE.** SW **v26**, suite **34 archivos / 651 checks / 0 fallos**
 (local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
+
+**🆕 BATCH 27 — AVISO DE GARANTIA (se lo pidio EL) + 3 bugs mas.**
+El aviso, en los dos momentos que sirven: **en el home** las que vencen en ≤60 dias con boton de
+WhatsApp (mensaje de SERVICIO, no de alarma — no le siembra al cliente que la pieza va a fallar) ·
+**al escribir el nombre en una orden nueva**, "este cliente tiene N piezas EN GARANTIA" con pieza,
+carro, hasta cuando, orden e invoice (**este es el que ahorra plata**) · **seccion de Garantias en
+la ficha del cliente** (vigentes arriba, vencidas abajo en gris — las vencidas explican por que
+esta vez si se cobra).
+Los 3 bugs, todos de la misma familia ("se descuenta en un camino y no se devuelve en el opuesto"):
+1. 🐛 **Borrar una orden NO devolvia las piezas al estante.** Hermano mayor del bug del 27-jul.
+   Orden al cliente equivocado, 4 bujias (10→6), la borras, y el estante se queda en 6 para siempre
+   aunque las bujias nunca salieron de la gaveta. `deleteRO` devuelve, `restaurarDePapelera` vuelve
+   a descontar, las dos anotadas en la bitacora.
+2. 🐛 **Lo mismo en el CATALOGO** (Menu → servicio → Piezas): borrar no devolvia y **editar la
+   cantidad no ajustaba nada** (de 1 a 3 descontaba 1 solo). Ahora los dos caminos usan
+   `ajustarInventario`, una sola definicion.
+3. 🐛 **El dialogo de cobro pedia el TOTAL cuando ya habia un abono.** Orden de $390.25 con $223
+   abonados decia *"Deja como esta si pago todo ($390.25)"*. La caja NO se rompia (`recibeAhora`
+   topa en el balance) pero **le habria cobrado $223 de mas a la clienta en la puerta**. Ahora los
+   prompts ensenan "Ya abono / DEBE", proponen el BALANCE, y el aviso final dice lo que entro AHORA
+   por ese metodo (decir "$390.25 por Cash" descuadra el cierre de caja).
+Pruebas nuevas: `test/garantia-avisa.js` (22), `test/papelera-inventario.js` (17),
+`test/pago-y-mas-trabajo.js` (29 — **el cliente paga y despues aprueba mas trabajo**, camino que
+ningun test habia corrido; de ahi salio el bug 3).
+⚠️ **2 de los 3 "fallos" iniciales de esa prueba eran de la PRUEBA, no de la app** (usaba un camino
+que la interfaz no ofrece, y el guard bloqueo correctamente una manipulacion de factura sellada).
+Separar siempre fallo-de-prueba de fallo-de-app antes de tocar codigo.
 
 **🆕 BATCH 26 — GARANTIA (se lo pregunto EL, con una clienta real de hoy).** Le instalo una
 bateria con **5 anos de garantia del fabricante pero A TRAVES DE EL** (el la compro y la revendio).
@@ -46,15 +73,15 @@ que le pregunta lo MISMO a tres pantallas e **inyecta el estado ya danado en dis
 la reparacion tras recargar.
 
 **LO QUE LE TOCA A ROBERTO — sin cambios, sigue igual que el cierre anterior** (ver la lista de
-abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v25)**, **rotar
+abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v26)**, **rotar
 el PAT de Supabase** y sacar la API key de Anthropic.
 
 **QUEDA EXPUESTO (nuevo de estos batches):**
 - La fusion de fichas repetidas **se deshace si la nube trae la ficha borrada** (`mergeDB` conserva
   lo que solo existe de un lado, igual que la papelera): la proxima carga la vuelve a tragar, asi
   que el nunca ve dos, pero la fila fantasma puede seguir viajando entre equipos.
-- La garantia de la pieza **no avisa sola** cuando esta por vencer ni cuando un cliente vuelve con
-  una pieza aun cubierta — hay que buscarla. Es el siguiente paso natural.
+- ✅ RESUELTO en el batch 27: la garantia **ya avisa sola** (home + orden nueva + ficha del cliente).
+- El aviso de garantia **vive dentro de la app**: si no la abre, no lo ve. No hay push ni correo.
 - El SQL de aprobaciones **sigue sin correrse contra la base real** (falta el PAT).
 
 ## 🚦 (historico) cierre del 2026-07-28 (batches 18-24)
@@ -180,7 +207,7 @@ desde `test/`. Contra el sitio en vivo: `SHOPFLOW_URL="https://robert30z.github.
 La mas completa: `node orden-completa.js` (43 checks, la orden de punta a punta).
 La de la caja: `node caja-cuadra.js` (16 checks, que las dos pantallas de cobro digan lo mismo).
 
-## Last updated: 2026-07-28 (batches 25-26: el cliente que vuelve + garantia de piezas y ordenes)
+## Last updated: 2026-07-28 (batches 25-27: el cliente que vuelve + garantia + aviso de garantia + 3 bugs de inventario/cobro)
 ## version visible, la nube ya no pisa lo fresco, respaldo verificado con orden real)
 
 ## 2026-07-28 (batch 20): EL AI PASA A CLAUDE OPUS 5 (SW v19)
