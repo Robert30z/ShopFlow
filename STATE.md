@@ -2,7 +2,32 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-28 (batches 25-27)
+## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-28)
+
+**Estado: TODO EN VIVO Y VERDE.** SW **v27**, suite **35 archivos / 668 checks / 0 fallos**
+(local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
+
+**🆕 BATCH 28 — LA CAJA SE DESCUADRABA CALLADA (2 bugs, de correr los EXTREMOS del dinero).**
+1. 🐛 **Ya cobrada y despues sin cargo.** Pasa de verdad: cobras, y despues te enteras de que la
+   pieza estaba en garantia. El total bajaba a $0 pero los $223 se quedaban en el libro de pagos
+   ⇒ *"Cierre de hoy: Vendido $0.00 · Cobrado $223.00"*. Ninguna pantalla mentia por su cuenta y
+   aun asi el dia no cuadraba — y ese dinero es del cliente. `conciliarSinCargo` avisa y registra
+   una **DEVOLUCION** (renglon negativo): el cobro no se borra, se le pone su contrapartida.
+2. 🐛 **Le pagan de mas y la app se lo tragaba.** `registrarPago` ya recortaba al balance y hasta
+   guardaba el `vuelto`, pero **en pantalla no salia**: tecleabas $150 sobre $111.50 y contestaba
+   "Recibido $111.50" sin mencionar los $38.50. Ahora: *"DEVUELVELE $38.50 de vuelto"*.
+✅ Verificado sin bugs: una orden de 7 renglones con centavos y labor fraccionada cuadra en las 3
+superficies (la suma de las lineas ES el subtotal del link del cliente, y +IVU es el total).
+Prueba: `test/dinero-extremos.js` (17 checks).
+
+**⏭ PEDIDO Y PENDIENTE (Roberto, 29-jul):** *"¿hay alguna manera de editar los precios finales?
+si ya le di precio al cliente me gustaria poner el precio exacto que ya le di"*. Diseno pensado:
+campo **"Precio final acordado (todo incluido)"** que fija `o.total`, y la diferencia sale como un
+renglon visible **"Ajuste acordado con el cliente"** — asi la factura sigue cuadrando renglon por
+renglon (si no, la suma de las lineas deja de dar el subtotal y se rompe lo que se acaba de
+verificar). Tocar: `calcEst`, `recalcROTotal`, PDF, pagina del cliente, CSV.
+
+## 🚦 (historico) cierre del 2026-07-28 (batches 25-27)
 
 **Estado: TODO EN VIVO Y VERDE.** SW **v26**, suite **34 archivos / 651 checks / 0 fallos**
 (local Y contra el sitio en vivo), `live == repo` byte a byte. Working tree limpio y pusheado.
@@ -73,7 +98,7 @@ que le pregunta lo MISMO a tres pantallas e **inyecta el estado ya danado en dis
 la reparacion tras recargar.
 
 **LO QUE LE TOCA A ROBERTO — sin cambios, sigue igual que el cierre anterior** (ver la lista de
-abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v26)**, **rotar
+abajo): pegar `supabase/aprobaciones.sql`, recargar iPad+iPhone **2 veces (ahora a v27)**, **rotar
 el PAT de Supabase** y sacar la API key de Anthropic.
 
 **QUEDA EXPUESTO (nuevo de estos batches):**
