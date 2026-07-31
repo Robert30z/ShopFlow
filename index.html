@@ -3704,7 +3704,9 @@ function waListo(roId,preguntar){
   bita('aviso-listo',roId,'se le avisó al cliente que el carro está listo');
   saveDB();
 }
-function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());inp.value='';saveDB();renderGarage();}
+// Mismo bug que en saveCita (31-jul): el `inp.value=''` iba antes de `saveDB()`, así que si el
+// guardado se rechazaba la nota del garage se perdía escrita y borrada a la vez. Ver saveCita.
+function addGL(id){var inp=document.getElementById('gl-'+id);if(!inp||!inp.value.trim())return;var c=DB.garage.find(function(x){return x.id===id;});if(!c)return;c.log=c.log||[];c.log.push(new Date().toLocaleTimeString('es-PR',{hour:'2-digit',minute:'2-digit'})+' — '+inp.value.trim());if(!saveDB())return;inp.value='';renderGarage();}
 
 /* Texto por el que se puede encontrar una orden. Las PIEZAS entran aquí a propósito: sin esto,
    dentro de 2 años un cliente vuelve con la batería mala y buscar su # de invoice no daba NADA —
@@ -4010,17 +4012,21 @@ function delG(id){
 }
 function saveG(){var d=document.getElementById('gd').value;var m=parseFloat(document.getElementById('gm').value);if(!d||isNaN(m)||m<=0){alert('Completa descripción y monto.');return;}
   var f=document.getElementById('gf').value||localDateStr();
-  if(_gastoEdit){
-    var ex=(DB.gastos||[]).find(function(x){return x.id===_gastoEdit;});
+  var eraEdit=_gastoEdit;
+  if(eraEdit){
+    var ex=(DB.gastos||[]).find(function(x){return x.id===eraEdit;});
     if(!ex){alert('Ese gasto ya no existe.');cancelEditG();return;}
     var antes=ex.monto;
     ex.desc=d;ex.cat=document.getElementById('gc').value;ex.monto=m;ex.fecha=f;ex.editado=new Date().toISOString();
-    bita('gasto-editado',_gastoEdit,d+': $'+(antes||0).toFixed(2)+' -> $'+m.toFixed(2));
-    _gastoEdit=null;try{localStorage.removeItem('sf_gasto_edit');}catch(e){}
+    bita('gasto-editado',eraEdit,d+': $'+(antes||0).toFixed(2)+' -> $'+m.toFixed(2));
   }else{
     DB.gastos.push({id:'G-'+Date.now(),desc:d,cat:document.getElementById('gc').value,monto:m,fecha:f});
   }
-  clearFields(['gd','gm','gf']);saveDB();renderGas();}
+  // Mismo bug que en saveCita (31-jul): se vaciaba el formulario antes de saber si el guardado
+  // pasó, y con el guard trancado el gasto se perdía junto con lo tecleado. Ver saveCita.
+  if(!saveDB())return;   // sin repintar: renderGas() reconstruye el formulario y borraría lo tecleado
+  if(eraEdit){_gastoEdit=null;try{localStorage.removeItem('sf_gasto_edit');}catch(e){}}
+  clearFields(['gd','gm','gf']);renderGas();}
 
 
 
@@ -5779,23 +5785,41 @@ function saveCita(){
     vehiculo:(document.getElementById('ct-v')||{value:''}).value.trim(),
     servicio:(document.getElementById('ct-s')||{value:''}).value.trim(),
     direccion:(document.getElementById('ct-d')||{value:''}).value.trim()};
-  if(_citaEdit){
+  var eraEdit=_citaEdit;
+  if(eraEdit){
     // Editar corrige un error de tipeo: NO crea una cita nueva, y conserva el estado
     // (completada / no llegó) y la hora en que se agendó originalmente.
-    var ex=DB.citas.find(function(x){return x.id===_citaEdit;});
+    var ex=DB.citas.find(function(x){return x.id===eraEdit;});
     if(!ex){alert('Esa cita ya no existe.');cancelEditCita();return;}
     Object.keys(campos).forEach(function(k){ex[k]=campos[k];});
     ex.editado=new Date().toISOString();
-    _citaEdit=null;try{localStorage.removeItem('sf_cita_edit');}catch(e){}
   }else{
     campos.id='CITA-'+Date.now();campos.estado='agendada';campos.creado=new Date().toISOString();
     DB.citas.push(campos);
   }
-  // La cita ya está en DB: el borrador de estos campos cumplió y se retira. La fecha y la
-  // hora van incluidas a propósito — si se quedaran guardadas, mañana el formulario abriría
-  // con la fecha de la cita vieja en vez de hoy y se agendaría en el día equivocado.
+  /* 🐛 ARREGLADO 31-jul-2026 — EL SEGUNDO GOLPE DE LO QUE LE PASÓ A ROBERTO.
+     Antes esto era: clearFields(...); saveDB(); renderCitas();
+     O sea que el formulario se vaciaba ANTES de saber si el guardado funcionó, y el resultado
+     de `saveDB()` ni se miraba. Cuando el guard rechazaba (su caso: RO-3), `saveDB` hace
+     `revertirAlUltimoBueno()` — que recarga el DB del disco y borra la cita de la memoria — y
+     devuelve false. Resultado: la cita NO quedó guardada Y lo que él acababa de teclear ya
+     estaba borrado de la pantalla. Perdía cliente, fecha, hora, vehículo, servicio y dirección
+     de un golpe, sin manera de recuperarlo.
+     REGLA: no se destruye nada de lo que el usuario escribió hasta que el guardado esté
+     confirmado. Y `_citaEdit` tampoco se suelta antes: si se soltara y el guardado fallara, al
+     reintentar se crearía una cita DUPLICADA en vez de corregir la vieja.
+     Ojo con el camino de fallo: NO se vuelve a pintar. `renderCitas()` reconstruye el formulario
+     con innerHTML y eso borraría lo tecleado igual que antes — la misma trampa que ya estaba
+     documentada para `rerenderCurrent()`. Como el guardado se rechazó y `saveDB` ya devolvió el
+     DB a su último estado bueno, lo que hay en pantalla sigue siendo correcto: no hay nada que
+     repintar, y lo que el usuario escribió se queda donde está para que pueda reintentar. */
+  if(!saveDB())return;
+  if(eraEdit){_citaEdit=null;try{localStorage.removeItem('sf_cita_edit');}catch(e){}}
+  // Ya está en disco: el borrador de estos campos cumplió y se retira. La fecha y la hora van
+  // incluidas a propósito — si se quedaran guardadas, mañana el formulario abriría con la fecha
+  // de la cita vieja en vez de hoy y se agendaría en el día equivocado.
   clearFields(['ct-n','ct-t','ct-v','ct-s','ct-d','ct-f','ct-h']);
-  saveDB();renderCitas();
+  renderCitas();
 }
 // ---- Editar una cita ya agendada (antes solo se podía borrar y rehacer, y eso perdía
 // el historial y el estado). Corregir un tipeo no debe costar una cita nueva. ----
