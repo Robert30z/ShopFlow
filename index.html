@@ -917,7 +917,7 @@ var COLS_SYNC=['clientes','citas','garage','gastos','inventario','tecnicos','ase
                'svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS'];
 function censo(db){
   db=db||DB;
-  var ids={},fp={},firmas=0,fotosAct=0;
+  var ids={},fp={},firmas=0,fotosAct=0,rotas={};
   function contar(o,activa){
     if(!o||!o.id)return;
     var nf=contarFotos(o);
@@ -925,6 +925,9 @@ function censo(db){
     try{fp[o.id]=hash32(JSON.stringify(o));}catch(e){}
     if(activa)fotosAct+=nf;
     if(o.sigData&&(o.sigData.sig1||o.sigData.sig2||o.sigData.sigDen))firmas++;
+    // Qué facturas selladas YA venían sin cuadrar. El guard compara contra esto para no
+    // culpar a este guardado de un daño que ya estaba ahí desde antes. Ver regla (4).
+    try{if(facturaSellada(o)&&!facturaIntacta(o))rotas[o.id]=1;}catch(e){}
   }
   (db.ordenes||[]).forEach(function(o){contar(o,true);});
   (db.papelera||[]).forEach(function(o){contar(o,false);});
@@ -937,7 +940,7 @@ function censo(db){
       try{fpc[k+':'+it.id]=hash32(JSON.stringify(it));}catch(e){}
     });
   });
-  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,fp:fp,fpc:fpc,
+  return {n:(db.ordenes||[]).length,fotos:fotosAct,firmas:firmas,ids:ids,fp:fp,fpc:fpc,rotas:rotas,
           pap:(db.papelera||[]).length,ts:Date.now()};
 }
 /* Marca con la hora cuál orden cambió de verdad, comparando su huella con la del último estado
@@ -984,10 +987,24 @@ function verificaIntegridad(prev,next){
   if(sinFotos.length)return 'se perderían fotos en '+sinFotos.slice(0,4).join(', ');
   // (3) las firmas de clientes son el respaldo legal: no pueden bajar nunca
   if(c.firmas<prev.firmas)return 'se perdería la firma de un cliente ('+prev.firmas+'→'+c.firmas+')';
-  // (4) una factura CERRADA no se puede alterar sin reabrirla a propósito
+  /* (4) una factura CERRADA no se puede alterar sin reabrirla a propósito.
+     🐛 ARREGLADO 31-jul-2026 — LO QUE LE PASÓ A ROBERTO: esta regla miraba SOLO el estado
+     absoluto de `next`, no la diferencia con `prev` como hacen las reglas (1), (2) y (3). Una
+     factura que ya venía sin cuadrar desde antes (RO-3, seguramente por el lío de sincronización
+     del 28-jul) hacía que el guard devolviera violación en CADA guardado, tocara lo que tocara.
+     Resultado: no se podía **agendar una cita** — que no toca ninguna orden — porque el guard se
+     quejaba de RO-3. La app quedaba trancada entera por un daño viejo en otra pantalla, y sin
+     salida: es el mismo patrón de "aviso sin salida" que ya está documentado arriba.
+     La regla correcta es la misma de las otras tres: este guardado solo se bloquea si ES ÉL el
+     que rompe la factura. Si ya estaba rota antes, se deja pasar y se avisa aparte — el daño
+     viejo se repara con "Reabrir para corregir", no bloqueando el trabajo del día. */
+  var yaRotas=(prev&&prev.rotas)||{};
   var alteradas=[];
   (next.ordenes||[]).forEach(function(o){
-    if(!facturaIntacta(o))alteradas.push(o.id);
+    if(!o||!o.id)return;
+    if(facturaIntacta(o))return;
+    if(yaRotas[o.id])return;              // ya venía así: no es culpa de este guardado
+    alteradas.push(o.id);
   });
   if(alteradas.length)return 'la factura CERRADA '+alteradas.slice(0,3).join(', ')+' se estaría cambiando sin reabrirla (usa “Reabrir para corregir”)';
   return null;
