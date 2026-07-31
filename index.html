@@ -3012,6 +3012,16 @@ function dineroRO(o,rate){
   var sub=r2(svc+labor+piezas);
   var out={svc:r2(svc),labor:r2(labor),piezas:r2(piezas),sub:sub,
            descAmt:0,ajuste:0,base:sub,ivu:0,total:0,manual:false};
+  /* 🐛 ARREGLADO 31-jul-2026 (inspección, eje 2: que los números CUADREN entre superficies).
+     `dineroRO` no miraba `o.sinIVU`, pero el reporte del contable (`ivuMes`) y el CSV sí. Un
+     ingreso manual de $200 marcado "NO incluye IVU" salía así en el detalle, el PDF y el link
+     del cliente:  subtotal $200 · IVU $23.00 · total $200.  **Eso no suma**, y le enseña al
+     cliente un IVU de $23 que Roberto nunca le cobró. El total siempre estuvo bien (sale de
+     `o.total`), y ventas y CSV también: lo torcido era la LÍNEA del IVU, en las tres superficies
+     que se arman con `dineroRO` — `openRODetail`, `exportPDF` y `shareStatus`.
+     Poner un impuesto que no se cobró en un documento que ve el cliente es justo lo que no puede
+     pasar en un negocio sin LLC todavía. */
+  var conIVU=!o.sinIVU;
   // 1) Sin cargo (cortesía o garantía) manda sobre todo lo demás: el cliente paga $0.
   if(sinCargo(o)){ out.base=sub;out.ivu=0;out.total=0;return out; }
   // 2) Precio final acordado: el total es el que él dio, y el resto se deriva de ahí.
@@ -3019,7 +3029,8 @@ function dineroRO(o,rate){
   if(o.totalManual!==''&&o.totalManual!=null&&isFinite(man)&&man>0){
     out.manual=true;
     out.total=r2(man);
-    out.base=r2(out.total/1.115);
+    // Si el ingreso no lleva IVU, el precio acordado ES la base: no hay nada que desglosar.
+    out.base=conIVU?r2(out.total/1.115):out.total;
     out.ivu=r2(out.total-out.base);      // así base + IVU da EXACTO el precio que él prometió
     out.ajuste=r2(out.base-sub);         // lo que se ajustó (puede ser negativo o positivo)
     return out;
@@ -3030,7 +3041,7 @@ function dineroRO(o,rate){
   // teclear 200 en vez de 20 daba un total NEGATIVO (-$111.50 sobre $100). Encontrado por Codex.
   out.descAmt=r2(Math.min(o.descTipo==='$'?d:sub*d/100, sub));
   out.base=r2(sub-out.descAmt);
-  out.ivu=r2(out.base*0.115);
+  out.ivu=conIVU?r2(out.base*0.115):0;
   out.total=r2(out.base+out.ivu);
   return out;
 }
