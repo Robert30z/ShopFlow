@@ -101,6 +101,52 @@ const is = (n, got, exp) => (got === exp ? ok(n, got) : no(n, { got, exp }));
   is('precio acordado SIN IVU: el precio ES la base', r.manualSin.base, 140);
   is('precio acordado SIN IVU: sin IVU inventado', r.manualSin.ivu, 0);
 
+  // ---- 2da parte: el espejo del mismo bug, el que SÍ movía el total ----
+  // Un ingreso manual que SÍ incluye IVU guardaba el monto en `ep`, y `dineroRO` trata `ep` como
+  // precio ANTES de impuesto: $200 se convertían en $223 en pantalla, PDF y link del cliente,
+  // mientras el CSV y las ventas decían $200. Se arregló poniéndole `totalManual`, y los que ya
+  // estaban guardados los cura `repararIngresosManuales` al arrancar.
+  const r2 = await page.evaluate(() => {
+    const out = {};
+    const mk = (id, m, sinIVU, conTotalManual) => {
+      const o = { id: id, fecha: new Date().toISOString(), cliente: 'X', tel: '', vehiculo: {},
+        servicios: [{ id: 'm', n: 'Trabajito', p: m, qty: 1, ep: m }], total: m, pago: 'Cash',
+        estado: 'pagado', insp: {}, denegados: [], manual: true, abonado: m, sinIVU: !!sinIVU };
+      if (conTotalManual) o.totalManual = m;
+      return o;
+    };
+    const cuadra = o => { const d = dineroRO(o); const t = o.total || 0;
+      const sub = o.sinIVU ? t : t / 1.115;
+      return { pantalla: { base: d.base, ivu: d.ivu, total: d.total },
+               csv: { sub: +sub.toFixed(2), ivu: +(t - sub).toFixed(2), total: t },
+               cuadra: d.total === t }; };
+
+    out.conIVU = cuadra(mk('ING-C', 200, false, true));
+    out.sinIVU = cuadra(mk('ING-S', 200, true, true));
+
+    // la migración: un ingreso viejo, guardado SIN totalManual
+    const viejo = mk('ING-VIEJO', 200, false, false);
+    const db = { ordenes: [viejo, { id: 'RO-NORMAL', cliente: 'Taller', servicios: [{ ep: 100 }], total: 111.5 }] };
+    out.reparados = repararIngresosManuales(db);
+    out.viejoAhora = cuadra(db.ordenes[0]);
+    out.noTocaOrdenNormal = db.ordenes[1].totalManual === undefined;
+    out.idempotente = repararIngresosManuales(db);   // correrla otra vez no cambia nada
+    return out;
+  });
+
+  console.log('-- el espejo: ingreso manual que SÍ incluye IVU --');
+  is('🐛 la pantalla ya no infla el total a $223', r2.conIVU.pantalla.total, 200);
+  is('...y desglosa la base hacia atrás como el CSV', r2.conIVU.pantalla.base, r2.conIVU.csv.sub);
+  is('...con el mismo IVU que el CSV', r2.conIVU.pantalla.ivu, r2.conIVU.csv.ivu);
+  is('pantalla y CSV cuadran', r2.conIVU.cuadra, true);
+  is('el de SIN IVU también cuadra', r2.sinIVU.cuadra, true);
+
+  console.log('-- reparar el daño viejo, no solo la causa --');
+  is('cura el ingreso manual que ya estaba guardado', r2.reparados, 1);
+  is('...y después cuadra con el CSV', r2.viejoAhora.cuadra, true);
+  is('no le mete mano a una orden normal de taller', r2.noTocaOrdenNormal, true);
+  is('correrla dos veces no cambia nada (idempotente)', r2.idempotente, 0);
+
   is('sin errores de JavaScript', errs.length, 0, errs);
 
   await browser.close();
