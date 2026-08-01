@@ -9,7 +9,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- viewport-fit=cover: sin esto `env(safe-area-inset-bottom)` vale siempre 0 y la ultima fila de
+     cada pantalla se queda debajo de la barra del home en el iPhone. Ver `.pg` mas abajo. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ShopFlow">
@@ -37,7 +39,17 @@ html.bigtext{zoom:1.15}
 .tgl:checked::after{left:24px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;font-size:14px;color:var(--gray-900);background:var(--gray-100);overscroll-behavior:none}
-.pg{display:none;height:100vh;overflow:hidden;flex-direction:column;position:relative}
+/* 🐛 ARREGLADO 31-jul-2026 — "la pagina no me deja bajar hasta abajo completamente" (Roberto).
+   Era `height:100vh` a secas. En iOS, `100vh` NO es lo que se ve: es la altura de la pantalla
+   COMO SI la barra de direcciones y la de abajo estuvieran escondidas. O sea que `.pg` quedaba
+   mas alta que el area visible, y como lleva `overflow:hidden` y el body no scrollea
+   (`height:100%` + `overscroll-behavior:none`), el final del contenedor que si scrollea
+   (`flex:1;overflow-y:auto`) se quedaba POR DEBAJO de la pantalla y no habia manera de llegar.
+   Se perdian los ultimos renglones de cada lista y los botones del final de los formularios.
+   `100dvh` es la altura visible DE VERDAD y se ajusta sola cuando la barra aparece o se va.
+   Se deja `100vh` primero como respaldo para cualquier navegador viejo que no entienda `dvh`.
+   El padding de abajo es para que la ultima fila no quede tapada por la barra del home. */
+.pg{display:none;height:100vh;height:100dvh;overflow:hidden;flex-direction:column;position:relative;padding-bottom:env(safe-area-inset-bottom,0px)}
 .pg.v{display:flex}
 .tb{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--navy);position:sticky;top:0;z-index:100;flex-shrink:0;width:100%}
 .sf-icon{width:30px;height:30px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
