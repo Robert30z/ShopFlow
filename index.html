@@ -51,7 +51,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text'
    El padding de abajo es para que la ultima fila no quede tapada por la barra del home. */
 .pg{display:none;height:100vh;height:100dvh;overflow:hidden;flex-direction:column;position:relative;padding-bottom:env(safe-area-inset-bottom,0px)}
 .pg.v{display:flex}
-.tb{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--navy);position:sticky;top:0;z-index:100;flex-shrink:0;width:100%}
+.tb{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--navy);position:sticky;top:0;z-index:100;flex-shrink:0;width:100%;flex-wrap:wrap;row-gap:8px}
 .sf-icon{width:30px;height:30px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sf-wm{font-size:17px;font-weight:700;letter-spacing:-.03em;color:#fff}
 .sf-wm span{color:var(--blue)}
@@ -182,11 +182,11 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
     <div id="home-protect" style="display:none"></div>
     <div id="home-abiertas" style="display:none"></div>
     <div class="sec">
-      <div class="sg sg4">
-        <div class="sc"><div class="sl">Hoy</div><div class="sv g" id="h-hoy">$0</div></div>
-        <div class="sc"><div class="sl">Taller</div><div class="sv a" id="h-taller">0</div></div>
-        <div class="sc"><div class="sl">x Cobrar</div><div class="sv r" id="h-cobrar">$0</div></div>
-        <div class="sc"><div class="sl">Órdenes</div><div class="sv n" id="h-ords">0</div></div>
+      <div class="sg">
+        <div class="sc" onclick="go('historial')" style="cursor:pointer"><div class="sl">Hoy</div><div class="sv g" id="h-hoy">$0</div></div>
+        <div class="sc" onclick="go('garage')" style="cursor:pointer"><div class="sl">Taller</div><div class="sv a" id="h-taller">0</div></div>
+        <div class="sc" onclick="go('ordenes')" style="cursor:pointer"><div class="sl">x Cobrar</div><div class="sv r" id="h-cobrar">$0</div></div>
+        <div class="sc" onclick="go('ordenes')" style="cursor:pointer"><div class="sl">Ordenes</div><div class="sv n" id="h-ords">0</div></div>
       </div>
       <div class="st">Acciones rápidas</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -504,7 +504,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v38';
+var APP_V='v39';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -2305,6 +2305,28 @@ function go(p){
   // los campos vuelven llenos al entrar a la página.
   restoreFields();
 }
+
+// ===== EL HUECO DE LA BARRA DE ABAJO CRECE CON LA BARRA =====
+// Con las letras grandes del sistema (Android/iOS: Accesibilidad), la barra .act crece porque
+// su texto crece, pero el hueco fijo de .pan (padding-bottom:80px) se queda corto y tapa el
+// final del panel: botones y ultimos campos quedan debajo de ella (bug del 12-ago-2026).
+// Un ResizeObserver mide la barra de verdad y ajusta el padding del panel visible. Funciona a
+// cualquier escala y en cualquier cambio futuro de la barra.
+(function(){
+  var nav=document.getElementById('ro-nav');
+  var wrap=document.getElementById('ro-panes-wrap');
+  if(nav&&wrap&&window.ResizeObserver){
+    new ResizeObserver(function(){
+      var h=nav.offsetHeight;
+      // Barra en 0 = pagina del wizard escondida: no tocar padding, que cada panel
+      // conserve su valor hasta que la barra vuelva a medir de verdad.
+      if(h>0){
+        h+=18;
+        wrap.querySelectorAll('.pan').forEach(function(p){p.style.paddingBottom=h+'px';});
+      }
+    }).observe(nav);
+  }
+})();
 
 // ===== PROTECCIÓN DE DATOS: aviso en el home cuando el trabajo NO está saliendo del equipo =====
 // Nació de un caso real (07-26): 2 días de clientes guardados solo en el iPad porque la sesión de

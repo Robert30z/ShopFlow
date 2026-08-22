@@ -2,9 +2,41 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — 2026-08-12 (batch 34: INSPECCION PRE-COMPRA)
+## 🚦 CONTINUA AQUI — 2026-08-22 (batch 35: FICHAS TOCABLES + LETRAS GRANDES CERRADO)
 
-**NO PUSHEADO TODAVIA. Falta que Roberto lo pruebe en la tablet y de el visto bueno.**
+**EN VIVO (v39).** El batch 34 salio antes hoy como v38 con el visto bueno de Roberto.
+
+**BATCH 35 - dos cosas que Roberto pidio juntas:**
+
+1. **Las fichas del home se tocan y te llevan** ("x cobrar hoy taller... los pueda tocar y me
+   lleven a donde es"): Hoy -> Historial, Taller -> Garage, x Cobrar -> Ordenes, Ordenes ->
+   Ordenes. El grid paso de `sg sg4` (4 columnas) a `sg` (2 columnas, igual que Acciones
+   rapidas): blancos mas grandes para el dedo y la fila deja de cortarse por la derecha con
+   letras grandes. Los valores se actualizan in-place (`textContent` sobre h-hoy/h-taller/
+   h-cobrar/h-ords), asi que los onclick persisten entre renders.
+2. **Bug LETRAS GRANDES CERRADO** (abierto el 12-ago). Causa raiz confirmada: `.pan`
+   reservaba `padding-bottom:80px` fijo pero la barra `.act` crece con el escalado del
+   sistema -> tapaba el final del panel a 1.6x/2x. Arreglo: ResizeObserver mide `#ro-nav`
+   de verdad y ajusta el padding de los paneles del wizard. Endurecido tras revision de
+   Codex: scoped a `#ro-panes-wrap .pan` y guard `h>0` para que la barra escondida no pise
+   nada. Ademas `.tb` gano `flex-wrap:wrap;row-gap:8px`: logo y fecha ya no chocan a texto
+   grande en ninguna de las 12 barras.
+3. De paso hoy: APP_V/CACHE_V desfasados (v33 vs v37) encontrados por version.js y
+   arreglados; un push desde worktree habia partido main en dos -> rebase con resolucion v38.
+
+Prueba: `test/fichas-tocables.js` (7 checks, NUEVO) + `letras-grandes.js` ahora 5/5 verde +
+suite completa **47 archivos / 0 fallos**. Codex reviso el diff: 2 hallazgos verificados,
+1 real (el stomp global del observer) endurecido, 1 seguro (.tb wrap) documentado.
+
+⚠️ **PENDIENTE QUE ROBERTO CONFIRME EN LA TABLET**: que las fichas se sientan bien en 2x2
+(antes eran 4 en fila) y que con SUS letras grandes llegue al final de cada pantalla.
+Si prefiere 4 en fila a tamano normal, se hace auto-fit con umbral.
+
+---
+
+## 🚦 (antes) CONTINUA AQUI — 2026-08-12 (batch 34: INSPECCION PRE-COMPRA)
+
+**(HISTORICO - SALIO EN VIVO COMO v38 EL 2026-08-22.)**
 
 **BATCH 34 — MODO INSPECCION PRE-COMPRA.** Lo pidio el dia que le llego el scanner Launch.
 El DVI estaba hecho para un carro que YA es del cliente: sus terminos hablan de garantia de
