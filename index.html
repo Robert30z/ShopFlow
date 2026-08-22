@@ -504,13 +504,131 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v37';
+var APP_V='v38';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
 var TERMS_VERSION=3,TERMS_DATE='2026-07-03';
 var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: Pit Stop no se responsabiliza de daños ocultos o pre-existentes no visibles en la inspección. Todo daño pre-existente queda documentado.\n\n2. GARANTÍA (30 DÍAS — SOLO PIEZAS SUPLIDAS POR PIT STOP): La mano de obra y las piezas tienen garantía de 30 días o 1,000 millas (lo que ocurra primero) ÚNICAMENTE cuando la pieza fue suplida por Pit Stop. Las piezas suplidas por Pit Stop mantienen además la garantía del fabricante. TRABAJOS CON PIEZAS SUPLIDAS POR EL CLIENTE NO TIENEN GARANTÍA ALGUNA, ni en la pieza ni en la mano de obra: si la pieza del cliente falla, el diagnóstico y el reemplazo se cobran como trabajo nuevo. Tampoco cubre piezas de desgaste normal (frenos, gomas, wipers, bombillas, filtros) ni daños por negligencia, mal uso, accidente o modificaciones posteriores al servicio.\n\n3. SERVICIOS DENEGADOS: Al rechazar servicios recomendados, el cliente exime a Pit Stop de responsabilidad por consecuencias.\n\n4. VEHÍCULOS NO RECLAMADOS: Vehículos no reclamados 24h después de ser contactado el cliente tendrán cargo de $30/día.\n\n5. ESTIMADOS: Aproximados. Si hay condiciones adicionales se notifica antes de proceder.\n\n6. RESPONSABILIDAD: Limitada al costo del servicio realizado.\n\nShopFlow by Pit Stop · Bayamón, Puerto Rico';
+
+/* ============ INSPECCIÓN PRE-COMPRA ============
+   El DVI está hecho para un carro que YA es del cliente y vino a arreglarse. La pre-compra es
+   otro trato: quien paga todavía NO es el dueño, y lo que compra no es una lista de colores
+   sino una decisión. Por eso lleva veredicto, el número para negociar, y términos propios.
+   Los términos de reparación (DISC) no aplican aquí: hablan de garantía de piezas, denegados y
+   vehículos no reclamados, nada de lo cual existe cuando solo se revisó un carro ajeno. */
+var DISC_PC='TÉRMINOS — INSPECCIÓN PRE-COMPRA\n\n1. ALCANCE: Esta es una inspección visual y mecánica del vehículo, en el estado y la fecha en que fue revisado. No incluye desarmar componentes, bajar motor o transmisión, ni pruebas de laboratorio.\n\n2. LO QUE NO CUBRE: No es posible detectar fallas internas u ocultas que no sean visibles ni medibles sin desarmar, ni condiciones que se presenten después de la inspección. Un vehículo puede presentar una falla después de haber sido revisado.\n\n3. NO ES UNA REVISIÓN LEGAL NI DE HISTORIAL: No se verifica título, gravámenes, marbete, deudas, historial de accidentes ni millaje real. Eso se verifica con las agencias correspondientes.\n\n4. LA DECISIÓN ES DEL COMPRADOR: Este reporte es información para que usted decida. La decisión de comprar y el precio que acuerde con el vendedor son suyas.\n\n5. ESTIMADOS: Los precios de lo que el vehículo necesita son aproximados y pueden variar al desarmar o según la disponibilidad de piezas.\n\n6. RESPONSABILIDAD: Limitada al costo de la inspección realizada.\n\n7. Este reporte se emite para el cliente que lo solicitó y refleja el estado del vehículo en la fecha indicada.';
+
+/* Una sola definición del veredicto para las TRES superficies (pantalla, PDF y WhatsApp).
+   Si viven separadas, el PDF dice una cosa y el WhatsApp otra, y el cliente lee las dos. */
+var PC_VER={
+  bueno:{l:'En buenas condiciones para comprar',rgb:[47,93,15],bg:'#e7f4e4',fg:'#2f5d0f',ic:'ti-circle-check'},
+  negociar:{l:'Se puede comprar tomando en cuenta lo que necesita',rgb:[140,88,10],bg:'#fdf3dc',fg:'#8c580a',ic:'ti-alert-triangle'},
+  esperar:{l:'Le recomiendo seguir buscando otra unidad',rgb:[176,32,32],bg:'#fdeaea',fg:'#b02020',ic:'ti-circle-x'}
+};
+function esPreCompra(o){return !!(o&&o.preCompra&&o.preCompra.activo);}
+/* EL NÚMERO QUE EL COMPRADOR SE LLEVA. Mismo filtro de denegados que usa el DVI, para que el
+   total del PDF y el del WhatsApp no puedan discrepar (el bug de dinero del 31-jul fue eso). */
+/* Lo que el vehículo necesita. `pcNecesita` trae TODO lo denegado (incluso sin precio todavía),
+   porque en una pre-compra un trabajo sin cotizar sigue siendo trabajo que el carro necesita y
+   esconderlo le subestima el número al comprador. `pcTotalNecesita` solo suma lo que tiene precio.
+   ⚠️ El precio se pasa por Number(): un respaldo restaurado o un import puede traerlo como texto,
+   y "139"+"220" da "139220" en vez de 359. Es dinero, y es el número por el que le pagan. */
+function pcPrecio(d){var n=Number(d&&d.precio);return isFinite(n)&&n>0?n:0;}
+function pcNecesita(o){
+  return ((o&&o.denegados)||[]).filter(function(d){return (!d.auto||d.confirmed);});
+}
+function pcTotalNecesita(o){
+  return Math.round(pcNecesita(o).reduce(function(t,d){return t+pcPrecio(d);},0)*100)/100;
+}
+/* La tarjeta que convierte una inspección normal en una pre-compra. Vive arriba del paso de
+   inspección porque la decisión de "esto es una pre-compra" se toma ANTES de marcar puntos:
+   si se pregunta al final, se marca la inspección pensando en reparar y no en comprar. */
+function pcCard(){
+  var pc=(RO.preCompra||{});
+  var on=!!pc.activo;
+  var h='<div class="card" style="margin-bottom:12px;border:1.5px solid '+(on?'var(--amber)':'var(--gray-200)')+'">'+
+    '<div class="ch" onclick="togglePreCompra()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">'+
+      '<span><i class="ti ti-shopping-cart-search"></i> Inspección pre-compra</span>'+
+      '<span class="badge '+(on?'ba':'')+'" style="font-size:10px">'+(on?'ACTIVADA':'Activar')+'</span>'+
+    '</div>';
+  if(!on){
+    h+='<div class="cb" style="font-size:11px;color:var(--gray-400)">El carro todavía no es del cliente. Actívala y el reporte sale con veredicto, con el estimado para negociar y con los términos de pre-compra en vez de los de reparación.</div></div>';
+    return h;
+  }
+  h+='<div class="cb">'+
+    '<div class="fl" style="margin-bottom:5px">Veredicto para el comprador</div>'+
+    '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
+  Object.keys(PC_VER).forEach(function(k){
+    var v=PC_VER[k],sel=pc.veredicto===k;
+    h+='<button class="btn full" onclick="setPCVer(\''+k+'\')" style="justify-content:flex-start;text-align:left;font-size:12px;'+
+       (sel?'background:'+v.bg+';border-color:'+v.fg+';color:'+v.fg+';font-weight:700':'')+'">'+
+       '<i class="ti '+v.ic+'"></i> '+v.l+'</button>';
+  });
+  h+='</div>'+
+    '<div class="fr"><div class="fg"><div class="fl">Precio que pide el vendedor</div>'+
+    /* El valor va por Number() antes de entrar al HTML: nunca puede cerrar la comilla del
+       atributo aunque un respaldo restaurado traiga basura en ese campo. */
+    '<input id="pc-pedido" type="number" step="0.01" placeholder="0.00" value="'+(Number(pc.precioPedido)>0?Number(pc.precioPedido):'')+'" oninput="setPCPedido(this.value)"></div></div>'+
+    '<div id="pc-math" style="margin-top:8px"></div>'+
+    '<div class="fr fr1" style="margin-top:8px"><div class="fg"><div class="fl">Nota del veredicto (sale en el reporte)</div>'+
+    /* El valor NO se interpola en el HTML: se asigna por .value en renderPCCard(). Meterlo aquí
+       obligaría a escapar a mano, y una nota con "</textarea>" rompería el paso completo. */
+    '<textarea id="pc-nota" rows="3" placeholder="Ej: El carro está sano de motor y transmisión. Necesita frenos delanteros y dos gomas. Tomando eso en cuenta el precio se puede conversar." oninput="RO.preCompra=RO.preCompra||{};RO.preCompra.nota=this.value"></textarea></div></div>'+
+  '</div></div>';
+  return h;
+}
+/* Los paneles del asistente se construyen UNA vez (buildPane), no hay re-render de paso. Por eso
+   la tarjeta se repinta sola dentro de su propio contenedor y no toca nada más de la pantalla. */
+function renderPCCard(){
+  var w=document.getElementById('pc-wrap');if(!w)return;
+  w.innerHTML=pcCard();
+  var t=document.getElementById('pc-nota');
+  if(t)t.value=((RO.preCompra||{}).nota)||'';
+  pcMath();
+}
+/* La resta que el comprador se lleva al vendedor. Se repinta sola al cambiar el precio pedido
+   o al tocar un denegado, porque es el número por el que están pagando los $80. */
+function pcMath(){
+  var el=document.getElementById('pc-math');if(!el)return;
+  var necesita=pcTotalNecesita(RO);
+  var pedido=parseFloat((RO.preCompra||{}).precioPedido)||0;
+  var h='<div style="background:var(--gray-50);border-radius:var(--r-md);padding:10px 12px;font-size:12px">'+
+    '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Lo que necesita el vehículo</span><b>$'+necesita.toFixed(2)+'</b></div>';
+  if(pedido>0){
+    var sug=Math.round((pedido-necesita)*100)/100;
+    h+='<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Precio que pide el vendedor</span><b>$'+pedido.toFixed(2)+'</b></div>'+
+       /* Tokens, NO hex fijo: el fondo es var(--gray-50), que se VOLTEA en tema oscuro
+          (#F8F9FA claro → #26333F oscuro). Un verde oscuro fijo encima daba 1.65:1, o sea
+          invisible de noche, que es justo cuando él trabaja en el patio. Medido, no a ojo.
+          El caso NEGATIVO no puede usar var(--red): en oscuro da 3.70:1 y no llega a AA. Lleva
+          su PAR INVARIANTE (fondo y texto fijos juntos), que mide 5.90:1 en los dos temas. */
+       '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--gray-200);padding-top:5px;margin-top:5px;'+
+       (sug<0?'background:#fdeaea;color:#b02020;border-radius:6px;padding:5px 7px':'color:var(--green)')+
+       '"><span style="font-weight:700">Precio a conversar</span><b>$'+sug.toFixed(2)+'</b></div>';
+    if(sug<0)h+='<div style="font-size:10px;background:#fdeaea;color:#b02020;border-radius:6px;padding:4px 7px;margin-top:4px">El trabajo que necesita pasa de lo que piden por el vehículo.</div>';
+  }else{
+    h+='<div style="font-size:10px;color:var(--gray-400)">Escribe el precio del vendedor y sale el número para conversar.</div>';
+  }
+  h+='<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Sale de los denegados con precio. Añade ahí lo que el carro necesita.</div></div>';
+  el.innerHTML=h;
+}
+function togglePreCompra(){
+  RO.preCompra=RO.preCompra||{};
+  RO.preCompra.activo=!RO.preCompra.activo;
+  renderPCCard();
+}
+function setPCVer(k){
+  RO.preCompra=RO.preCompra||{};
+  RO.preCompra.veredicto=(RO.preCompra.veredicto===k?'':k);
+  renderPCCard();
+}
+function setPCPedido(v){
+  RO.preCompra=RO.preCompra||{};
+  RO.preCompra.precioPedido=(v===''?'':parseFloat(v)||0);
+  pcMath();
+}
 
 var IZ=[
   {id:'elec',z:'Electrical',items:[{id:'bat',l:'Battery / terminals'},{id:'alt',l:'Alternator'},{id:'star',l:'Starter'},{id:'fus',l:'Fuses'}]},
@@ -2394,7 +2512,7 @@ function buildPane(id){
 
   if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de servicios y precios':'Autorización final (entrega)';var desc=id==='firma1'?'El cliente autoriza los servicios y precios presentados en el estimado, y la inspección/diagnóstico del vehículo.':'El cliente confirma el total final, incluyendo servicios agregados o ajustados durante el trabajo.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
 
-  if(id==='inspeccion'){var h='<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--ink);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"><div id="inx-'+it.id+'" style="display:none;margin-top:5px"><button class="btn sm" style="font-size:10px;padding:4px 8px" onclick="camInsp(\''+it.id+'\')"><i class="ti ti-camera"></i> Foto de esto</button><div id="inf-'+it.id+'" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"></div></div></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
+  if(id==='inspeccion'){var h='<div id="pc-wrap">'+pcCard()+'</div>'+'<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--ink);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"><div id="inx-'+it.id+'" style="display:none;margin-top:5px"><button class="btn sm" style="font-size:10px;padding:4px 8px" onclick="camInsp(\''+it.id+'\')"><i class="ti ti-camera"></i> Foto de esto</button><div id="inf-'+it.id+'" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"></div></div></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
 
   if(id==='servicios')return '<div class="sw"><i class="ti ti-search si"></i><input id="ro-sq" placeholder="Buscar servicio..." oninput="renderROSvcMenu()"></div><div class="cat-scroll" id="ro-sc"></div><div id="ro-sl"></div><button class="btn sm full" onclick="addManualSvc()" style="margin:8px 0;justify-content:center"><i class="ti ti-plus"></i> Servicio manual (nombre y precio libre)</button><div class="dv"></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="st" style="margin:0">Orden</div><button class="btn sm" onclick="RO.servicios=[];renderROSO()"><i class="ti ti-trash"></i></button></div><div id="ro-so"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="ro-sub" style="font-weight:700;font-size:14px;color:var(--red)">$0.00</span></div><div style="margin-top:10px"><div class="fl" style="margin-bottom:4px">Notas (salen en el recibo y la orden de trabajo)</div><textarea id="tech-n" placeholder="Ej: Cliente trajo su alternador — sin garantía" oninput="RO.techNotes=this.value"></textarea></div>';
 
@@ -2420,6 +2538,9 @@ function gotoStep(n){
   if(STEPS[n]&&STEPS[n].id==='fotos'){setTimeout(function(){renderPhotosGrid();},80);}
 
   if(n===3)buildEstSum();
+  /* La pre-compra se repinta al ENTRAR al paso: el total para negociar sale de los denegados,
+     que se escriben en el paso siguiente. Sin esto, el comprador ve un número viejo. */
+  if(STEPS[n]&&STEPS[n].id==='inspeccion')renderPCCard();
   if(n===6){renderAutoRecs();renderDenList();}
   if(n===8){var cn=document.getElementById('cier-next');if(cn)cn.value=RO.nextDate;}
   saveDraft();
@@ -4789,10 +4910,20 @@ function openRODetail(roId){
     if(o.tel)html+='<button class="btn full" onclick="waCobro(\''+o.id+'\')" style="margin-bottom:8px;background:#F76D00;color:#fff;border-color:#F76D00"><i class="ti ti-brand-whatsapp"></i> Cobrar por WhatsApp (ATH / tarjeta)</button>';
   }
   if(Object.keys(o.insp||{}).length){
-    html+='<div style="display:flex;gap:8px;margin-bottom:8px">'+
-      (o.tel?'<button class="btn full" onclick="waDVI(\''+o.id+'\')" style="background:#25D366;color:#fff;border-color:#25D366;flex:1"><i class="ti ti-clipboard-check"></i> DVI WhatsApp</button>':'')+
-      '<button class="btn full" onclick="dviPDF(\''+o.id+'\')" style="background:var(--navy);color:#fff;border-color:var(--ink);flex:1"><i class="ti ti-file-type-pdf"></i> DVI PDF</button>'+
-    '</div>';
+    /* Una pre-compra NO ofrece el DVI: sus términos son de reparación y su pie dice "de cortesía".
+       Mandarle ese papel a alguien que pagó por una pre-compra es documentar el trabajo con el
+       documento equivocado, y es justo el lado por el que queda expuesto. */
+    if(esPreCompra(o)){
+      html+='<div style="display:flex;gap:8px;margin-bottom:8px">'+
+        (o.tel?'<button class="btn full" onclick="waPreCompra(\''+o.id+'\')" style="background:#25D366;color:#fff;border-color:#25D366;flex:1"><i class="ti ti-shopping-cart-search"></i> Pre-compra WhatsApp</button>':'')+
+        '<button class="btn full" onclick="preCompraPDF(\''+o.id+'\')" style="background:var(--navy);color:#fff;border-color:var(--ink);flex:1"><i class="ti ti-file-type-pdf"></i> Reporte pre-compra</button>'+
+      '</div>';
+    }else{
+      html+='<div style="display:flex;gap:8px;margin-bottom:8px">'+
+        (o.tel?'<button class="btn full" onclick="waDVI(\''+o.id+'\')" style="background:#25D366;color:#fff;border-color:#25D366;flex:1"><i class="ti ti-clipboard-check"></i> DVI WhatsApp</button>':'')+
+        '<button class="btn full" onclick="dviPDF(\''+o.id+'\')" style="background:var(--navy);color:#fff;border-color:var(--ink);flex:1"><i class="ti ti-file-type-pdf"></i> DVI PDF</button>'+
+      '</div>';
+    }
   }
   if(o.tel){
     html+='<button class="btn full" onclick="waRecibo(\''+o.id+'\')" style="margin-bottom:8px;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>';
@@ -6229,6 +6360,218 @@ function dviPDF(roId){
   doc.setFontSize(7);doc.setTextColor(130,130,130);
   doc.text('Inspección visual de cortesía. Este reporte no constituye garantía. '+(DB.settings.shopName||'Pit Stop')+' — '+new Date().toLocaleDateString('es-PR'),14,288);
   sharePDFDoc(doc,'DVI_'+o.id+'.pdf','Inspección '+o.id);
+}
+
+/* ============ REPORTE DE INSPECCIÓN PRE-COMPRA ============
+   Lo que el comprador paga NO es la lista de colores, es la decisión y el número que lleva al
+   vendedor. Por eso el veredicto y la resta van ARRIBA, antes de los detalles: si quedan al
+   final, la persona que decide en 30 segundos en un estacionamiento nunca los lee. */
+function preCompraPDF(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var _todas=[];listasDeFotos(o).forEach(function(a){_todas=_todas.concat(a);});
+  if(_todas.some(function(f){return fotoIsRef(f)&&!_photoCache[f.id];})){hydratePhotos(_todas).then(function(){preCompraPDF(roId);});return;}
+  if(typeof window.jspdf==='undefined'){alert('PDF cargando... intenta de nuevo.');return;}
+  var pc=o.preCompra||{};
+  /* El veredicto es LO que compra el cliente. Un reporte pre-compra sin él es una lista de
+     colores, que es exactamente lo que este modo existe para no entregar. */
+  if(!PC_VER[pc.veredicto]&&!confirm('Esta pre-compra no tiene veredicto escogido.\n\nEl veredicto es lo que el cliente necesita para decidir. ¿Generar el reporte sin él de todas formas?'))return;
+  var doc=new window.jspdf.jsPDF();var y=0;
+  var s=inspSummary(o);
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'—';
+  doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
+  doc.text('INSPECCIÓN PRE-COMPRA',14,10);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');
+  doc.text((DB.settings.shopName||'Pit Stop')+' · '+(DB.settings.shopAddress||'Bayamón, Puerto Rico'),14,17);
+  doc.text(o.id+' · '+new Date(o.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
+  y=30;doc.setTextColor(0,0,0);doc.setFontSize(9);
+  doc.text('Solicitada por: '+(o.cliente||'—'),14,y);doc.text('Vehículo: '+veh,110,y);y+=5;
+  doc.text('Tablilla: '+((o.vehiculo&&o.vehiculo.tag)||'—'),14,y);
+  if(o.vehiculo&&o.vehiculo.vin)doc.text('VIN: '+o.vehiculo.vin,110,y);
+  if(o.vehiculo&&o.vehiculo.millas)doc.text('Millaje: '+o.vehiculo.millas,14,y+5);
+  y+=13;
+
+  // ---- VEREDICTO ----
+  var v=PC_VER[pc.veredicto];
+  if(v){
+    doc.setFillColor(v.rgb[0],v.rgb[1],v.rgb[2]);doc.rect(14,y-5,182,11,'F');
+    doc.setTextColor(255,255,255);doc.setFont(undefined,'bold');doc.setFontSize(11);
+    doc.text(v.l.toUpperCase(),18,y+2);
+    y+=14;doc.setTextColor(0,0,0);
+  }
+  if((pc.nota||'').trim()){
+    doc.setFont(undefined,'normal');doc.setFontSize(9.5);
+    doc.splitTextToSize(pc.nota.trim(),178).forEach(function(l){if(y>282){doc.addPage();y=16;}doc.text(l,14,y);y+=4.6;});
+    y+=6;
+  }
+
+  // ---- EL NÚMERO PARA NEGOCIAR ----
+  var necesita=pcTotalNecesita(o);
+  var pedido=Number(pc.precioPedido)>0?Number(pc.precioPedido):0;
+  /* Una nota de veredicto larga puede dejar `y` al final de la hoja. Sin este salto, el recuadro
+     del número se dibujaba encima del pie o fuera de la página: justo el dato por el que pagó. */
+  if(y+(pedido>0?30:16)>282){doc.addPage();y=18;}
+  doc.setFillColor(244,245,247);doc.rect(14,y-4,182,(pedido>0?26:12),'F');
+  doc.setFont(undefined,'bold');doc.setFontSize(9);doc.setTextColor(0,0,0);
+  doc.text('Lo que el vehículo necesita en trabajo',18,y+2);
+  doc.text('$'+necesita.toFixed(2),192,y+2,{align:'right'});
+  if(pedido>0){
+    var sug=Math.round((pedido-necesita)*100)/100;
+    doc.setFont(undefined,'normal');
+    doc.text('Precio que pide el vendedor',18,y+9);doc.text('$'+pedido.toFixed(2),192,y+9,{align:'right'});
+    doc.setDrawColor(150,150,150);doc.line(18,y+12,192,y+12);
+    doc.setFont(undefined,'bold');doc.setFontSize(10);
+    doc.setTextColor(sug<0?176:47,sug<0?32:93,sug<0?32:15);
+    doc.text('Precio a conversar con el vendedor',18,y+18);doc.text('$'+sug.toFixed(2),192,y+18,{align:'right'});
+    y+=26;doc.setTextColor(0,0,0);
+  }else{y+=14;}
+  y+=6;
+
+  function section(title,items,rgb){
+    if(!items.length)return;
+    if(y>270){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);
+    doc.setTextColor(rgb[0],rgb[1],rgb[2]);doc.text(title,14,y);y+=2;
+    doc.setDrawColor(rgb[0],rgb[1],rgb[2]);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');doc.setFontSize(9);doc.setTextColor(0,0,0);
+    items.forEach(function(it){
+      var lines=doc.splitTextToSize('• '+it,178);
+      if(y+lines.length*4>282){doc.addPage();y=16;}
+      doc.text(lines,16,y);y+=lines.length*4+1;
+    });
+    y+=4;
+  }
+  section('REQUIERE ATENCIÓN AHORA ('+s.r.length+')',s.r,[176,32,32]);
+  section('PARA TOMAR EN CUENTA ('+s.a.length+')',s.a,[140,88,10]);
+  if(s.g.length){
+    if(y>265){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(47,93,15);
+    doc.text('REVISADO Y EN BUEN ESTADO ('+s.g.length+')',14,y);y+=2;
+    doc.setDrawColor(47,93,15);doc.line(14,y,196,y);y+=5;
+    doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(60,60,60);
+    var gl=doc.splitTextToSize(s.g.join(' · '),178);
+    if(y+gl.length*3.6>282){doc.addPage();y=16;}
+    doc.text(gl,14,y);y+=gl.length*3.6+6;
+  }
+
+  // ---- DESGLOSE DE LO QUE NECESITA ----
+  var det=pcNecesita(o);
+  if(det.length){
+    if(y>250){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(0,0,0);
+    doc.text('DESGLOSE DEL TRABAJO QUE NECESITA',14,y);y+=2;
+    doc.setDrawColor(120,120,120);doc.line(14,y,196,y);y+=5;
+    doc.setFontSize(9);
+    det.forEach(function(d){
+      if(y>276){doc.addPage();y=16;}
+      doc.setFont(undefined,'normal');
+      var pr=pcPrecio(d);
+      /* Un trabajo sin cotizar sigue siendo trabajo que el carro necesita: se lista como
+         "por cotizar" en vez de desaparecer, que le subestimaba el número al comprador.
+         El nombre se corta para que nunca pise el precio alineado a la derecha. */
+      doc.text(doc.splitTextToSize('• '+d.nombre,150)[0],16,y);
+      doc.text(pr>0?('$'+pr.toFixed(2)):'por cotizar',196,y,{align:'right'});y+=5;
+      if((d.nota||'').trim()){
+        doc.setFontSize(8);doc.setTextColor(90,90,90);
+        doc.splitTextToSize(d.nota.trim(),170).forEach(function(l){if(y>282){doc.addPage();y=16;}doc.text(l,20,y);y+=3.8;});
+        doc.setFontSize(9);doc.setTextColor(0,0,0);y+=1;
+      }
+    });
+    if(y>276){doc.addPage();y=16;}
+    doc.setDrawColor(120,120,120);doc.line(120,y,196,y);y+=5;
+    doc.setFont(undefined,'bold');doc.text('Total estimado',122,y);doc.text('$'+necesita.toFixed(2),196,y,{align:'right'});
+    y+=9;
+  }
+
+  // ---- EVIDENCIA ----
+  var conFotos=[];
+  IZ.forEach(function(z){z.items.forEach(function(it){
+    var fs=((o.inspFotos||{})[it.id])||[];
+    if(fs.length)conFotos.push({l:it.l,estado:(o.insp||{})[it.id]||'',fotos:fs,nota:(o.inspNotes||{})[it.id]||''});
+  });});
+  if(conFotos.length){
+    if(y>250){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(11,31,58);
+    doc.text('EVIDENCIA POR PUNTO REVISADO',14,y);y+=2;
+    doc.setDrawColor(11,31,58);doc.line(14,y,196,y);y+=6;
+    conFotos.forEach(function(c){
+      if(y>240){doc.addPage();y=16;}
+      doc.setFont(undefined,'bold');doc.setFontSize(9);
+      doc.setTextColor(c.estado==='rojo'?176:c.estado==='amarillo'?140:60,c.estado==='rojo'?32:c.estado==='amarillo'?88:60,c.estado==='rojo'?32:c.estado==='amarillo'?10:60);
+      /* Con splitTextToSize: una nota larga de un punto se salía por el borde derecho de la hoja. */
+      doc.splitTextToSize(c.l+(c.nota?' — '+c.nota:''),178).forEach(function(l){
+        if(y>276){doc.addPage();y=16;}
+        doc.text(l,14,y);y+=4;
+      });
+      doc.setTextColor(0,0,0);
+      var x=14,alto=0;
+      c.fotos.slice(0,6).forEach(function(f){
+        var url=fotoSrc(f);if(!url)return;
+        if(x>150){x=14;y+=alto+3;alto=0;}
+        if(y>250){doc.addPage();y=16;x=14;}
+        try{doc.addImage(url,'JPEG',x,y,44,33);x+=47;alto=33;}catch(e){}
+      });
+      y+=alto+7;
+    });
+  }
+  var fotos=(o.fotos||[]).slice(0,6);
+  if(fotos.length){
+    if(y>200){doc.addPage();y=16;}
+    doc.setFont(undefined,'bold');doc.setFontSize(10);doc.setTextColor(0,0,0);
+    doc.text('FOTOS GENERALES DEL VEHÍCULO',14,y);y+=4;
+    var x2=14,w=57,h2=43,col=0;
+    fotos.forEach(function(f){
+      /* La comprobación de página iba solo ANTES del bloque: con 4 o más fotos, la segunda fila
+         caía encima del pie de página. Ahora se comprueba por fila. */
+      if(col===0&&y+h2>282){doc.addPage();y=16;}
+      try{doc.addImage(fotoSrc(f),'JPEG',x2,y,w,h2);}catch(e){}
+      col++;x2+=w+4;
+      if(col===3){col=0;x2=14;y+=h2+4;}
+    });
+    if(col>0)y+=h2+4;
+  }
+
+  // ---- TÉRMINOS EN SU PROPIA PÁGINA ----
+  doc.addPage();y=18;
+  doc.setFont(undefined,'bold');doc.setFontSize(11);doc.setTextColor(0,0,0);
+  doc.text('TÉRMINOS DE ESTA INSPECCIÓN',14,y);y+=3;
+  doc.setDrawColor(120,120,120);doc.line(14,y,196,y);y+=7;
+  doc.setFont(undefined,'normal');doc.setFontSize(8.5);doc.setTextColor(40,40,40);
+  DISC_PC.split('\n').forEach(function(par){
+    if(!par.trim()){y+=2.5;return;}
+    doc.splitTextToSize(par.trim(),178).forEach(function(l){if(y>280){doc.addPage();y=18;}doc.text(l,14,y);y+=4.3;});
+  });
+  for(var p=1;p<=doc.internal.getNumberOfPages();p++){
+    doc.setPage(p);doc.setFontSize(7);doc.setTextColor(130,130,130);
+    doc.text('Inspección pre-compra realizada el '+new Date(o.fecha).toLocaleDateString('es-PR')+'. Refleja el estado del vehículo en esa fecha. '+(DB.settings.shopName||'Pit Stop'),14,288);
+  }
+  sharePDFDoc(doc,'PreCompra_'+o.id+'.pdf','Inspección pre-compra '+o.id);
+}
+
+function waPreCompra(roId){
+  var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
+  var pc=o.preCompra||{};
+  var s=inspSummary(o);
+  var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'el vehículo';
+  var necesita=pcTotalNecesita(o);
+  var pedido=parseFloat(pc.precioPedido)||0;
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+    'Ya terminé la inspección pre-compra de '+veh+' y le dejo aquí el resumen, el reporte completo con las fotos se lo envío en el PDF.\n\n';
+  var v=PC_VER[pc.veredicto];
+  if(v)msg+='📋 *'+v.l+'*\n\n';
+  if((pc.nota||'').trim())msg+=pc.nota.trim()+'\n\n';
+  msg+='✅ Revisado y en buen estado: '+s.g.length+' punto'+(s.g.length!==1?'s':'')+'\n';
+  if(s.r.length)msg+='\n🔴 *Requiere atención ahora:*\n'+s.r.map(function(x){return '• '+x;}).join('\n')+'\n';
+  if(s.a.length)msg+='\n⚠️ *Para tomar en cuenta:*\n'+s.a.map(function(x){return '• '+x;}).join('\n')+'\n';
+  if(necesita>0){
+    msg+='\n💵 El trabajo que necesita ronda los $'+necesita.toFixed(2)+'\n';
+    if(pedido>0){
+      var sug=Math.round((pedido-necesita)*100)/100;
+      msg+='Si le están pidiendo $'+pedido.toFixed(2)+', tomando en cuenta ese trabajo el precio a conversar sería alrededor de $'+sug.toFixed(2)+'\n';
+    }
+  }
+  msg+='\nLa decisión de comprarlo es suya, yo le doy la información para que la tome con todo a la vista. Cualquier duda me escribe en confianza y se lo explico.\n\nQuedo al pendiente 🏁';
+  waSend(o.tel,msg);
 }
 
 // ============ v1.4: COBRO POR WHATSAPP (ATH Móvil) ============

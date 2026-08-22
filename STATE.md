@@ -2,7 +2,40 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — cierre del 2026-07-29 (batches 25-33)
+## 🚦 CONTINUA AQUI — 2026-08-12 (batch 34: INSPECCION PRE-COMPRA)
+
+**NO PUSHEADO TODAVIA. Falta que Roberto lo pruebe en la tablet y de el visto bueno.**
+
+**BATCH 34 — MODO INSPECCION PRE-COMPRA.** Lo pidio el dia que le llego el scanner Launch.
+El DVI estaba hecho para un carro que YA es del cliente: sus terminos hablan de garantia de
+piezas, denegados y vehiculos no reclamados, y su pie dice "inspeccion visual de cortesia".
+Nada de eso aplica cuando alguien PAGA desde $80 por que le revisen un carro AJENO antes de
+comprarlo. Mandarle ese papel es documentar el trabajo con el documento equivocado.
+
+Lo nuevo (todo dentro de `index.html`, reusa la inspeccion multipuntos y las fotos que ya habia):
+- `DISC_PC` terminos propios de pre-compra (alcance, lo que no cubre, que NO es revision legal
+  ni de historial, y que la decision es del comprador). Sin "certificado" ni "licenciado".
+- `PC_VER` los 3 veredictos, definidos UNA vez para pantalla, PDF y WhatsApp.
+- `pcCard()` / `pcMath()` la tarjeta arriba del paso de inspeccion, con la resta en vivo:
+  **precio del vendedor menos lo que necesita = precio a conversar.** Ese numero ES el producto.
+- `preCompraPDF()` reporte propio, veredicto y numero ARRIBA, terminos en su propia pagina.
+- `waPreCompra()` el mensaje en su voz (abre "Saludos!!", cierra "Quedo al pendiente 🏁").
+- Una pre-compra **NO ofrece el boton de DVI** y una orden normal **no ofrece el de pre-compra**.
+
+Prueba: `test/pre-compra.js` (46 checks). Sin regresiones en las 8 suites que corri.
+
+🔴 **BUG ABIERTO, SEPARADO DE ESTO — LETRAS GRANDES** (`test/letras-grandes.js`, lo reporto el
+12-ago). A 2x de tamano de letra: **el logo choca con la fecha en la barra de arriba**
+(holgura -89px a 1x, **0px a 2x**) y **la fila de numeros del home se corta por la derecha**.
+Lo que el midio como "no llego abajo" NO se reprodujo: el scroll llega al final en los dos
+tamanos (`cortado:-34`). **Falta que el diga en cual pantalla le pasa.**
+📌 Metodo: el escalado de Android NO cambia el font-size raiz, MULTIPLICA el ya calculado y deja
+los padding en px. Subir `html{font-size}` no reproduce nada porque la app declara
+`body{font-size:14px}`. Hay que recorrer el DOM y multiplicar cada font-size.
+
+---
+
+## 🚦 (anterior) cierre del 2026-07-29 (batches 25-33)
 
 **Estado: TODO EN VIVO Y VERDE.** SW **v33**, suite **39 archivos / 753 checks / 0 fallos**
 (local Y en vivo), `live == repo`. Working tree limpio y pusheado.
