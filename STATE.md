@@ -2,7 +2,77 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
-## 🚦 CONTINUA AQUI — 2026-08-22 (batch 35: FICHAS TOCABLES + LETRAS GRANDES CERRADO)
+## 🚦 CONTINUA AQUI — 2026-09-05 (batch 36: EL RESPALDO YA NO MIENTE — v40)
+
+**LO QUE SE ARREGLO: los 43 dias de silencio del 24-jul al 04-sep.** El aviso del home estuvo
+VERDE todo ese tiempo mientras NADA subia a GitHub. La causa raiz, encontrada en el codigo:
+
+1. 🔴 **`gitOk` miraba `_bkLastErr`, una bandera EN MEMORIA que se borra en cada recarga.**
+   Con el respaldo configurado y sin error *todavia en esa sesion*, la app se pintaba verde.
+   `last` (la fecha del ultimo respaldo que SI subio) se calculaba en `protectState` y **no la
+   miraba nadie**. Es el fallo #4 del 24-jul otra vez, una capa mas arriba: la app decia
+   "configurado" y no le preguntaba a la nube.
+2. 🔴 **El respaldo colgaba SOLO de un `setTimeout` de 45s que nace al guardar.** En el iPad la
+   app se cierra antes de que dispare y el temporizador se muere con ella: ese trabajo no sube
+   nunca y **nada lo reintentaba**.
+3. 🔴 **No habia recuperacion al arrancar.** Una subida perdida quedaba perdida para siempre.
+
+**EL ARREGLO (todo en `index.html`):**
+- `backupPendiente()` — UNA sola definicion de "hay trabajo sin subir": compara `DB._rev` (el
+  contador de escrituras del equipo, que sube `saveDB`) contra `DB.settings.backup.rev` (la
+  revision que de verdad quedo arriba). La usan el aviso del home, Ajustes y el reintento.
+- `backupHoras()` — edad del ultimo respaldo bueno. Sin fecha, fecha rota **o fecha en el
+  futuro** = infinito.
+- El aviso del home ahora **dice cuanto lleva sin subir** ("Hace 43 dias que no sube nada a
+  GitHub") en vez de callarse.
+- `flushCloudBackup()` enganchado en **tres sitios**: al abrir la app (4s), al esconder la
+  pantalla y en `pagehide`. Debounce de 45s → **10s**.
+- La revision se anota **al ARMAR el envio**, no al confirmar: si guarda mientras el PUT viaja,
+  ese cambio sigue contando como pendiente.
+
+**Prueba: `test/respaldo-no-miente.js` (14 checks, NUEVO).** Suite completa **48 archivos /
+893 checks**. Mutacion: se le devolvio el bug viejo a `gitOk` (4 fallos) y se movio la revision
+al confirmar (1 fallo) — la prueba caza las dos.
+
+⚠️ **`test/photos-cloud.js` falla** ("Failed to fetch"). **Ya fallaba ANTES de este cambio**
+(comprobado corriendolo contra el `index.html` de HEAD): necesita un Supabase vivo y el proyecto
+lleva pausado desde julio. No es regresion.
+
+**REVISORES (regla de Roberto):**
+- **Codex: 4 hallazgos, 3 reales y arreglados** — (a) fecha del ultimo respaldo **en el futuro**
+  (reloj adelantado) daba edad negativa, no pasaba la holgura y el aviso volvia a quedarse verde;
+  (b) `flushCloudBackup` limpiaba el temporizador y `cloudBackup` salia de una por `_cbBusy`, o
+  sea **se comia el reintento**; (c) `_cbBusy` no caducaba: una subida colgada por iOS trancaba
+  el respaldo **para siempre**. El 4to (que `restoreFromCloud` no anota `rev`) se verifico y
+  **NO es defecto**: restaurar normaliza y mueve fotos, asi que lo local ya no es igual a lo de
+  la nube y volver a subirlo es lo correcto.
+- **opencode: 5 hallazgos, 1 real y arreglado** — `_cbRevEnviada` era **global**: con `cbOcupado`
+  caducando a los 60s, dos subidas pueden solaparse en red lenta, la segunda le pisaba el numero
+  a la primera y **la primera marcaba como respaldado trabajo que no subio**. Ahora es local por
+  subida. De los otros 4: el de `keepalive` en `pagehide` es real pero **no aplica** (el limite de
+  64KB de keepalive es mucho menor que este respaldo, asi que ponerlo lo romperia mas); la
+  holgura de 30 min es **deliberada** (en el taller la senal se cae y un aviso que grita cada
+  2 minutos se aprende a ignorar); los otros dos son humo.
+
+### ⏭ LO QUE FALTA, Y ES DE ROBERTO
+1. 📲 **Abrir ShopFlow en el iPad y en el iPhone y recargar DOS veces** (Ajustes → Version de la
+   app tiene que decir **v40**). A los 4 segundos de abrir, la app intenta subir sola todo lo que
+   lleva sin respaldar.
+2. 👀 **Mirar el aviso del home.** Si sale rojo diciendo un error HTTP, el token del equipo esta
+   vencido o el repo cambio: hay que volver a poner repo y token en Ajustes → Respaldo.
+   **Si el aviso desaparece, el respaldo subio y ya hay copia fuera del equipo.**
+3. 🔑 Rotar el PAT de Supabase y cambiar la contrasena (pendiente desde el 26-jul).
+4. 📄 Correr `supabase/aprobaciones.sql` en el SQL Editor.
+5. ⏳ Despausar el proyecto de Supabase antes de finales de octubre (a los 90 dias pausado se
+   puede borrar). Vacio no se pierde data, pero habria que rehacer proyecto y claves.
+
+⚠️ **LO QUE ESTE ARREGLO NO HACE:** no puedo ver el iPad desde aqui. Si en ese equipo el repo y
+el token **nunca estuvieron puestos**, la app va a avisar en rojo pero no va a subir nada hasta
+que se configuren. El arreglo garantiza que **deje de mentir**, no que el token sea valido.
+
+---
+
+## 🚦 (antes) CONTINUA AQUI — 2026-08-22 (batch 35: FICHAS TOCABLES + LETRAS GRANDES CERRADO)
 
 **EN VIVO (v39).** El batch 34 salio antes hoy como v38 con el visto bueno de Roberto.
 

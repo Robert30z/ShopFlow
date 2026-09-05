@@ -504,7 +504,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v39';
+var APP_V='v40';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -2173,13 +2173,54 @@ function updSyncStatus(state){
     if(st)st.textContent=on?'':'Entra o crea el taller para sincronizar tus dispositivos.';
   });
 }
-var _cbTimer=null,_cbBusy=false;
+var _cbTimer=null,_cbBusy=false,_cbBusyAt=0;
+/* `_cbBusy` solo se soltaba al resolver el fetch. En iOS una subida arrancada al esconder la app
+   puede quedarse suspendida y no resolver NUNCA: desde ahí todo intento futuro salía de una y no
+   se volvía a subir nada. Es exactamente la forma del fallo que estoy arreglando, así que la
+   bandera caduca. También lo cazó Codex. */
+function cbOcupado(){
+  if(!_cbBusy)return false;
+  if(Date.now()-_cbBusyAt>60000){_cbBusy=false;return false;}   // subida colgada: otra toma el relevo
+  return true;
+}
+var BK_DEBOUNCE=10000;   // era 45s: el iPad se cierra antes y el temporizador se muere con la app
 function backupCfg(){var b=(DB.settings&&DB.settings.backup)||{};return (b.token&&b.repo)?b:null;}
+/* ¿Hay trabajo hecho en este equipo que TODAVÍA no está en GitHub?
+   `_rev` es el contador de escrituras de ESTE equipo (lo sube saveDB). Al respaldar se anota qué
+   revisión quedó arriba. Si las dos no cuadran, hay trabajo sin copia fuera del equipo.
+   UNA sola definición, usada por el aviso del home, por Ajustes y por el reintento al abrir —
+   dos criterios para el mismo dato es como se apaga un candado justo donde hace falta. */
+function backupPendiente(){
+  if(DB._demo||!backupCfg())return false;
+  var b=DB.settings.backup;
+  return (typeof b.rev!=='number')||b.rev!==(typeof DB._rev==='number'?DB._rev:0);
+}
+/* Edad del ÚLTIMO respaldo que SÍ subió. Sin fecha, fecha rota, o fecha EN EL FUTURO = infinito.
+   Lo del futuro lo cazó Codex: con el reloj del equipo adelantado la edad sale NEGATIVA, no pasa
+   la holgura de media hora, y el aviso se queda VERDE con trabajo sin subir — el mismo silencio
+   que este arreglo vino a matar. Una fecha que no me puedo creer vale igual que no tener fecha. */
+function backupHoras(){
+  var b=(DB.settings&&DB.settings.backup)||{},t=b.last?new Date(b.last).getTime():NaN;
+  if(isNaN(t))return Infinity;
+  var h=(Date.now()-t)/3600000;
+  return h<0?Infinity:h;
+}
 function scheduleCloudBackup(){
   if(DB._demo)return; // en demo NUNCA se sube nada — protege el respaldo real
   if(!backupCfg())return;
   clearTimeout(_cbTimer);
-  _cbTimer=setTimeout(function(){cloudBackup(false);},45000);
+  _cbTimer=setTimeout(function(){cloudBackup(false);},BK_DEBOUNCE);
+}
+/* El respaldo colgaba SOLO de ese temporizador. En el iPad la app se cierra en medio y el
+   temporizador se va con ella: ese trabajo no sube nunca y nada lo reintenta. Esta función es
+   la red — se llama al esconder la pantalla, al volver al frente y al abrir la app. */
+function flushCloudBackup(){
+  if(!backupPendiente())return;
+  // Si ya hay una subida en vuelo, NO le quites el turno al reintento: antes se limpiaba el
+  // temporizador y cloudBackup salía de una por _cbBusy, así que ese cambio se quedaba sin subir
+  // hasta que pasara otra cosa por casualidad (lo cazó Codex).
+  if(cbOcupado()){scheduleCloudBackup();return;}
+  clearTimeout(_cbTimer);cloudBackup(false);
 }
 function ghHeaders(t){return{'Authorization':'Bearer '+t,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'};}
 function cloudBackupPayload(){
@@ -2193,8 +2234,13 @@ function cloudBackup(manual){
   if(DB._demo){if(manual)alert('Modo demo activo — el respaldo en la nube está pausado para no sobrescribir tus datos reales. Sal del demo primero.');return;}
   var cfg=backupCfg();
   if(!cfg){if(manual)alert('Configura primero el repo y el token en esta pantalla.');return;}
-  if(_cbBusy)return;
-  _cbBusy=true;
+  if(cbOcupado()){scheduleCloudBackup();return;}   // ocupado: se reintenta, no se pierde
+  _cbBusy=true;_cbBusyAt=Date.now();
+  /* La revisión enviada es de ESTA subida, no una variable compartida. Con `cbOcupado` caducando
+     a los 60s, dos subidas pueden solaparse en una red lenta: con una global, la segunda pisaba
+     el número y la PRIMERA, al confirmar, anotaba una revisión más alta que la que subió — o sea
+     trabajo sin respaldar marcado como respaldado. Lo cazó opencode. */
+  var revEnviada=null;
   var url='https://api.github.com/repos/'+cfg.repo+'/contents/shopflow_backup.json';
   // GET el sha FRESCO (cache:no-store) y sube. Si da 409 (sha viejo por caché), reintenta 1 vez.
   function putOnce(retry){
@@ -2206,6 +2252,9 @@ function cloudBackup(manual){
         var localN=(DB.ordenes||[]).length,cloudN=0;
         if(cur&&cur.content){try{cloudN=((JSON.parse(decodeURIComponent(escape(atob(cur.content.replace(/\n/g,'')))))||{}).ordenes||[]).length;}catch(e){}}
         if(localN===0&&cloudN>0)return {__blocked:cloudN};
+        // La revisión se anota AQUÍ, no al confirmar: si guarda mientras el PUT viaja, `DB._rev`
+        // ya avanzó, y dar por respaldado ese cambio apagaría el aviso con trabajo sin subir.
+        revEnviada=(typeof DB._rev==='number'?DB._rev:0);
         var body={message:'ShopFlow auto-backup '+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(cloudBackupPayload())))};
         if(cur&&cur.sha)body.sha=cur.sha;
         return fetch(url,{method:'PUT',headers:ghHeaders(cfg.token),body:JSON.stringify(body),cache:'no-store'});
@@ -2222,6 +2271,7 @@ function cloudBackup(manual){
       }
       if(r&&r.ok){
         DB.settings.backup.last=new Date().toISOString();
+        if(revEnviada!==null)DB.settings.backup.rev=revEnviada;   // lo que de verdad quedó arriba
         try{localStorage.setItem('sf_v1',JSON.stringify(DB));}catch(e){}
         updBackupStatus();
         if(manual)alert('Respaldo subido a GitHub ✓ ('+(DB.ordenes||[]).length+' órdenes)');
@@ -2282,8 +2332,13 @@ function updBackupStatus(err){
   if(!cfg){st.textContent='Sin configurar — los datos solo viven en este dispositivo.';st.style.color='var(--red)';return;}
   if(err){st.textContent='⚠ Último intento falló ('+err+'). Reintenta con "Respaldar ahora".';st.style.color='var(--amber)';return;}
   var last=DB.settings.backup.last;
-  st.innerHTML=last?('<i class="ti ti-cloud-check"></i> Último respaldo: '+new Date(last).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):'Configurado — aún sin respaldos. Toca "Respaldar ahora".';
-  st.style.color=last?'var(--green)':'var(--amber)';
+  if(!last){st.textContent='Configurado — aún sin respaldos. Toca "Respaldar ahora".';st.style.color='var(--amber)';return;}
+  // Una fecha vieja sola no dice nada: lo que duele es fecha vieja CON trabajo sin subir.
+  var h=backupHoras(),atras=backupPendiente()&&h>0.5;
+  st.innerHTML='<i class="ti ti-cloud-'+(atras?'off':'check')+'"></i> Último respaldo: '
+    +new Date(last).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+    +(atras?' · <strong>'+(h===Infinity?'hay cambios sin subir':bkEdad(h).toLowerCase()+', y hay cambios sin subir')+'</strong>':'');
+  st.style.color=atras?'var(--amber)':'var(--green)';
 }
 
 function go(p){
@@ -2332,14 +2387,29 @@ function go(p){
 // Nació de un caso real (07-26): 2 días de clientes guardados solo en el iPad porque la sesión de
 // sync estaba apagada y el respaldo sin configurar — la app nunca lo dijo. Ahora lo grita.
 var _bkLastErr='',_bkOkAt=0;
+function bkEdad(h){
+  if(h===Infinity)return 'Nunca';
+  if(h<1)return 'Hace '+Math.max(1,Math.round(h*60))+' minutos';
+  if(h<48)return 'Hace '+Math.round(h)+' horas';
+  return 'Hace '+Math.round(h/24)+' días';
+}
 function protectState(cb){
   sbSession(function(sess){
     var nube=!!sess, git=!!backupCfg();
     var last=(DB.settings&&DB.settings.backup&&DB.settings.backup.last)||null;
-    // "configurado" no basta: si el último intento falló, esa vía NO está protegiendo nada
-    var gitOk=git&&!_bkLastErr, nubeOk=nube&&!_lastSyncErr;
+    /* 🚨 ESTE ES EL FALLO DEL 24-JUL AL 04-SEP: 43 días sin subir NADA y el aviso en VERDE todo
+       ese tiempo. `_bkLastErr` vive en memoria y se borra en CADA recarga, así que "configurado
+       y todavía sin error en esta sesión" daba por sano un respaldo que llevaba mes y medio
+       muerto. `last` —la única fecha que sabía la verdad— se calculaba aquí y no la miraba nadie.
+       Es el mismo fallo #4 del 24-jul una capa más arriba: la app decía "configurado" y no le
+       preguntaba a la nube. Ahora la vía de GitHub solo cuenta como que PROTEGE si de verdad
+       subió lo último. La media hora es holgura para el debounce, que sube en segundos. */
+    var horas=backupHoras();
+    var atrasado=git&&backupPendiente()&&horas>0.5;
+    var gitOk=git&&!_bkLastErr&&!atrasado, nubeOk=nube&&!_lastSyncErr;
     var nivel=(!gitOk&&!nubeOk)?'rojo':((gitOk&&nubeOk)?'verde':'ambar');
-    cb({nube:nube,git:git,gitOk:gitOk,nubeOk:nubeOk,last:last,nivel:nivel,err:(_bkLastErr||_lastSyncErr||'')});
+    cb({nube:nube,git:git,gitOk:gitOk,nubeOk:nubeOk,last:last,horas:horas,atrasado:atrasado,
+        nivel:nivel,err:(_bkLastErr||_lastSyncErr||'')});
   });
 }
 function renderProtect(){
@@ -2353,6 +2423,9 @@ function renderProtect(){
     var cuerpo=rojo
       ? 'Las órdenes, fotos y firmas que estás haciendo NO se están copiando a ningún lado. Si este equipo se pierde, se borra o Safari limpia la memoria, se pierde TODO.'
       : (p.nubeOk?'Estás sincronizando a la nube, pero el respaldo a GitHub no está funcionando.':'Tienes respaldo a GitHub, pero NO estás conectado a la nube — las fotos y los otros equipos no se sincronizan.');
+    if(p.atrasado)cuerpo+=' <strong>'+(p.horas===Infinity
+      ?(p.last?'No está subiendo a GitHub, y la fecha del último respaldo no cuadra con el reloj de este equipo.':'Nunca se ha subido un respaldo a GitHub.')
+      :(bkEdad(p.horas)+' que no sube nada a GitHub.'))+'</strong>';
     if(p.err)cuerpo+=' <span style="color:'+col+'">(último error: '+p.err+')</span>';
     var n=DB.ordenes.length;
     if(rojo&&n>0)cuerpo+=' Ahora mismo tienes <strong>'+n+' '+(n===1?'orden':'órdenes')+'</strong> en riesgo.';
@@ -7495,6 +7568,11 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(function(){});
   });
 }
+/* 🚨 RED DE SEGURIDAD AL ABRIR (del 24-jul al 04-sep no subió NADA y nadie se enteró).
+   El respaldo colgaba solo de un temporizador que nace al guardar; si la app se cerraba antes de
+   que disparara, ese trabajo no subía nunca y NADA lo reintentaba. Ahora, al abrir, si quedó algo
+   pendiente se sube. Los 4s son para no pelear con el primer pintado. */
+setTimeout(function(){try{flushCloudBackup();}catch(e){}},4000);
 
 var now=new Date();
 document.getElementById('hdate').textContent=MESES[now.getMonth()]+' '+now.getDate()+' · '+APP_V;
@@ -7505,12 +7583,15 @@ demoBanner();
 // Safari al bloquear/cambiar de app) y cada 5s como red de seguridad. checkDraft
 // ofrece recuperar una orden que quedó sin guardar la última vez.
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='hidden'){saveDraft();saveFields();}
-  else if(_syncOn){ // al volver a la app (iOS suspende la conexión en segundo plano): baja lo nuevo y reconecta
-    syncPull().catch(function(){});subscribeRealtime();
+  if(document.visibilityState==='hidden'){saveDraft();saveFields();try{flushCloudBackup();}catch(e){}}
+  else{
+    try{flushCloudBackup();}catch(e){}   // volvió al frente: lo que quedó sin subir, sube ahora
+    if(_syncOn){ // al volver a la app (iOS suspende la conexión en segundo plano): baja lo nuevo y reconecta
+      syncPull().catch(function(){});subscribeRealtime();
+    }
   }
 });
-window.addEventListener('pagehide',function(){saveDraft();saveFields();});
+window.addEventListener('pagehide',function(){saveDraft();saveFields();try{flushCloudBackup();}catch(e){}});
 window.addEventListener('online',function(){if(_syncOn){syncPull().catch(function(){});subscribeRealtime();}});
 setInterval(function(){saveDraft();saveFields();},5000);
 setTimeout(checkDraft,1400);
