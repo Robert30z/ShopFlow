@@ -4,6 +4,17 @@
 
 ## 🚦 CONTINUA AQUI — 2026-09-05 (batch 36: EL RESPALDO YA NO MIENTE — v40)
 
+**✅ EN VIVO Y VERIFICADO CONTRA EL SERVIDOR** (no contra el disco): commit `8c5c899` en `main`,
+`robert30z.github.io/ShopFlow` sirve **v40** y `sw.js` **shopflow-v40**, `live == repo` (solo
+difieren los finales de linea, que los pone git al sacar el archivo). Las **14 pruebas nuevas
+corridas CONTRA EL SITIO EN VIVO: 14/14**. Captura del aviso mirada: sale la banda roja con
+"Hace 43 dias que no sube nada a GitHub" y "2 ordenes en riesgo".
+
+👁️ **Visto de paso, NO es de este cambio y NO se toco:** la ficha **Garage** del home sale con el
+cuadro del icono **vacio** — la clase es `ti ti-building-garage` y esa glifa no existe en la
+version de Tabler que carga el CDN (todos los demas iconos pintan bien, asi que no es carga).
+Es cosmetico y esta en la pantalla que el ensena para vender ShopFlow.
+
 **LO QUE SE ARREGLO: los 43 dias de silencio del 24-jul al 04-sep.** El aviso del home estuvo
 VERDE todo ese tiempo mientras NADA subia a GitHub. La causa raiz, encontrada en el codigo:
 
