@@ -192,7 +192,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div class="mc" onclick="go('ro')"><div class="mi" style="background:var(--red-light)"><i class="ti ti-clipboard-plus" style="color:var(--red);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Nueva RO</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">9 pasos completos</div></div>
         <div class="mc" onclick="go('citas')"><div class="mi" style="background:var(--blue-light)"><i class="ti ti-calendar-time" style="color:var(--blue);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Citas</div><div id="home-citas-lbl" style="font-size:11px;color:var(--gray-400);margin-top:2px">Agenda del día</div></div>
-        <div class="mc" onclick="go('garage')"><div class="mi" style="background:var(--amber-light)"><i class="ti ti-building-garage" style="color:var(--amber);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Garage</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Vehículos activos</div></div>
+        <div class="mc" onclick="go('garage')"><div class="mi" style="background:var(--amber-light)"><i class="ti ti-car-garage" style="color:var(--amber);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Garage</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Vehículos activos</div></div>
         <div class="mc" onclick="go('ordenes')"><div class="mi" style="background:var(--green-light)"><i class="ti ti-clipboard-list" style="color:var(--green);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Órdenes</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Historial completo</div></div>
         <div class="mc" onclick="go('clientes')"><div class="mi" style="background:var(--blue-light)"><i class="ti ti-users" style="color:var(--blue);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Clientes</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Base de datos</div></div>
         <div class="mc" onclick="go('menu')"><div class="mi" style="background:#F3E8FF"><i class="ti ti-tools" style="color:#7C3AED;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Servicios</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Menú y calculadora</div></div>
@@ -504,7 +504,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v40';
+var APP_V='v41';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
