@@ -504,7 +504,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v42';
+var APP_V='v43';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -5528,9 +5528,9 @@ function renderBitacora(){
   ev.slice(0,300).map(function(e){
     return '<div style="display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--gray-100)">'
       +'<div style="flex-shrink:0;font-size:15px">'+(ICON[e.tipo]||'•')+'</div>'
-      +'<div style="min-width:0"><div style="font-size:12.5px;font-weight:700">'+(e.tipo||'')+(e.roId?' · '+e.roId:'')+'</div>'
-      +(e.det?'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.45">'+e.det+'</div>':'')
-      +'<div style="font-size:10.5px;color:var(--gray-400)">'+fechaCorta(e.ts)+' · '+(e.dev||'')+'</div></div></div>';
+      +'<div style="min-width:0"><div style="font-size:12.5px;font-weight:700">'+E_(e.tipo||'')+(e.roId?' · '+E_(e.roId):'')+'</div>'
+      +(e.det?'<div style="font-size:11.5px;color:var(--gray-500);line-height:1.45">'+E_(e.det)+'</div>':'')
+      +'<div style="font-size:10.5px;color:var(--gray-400)">'+fechaCorta(e.ts)+' · '+E_(e.dev||'')+'</div></div></div>';
   }).join('')
   +(ev.length>300?'<div style="font-size:11px;color:var(--gray-400);padding:9px 0">Mostrando los 300 más recientes de '+ev.length+'.</div>':'');
 }
@@ -5812,7 +5812,11 @@ function updAiKeyStatus(){
 }
 function exportBackup(){
   if(DB._demo&&!confirm('Estás en MODO DEMO — este archivo contendría datos de EJEMPLO, no los reales. ¿Exportar de todos modos?'))return;
-  var data=JSON.stringify(DB,null,2);
+  // Los secretos son POR EQUIPO (llave de IA y token de GitHub): no viajan en un archivo que se
+  // puede mandar por WhatsApp o dejar en Descargas. Igual que cloudBackupPayload().
+  var copia=JSON.parse(JSON.stringify(DB));
+  if(copia.settings){delete copia.settings.aiKey;delete copia.settings.backup;}
+  var data=JSON.stringify(copia,null,2);
   var blob=new Blob([data],{type:'application/json'});
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');
@@ -5835,6 +5839,9 @@ function importBackup(e){
       // Un respaldo con un campo del tipo equivocado (objeto donde va lista) tumbaba la app entera
       // al renderizar. Importar viene de un archivo de afuera: normalizar antes de usarlo.
       normalizarDB(DB);
+      // Un archivo de afuera NUNCA trae llave ni repo/token: si los trajera, los datos del taller
+      // se subirian solos al GitHub de quien hizo el archivo.
+      if(DB.settings){delete DB.settings.aiKey;delete DB.settings.backup;}
       if(keep.aiKey)DB.settings.aiKey=keep.aiKey;
       if(keep.backup&&keep.backup.token&&keep.backup.repo)DB.settings.backup=keep.backup;
       reconciliarPapelera();
@@ -6935,7 +6942,7 @@ function renderCustomerStatus(){
     var det=[];
     if(x.h)det.push(x.h+' h de mano de obra');
     if(x.pz)det.push('piezas '+M(x.pz));
-    return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px"><span>'+E(x.n)+(x.q>1?' ×'+x.q:'')+
+    return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px"><span>'+E(x.n)+(Number(x.q)>1?' ×'+Number(x.q):'')+
       (det.length?'<br><span style="font-size:11px;color:#888">'+E(det.join(' · '))+'</span>':'')+
       '</span><b>'+M(x.p*(x.q||1))+'</b></div>';
   }).join('')||'<div style="color:#888;font-size:13px;padding:8px 0">—</div>';
@@ -6955,7 +6962,8 @@ function renderCustomerStatus(){
   }
   var rec=(d.dn||[]).length?'<div style="margin-top:18px"><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#B82A20;margin-bottom:6px">Recomendado (opcional)</div>'+d.dn.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f2e0dd;font-size:13px;color:#555"><span>'+E(x.n)+'</span><span>'+M(x.p)+'</span></div>';}).join('')+'</div>':'';
   window._aprobSnap=d;
-  var approveWA=d.ph?'<a href="https://wa.me/'+d.ph+'?text='+encodeURIComponent('Apruebo el presupuesto de la orden '+d.id+' ('+M(d.tot)+'). — '+d.c)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border-radius:12px;text-decoration:none;margin-top:10px">✓ Aprobar presupuesto</a><a href="https://wa.me/'+d.ph+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:12px;text-decoration:none;font-size:14px">💬 Escribir al taller</a>':'';
+  var phD=String(d.ph||'').replace(/\D/g,'');
+  var approveWA=phD?'<a href="https://wa.me/'+phD+'?text='+encodeURIComponent('Apruebo el presupuesto de la orden '+d.id+' ('+M(d.tot)+'). — '+d.c)+'" style="display:block;text-align:center;background:#1FA463;color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:15px;border-radius:12px;text-decoration:none;margin-top:10px">✓ Aprobar presupuesto</a><a href="https://wa.me/'+phD+'" style="display:block;text-align:center;color:#12161C;font-weight:700;padding:12px;text-decoration:none;font-size:14px">💬 Escribir al taller</a>':'';
   /* Con token: el cliente aprueba AQUÍ y lo sella el servidor. Sin token (falta el SQL, no hay
      sesión de nube, o la orden ya está pagada): el botón de siempre, que abre WhatsApp. */
   var approve=approveWA;
