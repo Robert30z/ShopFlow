@@ -214,7 +214,7 @@ create or replace function public.aprob_registrar_items(p_token text, p_fp text,
                                                         p_nombre text, p_nota text) returns json
 language plpgsql security definer set search_path = public as $$
 declare a public.aprobaciones%rowtype; v_ip text; v_ua text; it jsonb; v text; mal text;
-        n_items int := 0; n_si int := 0; suma numeric(12,2) := 0;
+        n_items int := 0; n_si int := 0; n_srv int := 0; n_srv_si int := 0; suma numeric(12,2) := 0;
 begin
   if p_token is null or length(p_token) < 16 then return json_build_object('ok', false, 'err', 'token'); end if;
   if p_decisiones is null or jsonb_typeof(p_decisiones) <> 'object' then
@@ -228,7 +228,7 @@ begin
   if not found then return json_build_object('ok', false, 'err', 'no'); end if;
   if a.expira < now() then return json_build_object('ok', false, 'err', 'vencido'); end if;
   if a.decidido_at is not null then
-    return json_build_object('ok', true, 'ya', true, 'decision', a.decision, 'decisiones', a.decisiones,
+    return json_build_object('ok', true, 'ya', true, 'decision', a.decision, 'decisiones', a.decisiones, 'items', a.items,
                              'decidido_at', a.decidido_at, 'total_aprobado', a.total_aprobado, 'nombre', a.nombre);
   end if;
   if p_fp is null or public.aprob_huella(a.items, a.total) <> p_fp then
@@ -242,6 +242,10 @@ begin
     if v is null or v not in ('si', 'no') then
       return json_build_object('ok', false, 'err', 'falta', 'id', it ->> 'id');
     end if;
+    if coalesce(it ->> 'tipo', 'servicio') <> 'recomendado' then
+      n_srv := n_srv + 1;
+      if v = 'si' then n_srv_si := n_srv_si + 1; end if;
+    end if;
     if v = 'si' then
       n_si := n_si + 1;
       suma := suma + (it ->> 'precio')::numeric;      -- seguro: aprob_items_mal ya reviso el formato
@@ -251,11 +255,17 @@ begin
   if (select count(*) from jsonb_object_keys(p_decisiones)) <> n_items then
     return json_build_object('ok', false, 'err', 'ids');
   end if;
+  if n_si > 0 and coalesce(btrim(p_nombre), '') = '' then
+    return json_build_object('ok', false, 'err', 'nombre');
+  end if;
   v_ua := left(coalesce(nullif(current_setting('request.headers', true), '')::json ->> 'user-agent', ''), 200);
   update public.aprobaciones set
     decisiones     = p_decisiones,
     total_aprobado = suma,
-    decision       = case when n_si = n_items then 'aprobado' when n_si > 0 then 'parcial' else 'rechazado' end,
+    -- 'aprobado' = dijo que si a TODOS los trabajos del presupuesto (los recomendados son opcionales)
+    decision       = case when n_srv > 0 and n_srv_si = n_srv then 'aprobado'
+                          when n_srv = 0 and n_si = n_items then 'aprobado'
+                          when n_si > 0 then 'parcial' else 'rechazado' end,
     decidido_at    = now(),
     nombre         = left(coalesce(nullif(btrim(p_nombre), ''), '(sin nombre)'), 60),
     nota           = left(coalesce(p_nota, ''), 300),
@@ -263,7 +273,7 @@ begin
     ua             = v_ua
   where token = p_token;
   select * into a from public.aprobaciones where token = p_token;
-  return json_build_object('ok', true, 'decision', a.decision, 'decisiones', a.decisiones,
+  return json_build_object('ok', true, 'decision', a.decision, 'decisiones', a.decisiones, 'items', a.items,
                            'decidido_at', a.decidido_at, 'total_aprobado', a.total_aprobado, 'nombre', a.nombre);
 end $$;
 

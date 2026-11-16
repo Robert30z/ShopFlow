@@ -207,7 +207,119 @@ const SEMILLA = `
     return { txt: document.getElementById('apr-box').innerText, args: window._fake.ultimaRpc };
   `);
   yes('Al tocar "Apruebo" le sale el sello con fecha', /Trabajo aprobado/i.test(aprobado.txt) && /14 de|02:03|2:03|jul/i.test(aprobado.txt), aprobado.txt.replace(/\n/g, ' | '));
-  is('Y se manda con el token y la decisión correctos', { fn: aprobado.args.fn, dec: aprobado.args.args.p_decision, tok: aprobado.args.args.p_token.length }, { fn: 'aprob_registrar', dec: 'aprobado', tok: 32 });
+  is('Y se manda punto por punto con el token correcto', { fn: aprobado.args.fn, dec: aprobado.args.args.p_decisiones, tok: aprobado.args.args.p_token.length }, { fn: 'aprob_registrar_items', dec: { s0: 'si' }, tok: 32 });
+
+  // ---------- 8b. PUNTO POR PUNTO (15-nov) ----------
+  // La fila que se publica trae los MISMOS renglones (ids y precios) que ve el cliente.
+  const pub = await ev(page, SEMILLA + FAKE + `
+    _syncOn = true; APROB_PUERTA = true;
+    const o = DB.ordenes[0];
+    o.denegados = [{ nombre: 'Rotación de gomas', precio: 25, urgencia: 'recomendado' }];
+    o.servicios.push({ id: 's2', n: 'Alternador', p: 180, ep: 180, qty: 1, parts: [{ sellPrice: 210.5, qty: 1 }], laborHours: 0 });
+    o.aprobTok = 'b'.repeat(32); o.aprobTokFp = fpFactura(o); saveDB({ force: true });
+    await aprobPublicar(o);
+    const fila = window._fake.upserts[window._fake.upserts.length - 1] || {};
+    const l = aprobLineasCli(o);
+    return { items: fila.items, iguales: JSON.stringify(fila.items) === JSON.stringify(aprobItemsLista(l.sv, l.dn)) };
+  `);
+  is('La fila publicada trae un item por trabajo y por recomendado', pub.items, [
+    { id: 's0', nombre: 'Frenos delanteros', precio: 139, tipo: 'servicio' },
+    { id: 's1', nombre: 'Alternador', precio: 390.5, tipo: 'servicio' },
+    { id: 'r0', nombre: 'Rotación de gomas', precio: 25, tipo: 'recomendado' }]);
+  yes('Y son los mismos renglones que ve el cliente', pub.iguales);
+
+  // El cliente desmarca un trabajo y marca un recomendado: se manda exactamente eso.
+  const snap2 = await ev(page, SEMILLA + FAKE + `
+    _syncOn = true; APROB_PUERTA = null;
+    const o = DB.ordenes[0];
+    o.denegados = [{ nombre: 'Rotación de gomas', precio: 25, urgencia: 'recomendado' }];
+    o.servicios.push({ id: 's2', n: 'Alternador', p: 450, ep: 450, qty: 1, parts: [], laborHours: 0 });
+    saveDB({ force: true });
+    const abiertos = []; window.open = (u) => { abiertos.push(u); return { focus(){} }; };
+    shareStatus('RO-900');
+    return new Promise(r => setTimeout(() => r(decodeURIComponent(abiertos[0]||'').split('#s=')[1]||''), 300));
+  `);
+  await p2.goto('about:blank');
+  await p2.goto(BASE + '#s=' + snap2, { waitUntil: 'load' });
+  await p2.waitForTimeout(900);
+  const casillas = await ev(p2, FAKE + `
+    const cbs = [...document.querySelectorAll('#apr-items input[data-apr]')];
+    const antes = cbs.map(c => c.getAttribute('data-apr') + ':' + c.checked);
+    cbs.find(c => c.getAttribute('data-apr') === 's1').checked = false;   // no al alternador
+    cbs.find(c => c.getAttribute('data-apr') === 'r0').checked = true;    // sí a las gomas
+    window._aprobV = { ok: true, fp: 'huella-del-servidor' };
+    window._fake.rpc = { ok: true, decision: 'parcial', decidido_at: '2026-11-15T23:00:00Z', total_aprobado: 164,
+      nombre: 'Migdalia Cotto', items: [{ id: 's0', nombre: 'Frenos delanteros', precio: 139 }, { id: 's1', nombre: 'Alternador', precio: 450 },
+      { id: 'r0', nombre: 'Rotación de gomas', precio: 25 }], decisiones: { s0: 'si', s1: 'no', r0: 'si' } };
+    await aprobDesdeLink('aprobado');
+    return { antes, args: window._fake.ultimaRpc.args, txt: document.getElementById('apr-box').innerText };
+  `);
+  is('Servicios marcados y recomendados sin marcar al abrir', casillas.antes, ['s0:true', 's1:true', 'r0:false']);
+  is('Se manda lo que marcó, con la huella del servidor', { d: casillas.args.p_decisiones, fp: casillas.args.p_fp },
+     { d: { s0: 'si', s1: 'no', r0: 'si' }, fp: 'huella-del-servidor' });
+  yes('Y ve que aprobó PARTE, con lo que sí y lo que no', /parte del trabajo/i.test(casillas.txt) && /Alternador/.test(casillas.txt) && /164\.00/.test(casillas.txt), casillas.txt.replace(/\n/g, ' | ').slice(0, 160));
+
+  // Si el taller cambió el presupuesto mientras el cliente miraba: no firma y se lo dice.
+  await p2.goto('about:blank');
+  await p2.goto(BASE + '#s=' + snap2, { waitUntil: 'load' });
+  await p2.waitForTimeout(900);
+  const cambio = await ev(p2, FAKE + `
+    window._aprobV = { ok: true, fp: 'vieja' };
+    window._fake.rpc = { ok: false, err: 'cambio' };
+    await aprobDesdeLink('aprobado');
+    return document.getElementById('apr-box').innerText;
+  `);
+  yes('⭐ Presupuesto cambiado: no dice "aprobado" y pide recargar', /actualizó el presupuesto/i.test(cambio) && !/Trabajo aprobado/i.test(cambio), cambio.replace(/\n/g, ' | ').slice(0, 140));
+
+  // La app del taller baja la decisión parcial: lo que dijo que NO cae en Denegados, sin falso desfase.
+  const parcial = await ev(page, SEMILLA + FAKE + `
+    _syncOn = true; APROB_PUERTA = true;
+    const o = DB.ordenes[0]; o.aprobTok = 'c'.repeat(32); o.aprobTokFp = fpFactura(o); saveDB({ force: true });
+    const items = [{ id: 's0', nombre: 'Frenos delanteros', precio: 139 }, { id: 's1', nombre: 'Alternador', precio: 450 },
+                   { id: 'r0', nombre: 'Rotación de gomas', precio: 25 }];
+    window._fake.filas = [{ token: 'c'.repeat(32), ro: 'RO-900', total: 154.99, fp: o.aprobTokFp, decision: 'parcial',
+      decidido_at: '2026-11-15T23:00:00Z', nombre: 'Migdalia Cotto', nota: '', ip: '72.44.1.9',
+      items, decisiones: { s0: 'si', s1: 'no', r0: 'si' }, total_aprobado: 164 }];
+    let toast = ''; window.syncToast = (t) => { toast = t; };
+    await aprobPull(); await aprobPull();
+    const r = DB.ordenes[0];
+    return { parcial: !!(r.aprob && r.aprob.parcial), sinIvu: r.aprob && r.aprob.aprobadoSinIvu,
+             den: (r.denegados || []).map(d => d.nombre + ':' + d.precio), desfasada: aprobDesfasada(r), toast };
+  `);
+  is('La orden queda como aprobación PARCIAL con lo aprobado antes de IVU', { p: parcial.parcial, s: parcial.sinIvu }, { p: true, s: 164 });
+  is('⭐ El trabajo que dijo que NO cae en Denegados una sola vez (dos pulls)', parcial.den, ['Alternador:450']);
+  is('Anotar ese denegado NO dispara el aviso de "el trabajo cambió"', parcial.desfasada, false);
+  yes('El aviso dice que aprobó parte y que quiere el recomendado', /PARTE/.test(parcial.toast) && /Rotación de gomas/.test(parcial.toast), parcial.toast);
+
+  // Recomendado que el cliente aprobó: sale del seguimiento de 30 días y del próximo link.
+  const recAprob = await ev(page, SEMILLA + FAKE + `
+    _syncOn = true; APROB_PUERTA = true;
+    const o = DB.ordenes[0];
+    o.denegados = [{ nombre: 'Rotación de gomas', precio: 25, urgencia: 'recomendado' }];
+    o.aprobTok = 'd'.repeat(32); o.aprobTokFp = fpFactura(o); saveDB({ force: true });
+    window._fake.filas = [{ token: 'd'.repeat(32), ro: 'RO-900', total: 154.99, fp: o.aprobTokFp, decision: 'aprobado',
+      decidido_at: '2026-11-15T23:30:00Z', nombre: 'Migdalia Cotto', nota: '', ip: '1.1.1.1',
+      items: [{ id: 's0', nombre: 'Frenos delanteros', precio: 139, tipo: 'servicio' }, { id: 'r0', nombre: 'Rotación de gomas', precio: 25, tipo: 'recomendado' }],
+      decisiones: { s0: 'si', r0: 'si' }, total_aprobado: 164 }];
+    await aprobPull();
+    const r = DB.ordenes[0];
+    return { marcado: !!r.denegados[0].aprobadoCliente, enLink: aprobLineasCli(r).dn.length,
+             desfasada: aprobDesfasada(r) };
+  `);
+  is('⭐ Recomendado aprobado: marcado, fuera del próximo link y sin falso desfase', recAprob, { marcado: true, enLink: 0, desfasada: false });
+
+  // Los renglones del servidor no son los de la página (link viejo o tocado): no firma.
+  await p2.goto('about:blank');
+  await p2.goto(BASE + '#s=' + snap2, { waitUntil: 'load' });
+  await p2.waitForTimeout(900);
+  const noCuadra = await ev(p2, FAKE + `
+    window._aprobV = { ok: true, fp: 'x', items: [{ id: 's0', nombre: 'Otra cosa', precio: 999 }] };
+    window._fake.rpc = { ok: true, decision: 'aprobado', decidido_at: '2026-11-15T23:00:00Z' };
+    window._fake.ultimaRpc = null;
+    await aprobDesdeLink('aprobado');
+    return { txt: document.getElementById('apr-box').innerText, llamo: !!window._fake.ultimaRpc };
+  `);
+  yes('⭐ Si lo del servidor no es lo que ve, NO firma y pide recargar', /actualizó el presupuesto/i.test(noCuadra.txt) && !noCuadra.llamo, noCuadra);
 
   // ---------- 9. SIN SEÑAL: no le miente al cliente ----------
   await p2.goto('about:blank');
