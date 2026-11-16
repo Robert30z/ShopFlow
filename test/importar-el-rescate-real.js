@@ -19,7 +19,7 @@ const path = require('path');
 const fs = require('fs');
 const BASE = process.env.SHOPFLOW_URL || 'http://localhost:8931/index.html';
 const RESCATE = process.env.SHOPFLOW_RESCATE ||
-  'C:/Users/Roberto Mendez/Desktop/HQ/Pit Stop/ShopFlow-Rescate/RESCATE-shopflow-2026-07-24.json';
+  'C:/Users/User/Desktop/HQ/Pit Stop/ShopFlow-Rescate/RESCATE-shopflow-2026-07-24.json';
 
 let pass = 0, fail = 0;
 const ok = (n, d) => { pass++; console.log('[PASS] ' + n + (d !== undefined ? ' — ' + JSON.stringify(d) : '')); };
