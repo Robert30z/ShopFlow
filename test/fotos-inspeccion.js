@@ -100,7 +100,7 @@ const is = (n, got, exp) => (JSON.stringify(got) === JSON.stringify(exp) ? ok(n,
         res({
           archivo: guardado,
           porPunto: crudo.indexOf('EVIDENCIA POR PUNTO REVISADO') >= 0,
-          etiqueta: /Front pads/.test(crudo),
+          etiqueta: /Pastillas delanteras/.test(crudo),
           imagenes: (crudo.match(/DCTDecode/g) || []).length     // cada JPEG incrustado
         });
       }, 1500);

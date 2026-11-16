@@ -504,7 +504,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v43';
+var APP_V='v44';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -631,14 +631,16 @@ function setPCPedido(v){
 }
 
 var IZ=[
-  {id:'elec',z:'Electrical',items:[{id:'bat',l:'Battery / terminals'},{id:'alt',l:'Alternator'},{id:'star',l:'Starter'},{id:'fus',l:'Fuses'}]},
-  {id:'mot',z:'Engine & Fluids',items:[{id:'oil',l:'Engine oil'},{id:'cool',l:'Coolant'},{id:'brkf',l:'Brake fluid'},{id:'belt',l:'Belts'},{id:'hose',l:'Hoses'},{id:'airf',l:'Air filter'}]},
-  {id:'frn',z:'Brakes',items:[{id:'pf',l:'Front pads'},{id:'pr',l:'Rear pads'},{id:'rf',l:'Front rotors'},{id:'rr',l:'Rear rotors'},{id:'cal',l:'Calipers'}]},
-  {id:'sus',z:'Suspension / Front End',items:[{id:'lca',l:'Lower control arm'},{id:'tie',l:'Tie rods'},{id:'sbl',l:'Sway bar links'},{id:'blj',l:'Ball joints'},{id:'shk',l:'Shocks / struts'}]},
-  {id:'drv',z:'Drivetrain',items:[{id:'cvx',l:'CV axles'},{id:'trf',l:'Transmission fluid'},{id:'mnt',l:'Motor mounts'}]},
-  {id:'gom',z:'Tires',items:[{id:'tfl',l:'Front left tire'},{id:'tfr',l:'Front right tire'},{id:'trl',l:'Rear left tire'},{id:'trr',l:'Rear right tire'}]},
-  {id:'aac',z:'Air Conditioning',items:[{id:'acc',l:'Cooling'},{id:'acp',l:'Compressor'},{id:'ach',l:'Heating'},{id:'acf',l:'Cabin filter'}]},
-  {id:'ext',z:'Lights & Exterior',items:[{id:'lhd',l:'Headlights'},{id:'ltl',l:'Tail lights'},{id:'lbk',l:'Brake light'},{id:'wip',l:'Wipers'},{id:'hrn',l:'Horn'}]}
+  /* 15-nov-2026: en ESPANOL (estaba en ingles y asi le llegaba al cliente por WhatsApp y en el PDF).
+     Los ids NO cambian: las inspecciones viejas, las fotos y los denegados cuelgan de ellos. */
+  {id:'elec',z:'Eléctrico',items:[{id:'bat',l:'Batería / terminales'},{id:'alt',l:'Alternador'},{id:'star',l:'Motor de arranque (starter)'},{id:'fus',l:'Fusibles'}]},
+  {id:'mot',z:'Motor y líquidos',items:[{id:'oil',l:'Aceite de motor'},{id:'cool',l:'Coolant (refrigerante)'},{id:'brkf',l:'Líquido de frenos'},{id:'belt',l:'Correas'},{id:'hose',l:'Mangueras'},{id:'airf',l:'Filtro de aire'}]},
+  {id:'frn',z:'Frenos',items:[{id:'pf',l:'Pastillas delanteras'},{id:'pr',l:'Pastillas traseras'},{id:'rf',l:'Discos delanteros'},{id:'rr',l:'Discos traseros'},{id:'cal',l:'Calipers'}]},
+  {id:'sus',z:'Suspensión / tren delantero',items:[{id:'lca',l:'Brazo de control inferior'},{id:'tie',l:'Terminales de dirección'},{id:'sbl',l:'Links de la barra estabilizadora'},{id:'blj',l:'Rótulas (ball joints)'},{id:'shk',l:'Amortiguadores / struts'}]},
+  {id:'drv',z:'Transmisión y ejes',items:[{id:'cvx',l:'Ejes (CV axles)'},{id:'trf',l:'Aceite de transmisión'},{id:'mnt',l:'Bases de motor'}]},
+  {id:'gom',z:'Gomas',items:[{id:'tfl',l:'Goma delantera izquierda'},{id:'tfr',l:'Goma delantera derecha'},{id:'trl',l:'Goma trasera izquierda'},{id:'trr',l:'Goma trasera derecha'}]},
+  {id:'aac',z:'Aire acondicionado',items:[{id:'acc',l:'Enfriamiento'},{id:'acp',l:'Compresor'},{id:'ach',l:'Calefacción'},{id:'acf',l:'Filtro de cabina'}]},
+  {id:'ext',z:'Luces y exterior',items:[{id:'lhd',l:'Luces delanteras'},{id:'ltl',l:'Luces traseras'},{id:'lbk',l:'Luz de freno'},{id:'wip',l:'Wipers'},{id:'hrn',l:'Bocina'}]}
 ];
 
 /* CATÁLOGO DE FÁBRICA — en ESPAÑOL. Estaba en inglés ("Front Brake Service", "Battery
