@@ -504,7 +504,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v44';
+var APP_V='v45';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -3178,7 +3178,7 @@ function rmDen(i){var conf=RO.denegados.filter(function(d){return !d.auto||(d.au
 
 function buildEstSum(){
   var veh=(RO.vehiculo.year+' '+RO.vehiculo.make+' '+RO.vehiculo.model).trim();
-  var cli=document.getElementById('est-cli');if(cli)cli.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400);font-size:11px">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Tablilla</span><span>'+(RO.vehiculo.tag||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Odómetro</span><span>'+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi</span></div>';
+  var cli=document.getElementById('est-cli');if(cli)cli.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400);font-size:11px">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Tablilla</span><span>'+(RO.vehiculo.tag||'—')+'</span><span style="color:var(--gray-400);font-size:11px">Odómetro</span><span>'+(RO.vehiculo.odoIn||'—')+' -> '+(RO.vehiculo.odoOut||'—')+' mi</span></div>';
   var rate=DB.settings.laborRate||103;var il=document.getElementById('est-items');if(il)il.innerHTML=RO.servicios.map(function(s){var laborC=(s.laborHours||0)*rate;var partsC=(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);var lineT=(s.ep||0)*(s.qty||1)+laborC+partsC;return '<div style="padding:6px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;justify-content:space-between"><span style="font-weight:700;font-size:12px">'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>'+((s.laborHours>0||partsC>0)?'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+((s.ep||0)>0?'Servicio $'+((s.ep||0)*(s.qty||1)).toFixed(2):'')+(s.laborHours>0?' · Labor '+s.laborHours+'h $'+laborC.toFixed(2):'')+(partsC>0?' · Piezas $'+partsC.toFixed(2):'')+'</div>':'')+'</div>';}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sin servicios.</div>';
   var dn=document.getElementById('est-next');if(dn)dn.value=RO.nextDate;
   var se=document.getElementById('est-estado');if(se)se.value=(RO.estado==='abierta'||RO.estado==='pendiente')?'pendiente':'pagado';
@@ -3523,10 +3523,42 @@ function autoSaveCli(){
   }
 }
 
+// (17-nov) Las fuentes de jsPDF (Helvetica/WinAnsi) no tienen flechas, palomitas ni emojis: si una linea trae
+// uno, la linea entera sale con basura y letras separadas ("#ó PENDIENTE"). Todo texto del PDF pasa por aqui.
+var PDF_CAMBIOS={'→':'->','←':'<-','↔':'<->','⇒':'=>','✓':'OK','✔':'OK','✅':'OK','❌':'NO','✗':'NO','✘':'NO','⏳':'','⚠':'!','≤':'<=','≥':'>=','≠':'!=','≈':'~','Ω':'ohm','Ω':'ohm','⁄':'/','−':'-',' ':' ',' ':' ',' ':' '};
+var PDF_WINANSI_EXTRA='€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+function pdfSeguro(s){
+  if(Array.isArray(s))return s.map(pdfSeguro);
+  if(typeof s!=='string')return s;
+  if(s.normalize)s=s.normalize('NFC');   // 'e'+acento suelto (copiado de otro sistema) -> 'é' de una pieza
+  var out='',quite=false;
+  for(var ch of s){
+    var c=ch.codePointAt(0),r;
+    if(Object.prototype.hasOwnProperty.call(PDF_CAMBIOS,ch))r=PDF_CAMBIOS[ch];
+    else if(c===10||c===13||c===9||(c>=32&&c<=126)||(c>=160&&c<=255)||PDF_WINANSI_EXTRA.indexOf(ch)>=0)r=ch;
+    else if(c===0xFE0F||c===0x200D||(c>=0x0300&&c<=0x036F))continue;   // selector/union de emojis y acentos sueltos que no se pudieron juntar
+    else if((c>=0x1F000&&c<=0x1FAFF)||(c>=0x2600&&c<=0x27BF)||(c>=0x2300&&c<=0x23FF)||(c>=0x2B00&&c<=0x2BFF))r='';   // emojis y dibujitos: fuera
+    else r='?';   // cualquier otra letra que la fuente no tiene: se marca, no se esconde
+    if(r===''){quite=true;continue;}
+    if(quite&&r===' '&&(out===''||out.slice(-1)===' ')){quite=false;continue;}   // no dejar doble espacio donde estaba el simbolo
+    quite=false;out+=r;
+  }
+  return out.replace(/ +$/g,'');
+}
+function nuevoPDF(){
+  var doc=new window.jspdf.jsPDF();
+  var t=doc.text.bind(doc),sp=doc.splitTextToSize.bind(doc);
+  doc.text=function(txt){var a=Array.prototype.slice.call(arguments);
+    if(typeof a[0]==='number'&&typeof a[1]==='number')a[2]=pdfSeguro(a[2]);else a[0]=pdfSeguro(txt);   // firma vieja text(x,y,txt)
+    return t.apply(null,a);};
+  doc.splitTextToSize=function(txt){var a=Array.prototype.slice.call(arguments);a[0]=pdfSeguro(txt);return sp.apply(null,a);};
+  return doc;
+}
+
 function exportPDF(){
   if(typeof window.jspdf==='undefined'){alert('PDF cargando...');return;}
   if(!RO.cliente){alert('Completa datos del cliente.');return;}
-  var doc=new window.jspdf.jsPDF();var y=0;
+  var doc=nuevoPDF();var y=0;
   var rate=DB.settings.laborRate||103;
 
   // Header
@@ -3546,7 +3578,7 @@ function exportPDF(){
   doc.setFont(undefined,'normal');
   doc.text('Cliente: '+RO.cliente,14,y);doc.text('Tel: '+(RO.tel||'—'),110,y);y+=5;
   doc.text('Vehículo: '+veh,14,y);doc.text('Tablilla: '+(RO.vehiculo.tag||'—'),110,y);y+=5;
-  doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' → '+(RO.vehiculo.odoOut||'—')+' mi',14,y);
+  doc.text('Odómetro: '+(RO.vehiculo.odoIn||'—')+' -> '+(RO.vehiculo.odoOut||'—')+' mi',14,y);
   if(RO.vehiculo.vin)doc.text('VIN: '+RO.vehiculo.vin,110,y);y+=5;
   if(RO.queja){var ql=doc.splitTextToSize('Queja: '+RO.queja,180);doc.text(ql,14,y);y+=ql.length*4;}
 
@@ -3645,7 +3677,7 @@ function exportPDF(){
     if(_gl){doc.text(doc.splitTextToSize(_gl,176)[0],18,y+7);y+=4;}
     doc.setFontSize(9);doc.setTextColor(0,0,0);y+=12;
   }
-  doc.text('Método: '+(RO.pago||'—')+'  ·  Estado: '+(RO.estado==='pagado'?'✓ PAGADO':'⏳ PENDIENTE'),14,y);y+=6;
+  doc.text('Método: '+(RO.pago||'—')+'  ·  Estado: '+(RO.estado==='pagado'?'PAGADO':'PENDIENTE'),14,y);y+=6;
   var _abo=RO.abonado||0;
   if(RO.estado!=='pagado'&&_abo>0){
     var _bal=Math.max(0,totalFinal-_abo);
@@ -3823,7 +3855,7 @@ function closePDFShare(){document.getElementById('pdf-share-modal').style.displa
 function workOrderPDF(){
   if(typeof window.jspdf==='undefined'){alert('PDF cargando...');return;}
   if(!RO.cliente){alert('Completa el nombre del cliente primero.');return;}
-  var doc=new window.jspdf.jsPDF();var y=0;
+  var doc=nuevoPDF();var y=0;
   var rate=DB.settings.laborRate||103;
 
   // Header
@@ -4042,7 +4074,7 @@ function flotaPDF(emp){
   var ym=prompt('¿Mes del estado de cuenta? (YYYY-MM)',def);if(!ym)return;
   var st=buildFlotaStmt(emp,ym);
   if(!st.rows.length&&!st.pendTotal){alert('No hay órdenes de '+emp+' en '+ym+' ni balance pendiente.');return;}
-  var doc=new window.jspdf.jsPDF();var y=0;
+  var doc=nuevoPDF();var y=0;
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
   doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
   doc.text((DB.settings.shopName||'Pit Stop')+' — Estado de Cuenta',14,10);
@@ -6375,7 +6407,7 @@ function dviPDF(roId){
   var _todas=[];listasDeFotos(o).forEach(function(a){_todas=_todas.concat(a);});
   if(_todas.some(function(f){return fotoIsRef(f)&&!_photoCache[f.id];})){hydratePhotos(_todas).then(function(){dviPDF(roId);});return;}
   if(typeof window.jspdf==='undefined'){alert('PDF cargando... intenta de nuevo.');return;}
-  var doc=new window.jspdf.jsPDF();var y=0;
+  var doc=nuevoPDF();var y=0;
   var s=inspSummary(o);
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'—';
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
@@ -6493,7 +6525,7 @@ function preCompraPDF(roId){
   /* El veredicto es LO que compra el cliente. Un reporte pre-compra sin él es una lista de
      colores, que es exactamente lo que este modo existe para no entregar. */
   if(!PC_VER[pc.veredicto]&&!confirm('Esta pre-compra no tiene veredicto escogido.\n\nEl veredicto es lo que el cliente necesita para decidir. ¿Generar el reporte sin él de todas formas?'))return;
-  var doc=new window.jspdf.jsPDF();var y=0;
+  var doc=nuevoPDF();var y=0;
   var s=inspSummary(o);
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'—';
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
