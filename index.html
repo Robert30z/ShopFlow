@@ -219,8 +219,10 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
     <button onclick="showROView()" style="background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:8px;padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-eye"></i> Ver RO <span id="ro-id-lbl" style="opacity:.6;font-weight:400"></span></button>
   </div>
   <div class="steps-bar" id="ro-steps-bar"></div>
+  <div id="ro-abiertas" style="display:none"></div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="ro-panes-wrap"></div>
   <div class="act" id="ro-nav">
+    <button class="btn full" id="ro-terminar" onclick="terminarDesdeAsistente()" style="display:none;order:-1;flex-basis:100%;min-height:44px;background:var(--green);color:#fff;border-color:var(--green);font-weight:700"><i class="ti ti-cash"></i> Terminé: cobrar y cerrar</button>
     <button class="btn" id="ro-prev" onclick="prevStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
     <button class="btn g" id="ro-save" onclick="saveOpenRO()" title="Guardar sin completar — protege firmas y fotos"><i class="ti ti-device-floppy"></i></button>
     <button class="btn" id="ro-print" onclick="workOrderPDF()" title="Imprimir orden de trabajo (papel para el técnico)"><i class="ti ti-printer"></i></button>
@@ -504,7 +506,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v45';
+var APP_V='v46';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -2655,6 +2657,69 @@ function updNav(){
   // Always show nav bar so user can go back from any step
   document.getElementById('ro-nav').style.display='flex';
   var sl=document.getElementById('ro-step-lbl');if(sl)sl.textContent=(curStep+1)+'/'+STEPS.length;
+  // (B) Boss 18-nov: si esta orden ya esta guardada como ABIERTA, se cierra desde aqui mismo, en cualquier paso
+  var bt=document.getElementById('ro-terminar');
+  if(bt){var gu=RO&&RO.id&&(DB.ordenes||[]).find(function(x){return x.id===RO.id;});bt.style.display=(gu&&gu.estado==='abierta'&&!DB._demo)?'flex':'none';}
+  renderROAbiertas();
+}
+/* (A) Boss 18-nov: "finalizar el RO desde el mismo sitio que lo creo". Al abrir Nueva RO salen
+   las ordenes ABIERTAS con su boton de cobrar y cerrar. Solo en el paso 1 de una orden nueva:
+   cuando ya estas llenando otra, no estorba. */
+function renderROAbiertas(){
+  var el=document.getElementById('ro-abiertas');if(!el)return;
+  var nueva=RO&&!(DB.ordenes||[]).some(function(x){return x.id===RO.id;});
+  var ab=(DB.ordenes||[]).filter(function(o){return o.estado==='abierta';});
+  if(DB._demo||!nueva||curStep!==0||!ab.length){el.style.display='none';el.innerHTML='';return;}
+  ab.sort(function(a,b){return new Date(a.fecha)-new Date(b.fecha);});
+  el.style.display='block';
+  el.innerHTML='<div style="margin:8px 12px 0;padding:10px 12px;border-radius:var(--r-md);background:var(--white);border:2px solid var(--blue)">'
+    +'<div style="font-size:13px;font-weight:800;color:var(--blue);margin-bottom:6px"><i class="ti ti-clipboard-list"></i> '+ab.length+' '+(ab.length===1?'orden abierta':'órdenes abiertas')+'. ¿Terminaste alguna?</div>'
+    +ab.slice(0,3).map(function(o){
+      var h=Math.floor((Date.now()-new Date(o.fecha).getTime())/3600000);
+      var edad=h<1?'hace un rato':(h<24?('hace '+h+'h'):('hace '+Math.floor(h/24)+'d'));
+      return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--gray-100);flex-wrap:wrap">'
+        +'<div style="flex:1;min-width:140px"><div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+E_(o.id)+' · '+E_(o.cliente||'(sin nombre)')+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-400)">'+edad+' · $'+((o.total||0).toFixed(2))+'</div></div>'
+        +'<div style="display:flex;gap:6px;flex:1 1 220px">'
+        // Codex 18-nov: el id va en data-id, no metido en el onclick (un id raro importado no se ejecuta)
+        +'<button class="btn sm" style="min-height:44px;flex:1" data-id="'+E_(o.id)+'" onclick="seguirAbiertaDesdeLista(this.dataset.id)"><i class="ti ti-player-play"></i> Seguir</button>'
+        +'<button class="btn sm" style="min-height:44px;flex:1.6;background:var(--green);color:#fff;border-color:var(--green);font-weight:700" data-id="'+E_(o.id)+'" onclick="cerrarAbiertaDesdeLista(this.dataset.id)"><i class="ti ti-cash"></i> Cobrar y cerrar</button>'
+        +'</div>'
+        +'</div>';
+    }).join('')
+    +(ab.length>3?'<div style="font-size:11px;color:var(--gray-400);margin-top:2px">y '+(ab.length-3)+' más en Órdenes.</div>':'')
+    +'</div>';
+}
+// Codex 18-nov: si ya empezaste a llenar la orden nueva, "Seguir" otra no te la borra sin preguntar
+function seguirAbiertaDesdeLista(id){
+  if(draftHasContent()&&!confirm('Ya empezaste a llenar esta orden nueva. Si sigues con '+id+', lo que escribiste aqui se pierde.\n\n¿Seguir con '+id+'?'))return;
+  continueRO(id);
+}
+// Codex 18-nov: solo se cobra si de verdad sigue ABIERTA (otro equipo pudo cerrarla mientras el cuadro estaba pintado)
+function cerrarAbiertaDesdeLista(id){
+  var o=(DB.ordenes||[]).find(function(x){return x.id===id;});
+  if(!o||o.estado!=='abierta'){alert('Esa orden ya no esta abierta. No cobre nada.');renderROAbiertas();return;}
+  cobrarYCerrar(id);
+}
+/* (B) Guarda lo que tengas en pantalla y abre el mismo cobro de "Terminé — cobrar y cerrar". */
+function terminarDesdeAsistente(){
+  if(!RO.cliente){alert('Agrega el nombre del cliente antes de cerrar.');gotoStep(0);return;}
+  if(!RO.servicios||!RO.servicios.length){alert('Agrega al menos un servicio antes de cerrar.');gotoStep(2);return;}
+  // Cortesia y garantia tienen su propio cierre (motivo obligatorio, pago 'Cortesía'/'Garantía'): van por el paso de Cierre
+  if(RO.cortesia||RO.garantia){alert('Esta orden es de '+(RO.cortesia?'cortesía':'garantía')+': ciérrala en el paso de Cierre para que quede con su motivo.');gotoStep(8);return;}
+  var guardada=(DB.ordenes||[]).find(function(x){return x.id===RO.id;});
+  // Codex 18-nov: una copia vieja en pantalla NUNCA pisa una orden que ya se cobro en otro equipo
+  if(!guardada||guardada.estado!=='abierta'){alert('Esta orden ya no esta abierta (se cerro en otro sitio). No cambie nada.');updNav();return;}
+  RO.estado='abierta';
+  calcEst();RO.total=Math.round(RO.total*100)/100;
+  upsertRO();autoSaveCli();
+  if(!saveDB())return;
+  var id=RO.id;
+  cobrarYCerrar(id);
+  var o=(DB.ordenes||[]).find(function(x){return x.id===id;});
+  // el borrador solo se suelta si el cierre quedo GUARDADO (saveDB otra vez confirma que cupo en disco)
+  if(o&&o.estado!=='abierta'&&saveDB()){clearDraft();_roWizardOpen=false;}
+  else updNav();   // cancelo el cobro: sigue en el asistente con la orden abierta
 }
 
 function initSigs(){
@@ -3433,6 +3498,7 @@ function saveOpenRO(){
   var bkO=backupCfg();
   if(bkO&&!DB._demo){clearTimeout(_cbTimer);cloudBackup(false);}
   document.getElementById('ro-id-lbl').textContent=RO.id+' · ABIERTA';
+  updNav();   // (B) ya guardada como abierta: aparece "Terminé: cobrar y cerrar"
   alert('Orden '+RO.id+' guardada como ABIERTA ✓\n\nFirmas, fotos e inspección protegidas'+(bkO?' y respaldándose a la nube':'')+'. Puedes cerrar la app y continuarla luego desde Órdenes → '+RO.id+'.');
 }
 function saveRO(){
