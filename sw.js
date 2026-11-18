@@ -1,7 +1,7 @@
 // ShopFlow service worker — la app abre SIN internet (mecánico móvil = señal mala).
 // Estrategia: index.html va red-primero (siempre fresco online, cache offline);
 // CDN y assets van cache-primero. Sube CACHE_V cuando cambie la estrategia.
-var CACHE_V='shopflow-v46';
+var CACHE_V='shopflow-v47';
 
 self.addEventListener('install',function(e){
   e.waitUntil(
@@ -37,8 +37,13 @@ self.addEventListener('fetch',function(e){
   if(url.origin===location.origin&&(req.mode==='navigate'||url.pathname.endsWith('/index.html')||url.pathname.endsWith('/'))){
     e.respondWith(
       fetch(req).then(function(r){
-        var cp=r.clone();
-        caches.open(CACHE_V).then(function(c){c.put('./index.html',cp);});
+        // Codex 16-nov (#11): solo una respuesta BUENA reemplaza el shell. Un 503/404 pasajero
+        // antes se guardaba como index.html y la app offline abria la pagina de error.
+        var ct=(r&&r.headers&&r.headers.get('content-type'))||'';
+        if(r&&r.ok&&r.type!=='opaque'&&ct.indexOf('text/html')!==-1){
+          var cp=r.clone();
+          caches.open(CACHE_V).then(function(c){c.put('./index.html',cp);});
+        }
         return r;
       }).catch(function(){return caches.match('./index.html');})
     );
