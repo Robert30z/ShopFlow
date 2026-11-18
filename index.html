@@ -506,7 +506,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v48';
+var APP_V='v49';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
@@ -3426,7 +3426,7 @@ function roViewHTML(){
     var laborC=(s.laborHours||0)*rate;
     var partsC=(s.parts||[]).reduce(function(ps,p){return ps+(p.sellPrice*p.qty);},0);
     var lineT=(s.ep||0)*(s.qty||1)+laborC+partsC;sub+=lineT;
-    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--gray-100)"><span>'+s.n+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>';
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--gray-100)"><span>'+E_(s.n)+(s.qty>1?' ×'+s.qty:'')+'</span><span style="font-weight:700">$'+lineT.toFixed(2)+'</span></div>';
   }).join('')||'<div style="color:var(--gray-400)">Todavía sin servicios.</div>';
   // Esta vista tenía su propia matemática y se quedaba fuera de cualquier cosa nueva
   // (con el precio final acordado enseñaba un total distinto al del estimado). Ahora usa `dineroRO`.
@@ -3450,11 +3450,11 @@ function roViewHTML(){
     chk(saved)+' Guardada en el sistema</div></div>';
   // Cliente / vehículo
   h+=_rowCard('<i class="ti ti-user"></i> Cliente y vehículo',
-    '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400)">Cliente</span><span style="font-weight:700">'+(RO.cliente||'—')+'</span>'+
-    '<span style="color:var(--gray-400)">Tel</span><span>'+(RO.tel||'—')+'</span>'+
-    '<span style="color:var(--gray-400)">Vehículo</span><span style="font-weight:700">'+(veh||'—')+'</span>'+
-    '<span style="color:var(--gray-400)">Tablilla</span><span>'+(vv.tag||'—')+'</span>'+
-    (RO.queja?'<span style="color:var(--gray-400)">Queja</span><span>'+RO.queja+'</span>':'')+'</div>');
+    '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400)">Cliente</span><span style="font-weight:700">'+E_(RO.cliente||'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Tel</span><span>'+E_(RO.tel||'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Vehículo</span><span style="font-weight:700">'+E_(veh||'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Tablilla</span><span>'+E_(vv.tag||'—')+'</span>'+
+    (RO.queja?'<span style="color:var(--gray-400)">Queja</span><span>'+E_(RO.queja)+'</span>':'')+'</div>');
   // Servicios + total
   h+='<div class="card" style="margin-bottom:10px"><div class="ch" style="font-size:13px"><i class="ti ti-tool"></i> Servicios</div><div class="cb" style="font-size:13px">'+svcRows+
     '<div style="border-top:2px solid var(--gray-200);margin-top:8px;padding-top:8px">'+
@@ -3465,14 +3465,14 @@ function roViewHTML(){
   // Denegados
   if(denConf.length){var dt=denConf.reduce(function(s,x){return s+(x.precio||0);},0);
     h+=_rowCard('<i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Recomendados no autorizados',
-      denConf.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>'+x.nombre+'</span><span>$'+(x.precio||0).toFixed(2)+'</span></div>';}).join('')+
+      denConf.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>'+E_(x.nombre)+'</span><span>$'+(x.precio||0).toFixed(2)+'</span></div>';}).join('')+
       '<div style="border-top:1px solid var(--gray-100);margin-top:5px;padding-top:5px;font-weight:700;display:flex;justify-content:space-between"><span>Total</span><span>$'+dt.toFixed(2)+'</span></div>');}
   // Estado / respaldo
   var bk=(DB.settings&&DB.settings.backup)||{};
   var bkTxt=DB._demo?'Pausado (modo demo)':((bk.token&&bk.repo)?(bk.last?('Último respaldo: '+new Date(bk.last).toLocaleString('es-PR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):'Configurado — se sube al guardar'):'<span style="color:var(--red)">SIN configurar — solo en este iPad</span>');
   h+=_rowCard('<i class="ti ti-cloud"></i> Guardado y respaldo',
     '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px"><span style="color:var(--gray-400)">Estado</span><span style="font-weight:700">'+(saved?'Guardada ✓':'Sin guardar todavía')+'</span>'+
-    '<span style="color:var(--gray-400)">Técnico</span><span>'+(RO.tecnico?tecName(RO.tecnico):'—')+'</span>'+
+    '<span style="color:var(--gray-400)">Técnico</span><span>'+E_(RO.tecnico?tecName(RO.tecnico):'—')+'</span>'+
     '<span style="color:var(--gray-400)">Respaldo</span><span>'+bkTxt+'</span></div>');
   // Saltos rápidos
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">'+

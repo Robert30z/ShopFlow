@@ -28,6 +28,12 @@ const check = (ok, n, d) => { console.log('[' + (ok ? 'PASS' : 'FAIL') + '] ' + 
   // cambiar algo y volver al cierre: el resumen se actualiza
   await page.evaluate(() => gotoStep(0)); await page.fill('#c-n', 'Cliente Cambiado'); await page.evaluate(() => { RO.cliente = 'Cliente Cambiado'; gotoStep(8); }); await page.waitForTimeout(400);
   check(((await page.textContent('#cier-resumen')) || '').includes('Cliente Cambiado'), 'el resumen se repinta al volver al Cierre');
+  // Codex 18-nov: lo que se escribe NO se ejecuta como codigo al pintar el resumen (ahora sale solo al entrar a Cierre)
+  await page.evaluate(() => { RO.cliente = '<img src=x onerror="window.__xss=1">'; RO.servicios[0].n = '<b onmouseover=1>Aceite</b>'; RO.queja = '<script>window.__xss=2</script>'; gotoStep(8); });
+  await page.waitForTimeout(500);
+  check(!(await page.evaluate(() => window.__xss)), 'XSS: un nombre con HTML no se ejecuta en el resumen');
+  check(((await page.textContent('#cier-resumen')) || '').includes('<img src=x'), 'XSS: el nombre sale como texto, tal cual');
+  check(await page.evaluate(() => !document.querySelector('#cier-resumen img, #cier-resumen b[onmouseover]')), 'XSS: no se crean etiquetas desde lo escrito');
   if (process.argv[2]) await page.screenshot({ path: process.argv[2] + '/cierre-390.png', fullPage: false });
   check(errs.length === 0, 'Sin errores de JS', errs);
   await browser.close();
