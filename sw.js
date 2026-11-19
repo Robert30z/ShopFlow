@@ -1,7 +1,7 @@
 // ShopFlow service worker — la app abre SIN internet (mecánico móvil = señal mala).
 // Estrategia: index.html va red-primero (siempre fresco online, cache offline);
 // CDN y assets van cache-primero. Sube CACHE_V cuando cambie la estrategia.
-var CACHE_V='shopflow-v49';
+var CACHE_V='shopflow-v50';
 
 self.addEventListener('install',function(e){
   e.waitUntil(
@@ -32,6 +32,12 @@ self.addEventListener('fetch',function(e){
   // API de GitHub (respaldo en la nube): SIEMPRE red directa, nunca caché.
   // Cachearlo dejaba el "sha" viejo y todo respaldo daba HTTP 409. NO tocar.
   if(url.hostname==='api.github.com'){e.respondWith(fetch(req));return;}
+
+  // Supabase (la nube del taller: datos, sesión, fotos): SIEMPRE red directa, nunca caché.
+  // 19-nov: caía en "cache primero" de abajo, así que cada equipo leía para siempre la PRIMERA
+  // copia de la fila del taller (syncPull) y no veía lo que guardaba el otro equipo. NO tocar.
+  // (Codex 19-nov #2: las FOTOS de Storage /storage/v1/... siguen en cache para verlas sin señal.)
+  if((url.hostname==='supabase.co'||url.hostname.slice(-12)==='.supabase.co')&&url.pathname.indexOf('/storage/')!==0)return;
 
   // App shell: red primero (deploy de GitHub Pages llega al instante), cache si no hay señal
   if(url.origin===location.origin&&(req.mode==='navigate'||url.pathname.endsWith('/index.html')||url.pathname.endsWith('/'))){
