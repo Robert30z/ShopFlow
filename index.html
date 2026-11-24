@@ -167,14 +167,14 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
       <div style="font-size:11px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase">Auto Service Management</div>
     </div>
   </div>
-  <div style="font-size:13px;color:rgba(255,255,255,.35);margin-top:8px">by Pit Stop · Bayamón, PR</div>
+  <div id="splash-by" style="font-size:13px;color:rgba(255,255,255,.35);margin-top:8px"></div>
 </div>
 
 <div id="home" class="pg v">
   <div class="tb">
     <div style="display:flex;align-items:center;gap:9px">
       <div class="sf-icon"><i class="ti ti-tool" style="color:#fff;font-size:17px"></i></div>
-      <div><div class="sf-wm">Shop<span>Flow</span></div><div class="sf-by">Pit Stop · Bayamón PR</div></div>
+      <div><div class="sf-wm">Shop<span>Flow</span></div><div class="sf-by" id="sf-by" onclick="if(!(DB.settings&&DB.settings.shopName))go('ajustes')"></div></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px"><div id="hdate" style="font-size:11px;color:rgba(255,255,255,.5)"></div><button onclick="go('ajustes')" style="background:rgba(255,255,255,.12);border:none;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="ti ti-settings" style="color:#fff;font-size:17px"></i></button></div>
   </div>
@@ -383,7 +383,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Referencia: Dealer Toyota ~$103/hr · Meineke ~$88/hr · Independiente PR ~$65-85/hr</div>
       </div></div>
       <div class="card"><div class="ch"><i class="ti ti-building-store"></i> Datos del taller</div><div class="cb">
-        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Nombre del taller</div><input id="set-name" placeholder="Pit Stop" oninput="saveSettings()"></div></div>
+        <div class="fr1" style="margin-bottom:8px"><div class="fg"><div class="fl">Nombre del taller</div><input id="set-name" placeholder="Nombre de tu taller" oninput="saveSettings()"></div></div>
         <div class="fr"><div class="fg"><div class="fl">Teléfono</div><input id="set-phone" placeholder="787-000-0000" oninput="saveSettings()"></div><div class="fg"><div class="fl">Ubicación</div><input id="set-addr" placeholder="Bayamón, PR" oninput="saveSettings()"></div></div>
       </div></div>
       <div class="card"><div class="ch"><i class="ti ti-cash"></i> Cobros y reseñas</div><div class="cb">
@@ -494,7 +494,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div id="set-version" style="font-size:12px;line-height:1.8">Calculando...</div>
         <button class="btn full" onclick="forzarActualizar()" style="margin-top:8px"><i class="ti ti-refresh"></i> Buscar actualización y recargar</button>
       </div></div>
-      <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:12px">ShopFlow · by Pit Stop</div>
+      <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:12px">ShopFlow</div>
     </div>
   </div>
 </div>
@@ -506,9 +506,14 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
 /* VERSIÓN VISIBLE — tiene que cuadrar con `CACHE_V` en sw.js (lo vigila test/version.js).
    Sin esto, la única forma de saber si el iPad ya cogió el código nuevo era adivinar: recargaba
    dos veces y se quedaba con la duda de si habia agarrado. Ahora Ajustes se lo dice de frente. */
-var APP_V='v50';
+var APP_V='v51';
 var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'Pit Stop',shopPhone:'',shopAddress:'Bayamón, PR'}};
+var DB={ordenes:[],clientes:[],garage:[],gastos:[],suplidores:[],ordenesS:[],inventario:[],serviceParts:{},citas:[],svcsCustom:[],catsCustom:[],tecnicos:[],tecCounter:0,jobsCustom:[],promos:[],roCounter:0,settings:{laborRate:103,shopName:'',shopPhone:'',shopAddress:''}};
+/* (24-nov) Marca del taller: un taller nuevo arranca SIN nombre (antes heredaba 'Pit Stop'). Todo texto
+   que nombra al taller pasa por taller(); los terminos por discTexto(). */
+function taller(){var n=DB.settings&&DB.settings.shopName;return (n&&String(n).trim())||'el taller';}
+function tallerDir(){var a=DB.settings&&DB.settings.shopAddress;return (a&&String(a).trim())||'';}
+function tallerLinea(){return [(DB.settings&&String(DB.settings.shopName||'').trim()),tallerDir()].filter(Boolean).join(' · ');}
 var RO={};var curStep=0;var activeCat='aceites';var MO=[];
 
 var TERMS_VERSION=3,TERMS_DATE='2026-07-03';
@@ -520,6 +525,7 @@ var DISC='TÉRMINOS — SHOPFLOW / PIT STOP AUTO SERVICE\n\n1. DAÑOS OCULTOS: P
    sino una decisión. Por eso lleva veredicto, el número para negociar, y términos propios.
    Los términos de reparación (DISC) no aplican aquí: hablan de garantía de piezas, denegados y
    vehículos no reclamados, nada de lo cual existe cuando solo se revisó un carro ajeno. */
+function discTexto(){var n=(DB.settings&&String(DB.settings.shopName||'').trim())||'';if(!n||n==='Pit Stop')return n?DISC:DISC.replace('ShopFlow by Pit Stop · Bayamón, Puerto Rico','ShopFlow').replace('SHOPFLOW / PIT STOP AUTO SERVICE','SHOPFLOW').replace(/PIT STOP/g,'EL TALLER').replace(/Pit Stop/g,'el taller');return DISC.replace('ShopFlow by Pit Stop · Bayamón, Puerto Rico','ShopFlow · '+([n,tallerDir()].filter(Boolean).join(' · '))).replace('SHOPFLOW / PIT STOP AUTO SERVICE','SHOPFLOW / '+n.toUpperCase()).replace(/PIT STOP/g,n.toUpperCase()).replace(/Pit Stop/g,n);}
 var DISC_PC='TÉRMINOS — INSPECCIÓN PRE-COMPRA\n\n1. ALCANCE: Esta es una inspección visual y mecánica del vehículo, en el estado y la fecha en que fue revisado. No incluye desarmar componentes, bajar motor o transmisión, ni pruebas de laboratorio.\n\n2. LO QUE NO CUBRE: No es posible detectar fallas internas u ocultas que no sean visibles ni medibles sin desarmar, ni condiciones que se presenten después de la inspección. Un vehículo puede presentar una falla después de haber sido revisado.\n\n3. NO ES UNA REVISIÓN LEGAL NI DE HISTORIAL: No se verifica título, gravámenes, marbete, deudas, historial de accidentes ni millaje real. Eso se verifica con las agencias correspondientes.\n\n4. LA DECISIÓN ES DEL COMPRADOR: Este reporte es información para que usted decida. La decisión de comprar y el precio que acuerde con el vendedor son suyas.\n\n5. ESTIMADOS: Los precios de lo que el vehículo necesita son aproximados y pueden variar al desarmar o según la disponibilidad de piezas.\n\n6. RESPONSABILIDAD: Limitada al costo de la inspección realizada.\n\n7. Este reporte se emite para el cliente que lo solicitó y refleja el estado del vehículo en la fecha indicada.';
 
 /* Una sola definición del veredicto para las TRES superficies (pantalla, PDF y WhatsApp).
@@ -1354,9 +1360,9 @@ function normalizarDB(db){
   if(!db.settings||typeof db.settings!=='object'||Array.isArray(db.settings))db.settings={};
   var st=db.settings;
   if(typeof st.laborRate!=='number')st.laborRate=103;
-  if(!st.shopName)st.shopName='Pit Stop';
+  if(typeof st.shopName!=='string')st.shopName='';
   if(typeof st.shopPhone!=='string')st.shopPhone='';
-  if(!st.shopAddress)st.shopAddress='Bayamón, PR';
+  if(typeof st.shopAddress!=='string')st.shopAddress='';
   if(!st.videoIntro)st.videoIntro='Hola, mi nombre es {tecnico} y seré su técnico hoy. Gracias por agendar su servicio con nosotros en {taller}. Le voy a realizar una inspección completa a su {vehiculo} y le muestro todo en este video.';
   // Los contadores NO se pueden poner en 0 ni en "cantidad de ordenes": si el respaldo trae
   // RO-7 y el contador arranca en 0, la proxima orden se llamaria RO-1 y PISARIA una existente
@@ -2067,6 +2073,7 @@ function mergeDB(local,remote){
 function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes}[v.id];if(!f)return;var keep=snapFields();try{f();}catch(e){}putFields(keep);}
 function sbSession(cb){var c=sbReady();if(!c){cb(null);return;}c.auth.getSession().then(function(r){cb(r&&r.data&&r.data.session||null);}).catch(function(){cb(null);});}
 async function syncPull(){
+  if(DB._demo)return; // (24-nov, Codex) el demo nunca se mezcla con la nube: un taller nuevo subia ordenes de ejemplo
   var c=sbReady();if(!c)return;var sess=(await c.auth.getSession()).data.session;if(!sess){_lastSyncErr='sin sesión';updSyncStatus();return;}var uid=sess.user.id;
   var res=await c.from('shops').select('data,rev').eq('owner',uid).maybeSingle();
   if(res.error){_lastSyncErr=res.error.message;console.warn('sync pull',res.error.message);updSyncStatus('error');return;}
@@ -2133,6 +2140,7 @@ function syncToast(msg){
 }
 async function shopSignup(email,pass,shopName){
   email=(email||'').trim();if(!email||!pass){alert('Escribe correo y contraseña.');return;}
+  if(!String(shopName||(DB.settings&&DB.settings.shopName)||'').trim()){alert('Primero ponle nombre a tu taller (arriba en Ajustes) y después crea la cuenta.');return;}
   var c=sbReady();if(!c){alert('No se pudo cargar la nube. Revisa tu conexión e intenta de nuevo.');return;}
   var r=await c.auth.signUp({email:email,password:pass});
   if(r.error){alert('No se pudo crear el taller: '+r.error.message);return;}
@@ -2473,7 +2481,8 @@ function renderAbiertas(){
     +(ab.length>4?'<div style="font-size:11px;color:var(--gray-400);margin-top:2px">y '+(ab.length-4)+' más en Órdenes.</div>':'')
     +'</div>';
 }
-function renderHome(){
+function pintarMarca(){var l=tallerLinea();var tn=DB.settings&&String(DB.settings.shopName||'').trim();var e=document.getElementById('sf-by');if(e){e.textContent=tn?l:'⚙️ Ponle nombre a tu taller';e.style.cursor=tn?'':'pointer';}var sp=document.getElementById('splash-by');if(sp)sp.textContent=l?('by '+l):'';}
+function renderHome(){try{pintarMarca();}catch(e){}
   var now=new Date();
   renderProtect();
   try{renderAbiertas();}catch(e){}
@@ -2613,7 +2622,7 @@ function buildPane(id){
 
 
 
-  if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de servicios y precios':'Autorización final (entrega)';var desc=id==='firma1'?'El cliente autoriza los servicios y precios presentados en el estimado, y la inspección/diagnóstico del vehículo.':'El cliente confirma el total final, incluyendo servicios agregados o ajustados durante el trabajo.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
+  if(id==='firma1'||id==='firma2'){var key=id==='firma1'?'sig1':'sig2';var cid=id==='firma1'?'sig-1':'sig-2';var titulo=id==='firma1'?'Autorización de servicios y precios':'Autorización final (entrega)';var desc=id==='firma1'?'El cliente autoriza los servicios y precios presentados en el estimado, y la inspección/diagnóstico del vehículo.':'El cliente confirma el total final, incluyendo servicios agregados o ajustados durante el trabajo.';return '<div style="background:var(--blue-light);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--blue);display:flex;gap:8px;margin-bottom:10px"><i class="ti ti-writing" style="font-size:18px;flex-shrink:0"></i><div><strong>'+titulo+'</strong><br>'+desc+'</div></div><div class="card"><div class="ch" onclick="var b=document.getElementById(\'disc-'+key+'\');b.style.display=b.style.display===\'block\'?\'none\':\'block\';" style="cursor:pointer"><span><i class="ti ti-file-text"></i> Términos y condiciones</span><i class="ti ti-chevron-down" style="color:var(--gray-400)"></i></div><div id="disc-'+key+'" style="display:none"><div class="disc" style="margin:12px 14px;max-height:240px">'+discTexto().replace(/\n/g,'<br>')+'</div></div></div><div style="background:var(--amber-light);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--amber);margin-bottom:10px;display:flex;gap:7px;align-items:center"><i class="ti ti-info-circle" style="font-size:15px;flex-shrink:0"></i><span>Toca arriba para leer los términos completos antes de firmar.</span></div><div class="card"><div class="ch">Firma del cliente</div><div class="cb"><canvas id="'+cid+'" class="sig-pad" width="600" height="230"></canvas><div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sm" onclick="clearSig(\''+cid+'\',\''+key+'\')"><i class="ti ti-eraser"></i> Borrar</button><span id="st-'+key+'" style="font-size:11px;color:var(--gray-400)">Sin firma</span></div></div></div><div style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:4px">'+new Date().toLocaleDateString('es-PR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>';}
 
   if(id==='inspeccion'){var h='<div id="pc-wrap">'+pcCard()+'</div>'+'<button class="btn blue full" onclick="aiDiagnosticSummary()" style="margin-bottom:10px"><i class="ti ti-sparkles"></i> AI — Problemas comunes de este vehículo</button><div id="ai-diag-result" style="display:none;background:var(--blue-light);border-radius:var(--r-md);padding:12px;margin-bottom:12px;font-size:12px;color:var(--ink);line-height:1.6"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="insp-b"><span class="badge bg">0 OK</span><span class="badge ba">0 Atención</span><span class="badge br">0 Crítico</span></div>';IZ.forEach(function(z){h+='<div class="insp-zone"><div class="izt"><div style="display:flex;align-items:center;gap:6px">'+z.z+'</div><span id="zs-'+z.id+'" style="font-size:10px;color:var(--gray-500)">—</span></div><div class="ig">'+z.items.map(function(it){return '<div class="ii" id="ii-'+it.id+'"><div class="iin">'+it.l+'</div><div class="ibs"><button class="ibt" id="ibv-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'verde\')"><i class="ti ti-check"></i></button><button class="ibt" id="iba-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'amarillo\')"><i class="ti ti-alert-triangle"></i></button><button class="ibt" id="ibr-'+it.id+'" onclick="setInsp(\''+z.id+'\',\''+it.id+'\',\'rojo\')"><i class="ti ti-x"></i></button></div><input id="in-'+it.id+'" placeholder="Nota..." style="display:none;font-size:11px;margin-top:4px" oninput="RO.inspNotes=RO.inspNotes||{};RO.inspNotes[\''+it.id+'\']=this.value"><div id="inx-'+it.id+'" style="display:none;margin-top:5px"><button class="btn sm" style="font-size:10px;padding:4px 8px" onclick="camInsp(\''+it.id+'\')"><i class="ti ti-camera"></i> Foto de esto</button><div id="inf-'+it.id+'" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"></div></div></div>';}).join('')+'</div></div>';});h+='<div class="card" style="margin-top:12px"><div class="ch"><i class="ti ti-notes"></i> Notas de inspección</div><div class="cb"><div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">Observaciones generales del diagnóstico — salen en el reporte de inspección (DVI) y en el WhatsApp al cliente.</div><textarea id="insp-gen" rows="4" placeholder="Ej: Carro entró con luz de check engine. Se recomienda revisar sensor de oxígeno. Llantas delanteras al 40%..." oninput="RO.inspGeneral=this.value"></textarea></div></div>';return h;}
 
@@ -2623,7 +2632,7 @@ function buildPane(id){
 
   if(id==='estimado')return '<div class="card"><div class="ch"><i class="ti ti-receipt"></i> Resumen</div><div class="cb"><div id="est-cli" style="background:var(--gray-50);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;font-size:12px"></div><div id="est-items"></div><div id="est-breakdown" style="margin:6px 0;padding:6px 0;border-top:1px solid var(--gray-100)"></div><div class="er"><span style="font-weight:700">Subtotal</span><span id="est-sub" style="font-weight:700">$0.00</span></div><div class="er" id="est-desc-row"><span>Descuento</span><span style="display:flex;align-items:center;gap:4px"><input id="est-desc" type="number" min="0" value="0" style="width:60px;text-align:right;font-size:12px" oninput="RO.descuento=parseFloat(this.value)||0;calcEst()"><select id="est-desc-t" style="width:auto;font-size:12px;padding:4px 6px" onchange="RO.descTipo=this.value;calcEst()"><option value="%">%</option><option value="$">$</option></select></span></div><div class="fr1" id="est-desc-m-row" style="display:none;margin:2px 0 6px"><div class="fg"><input id="est-desc-m" placeholder="Motivo del descuento (ej: cliente frecuente)" style="font-size:11px" oninput="RO.descMotivo=this.value"></div></div><div class="er"><span>IVU (11.5%)</span><span id="est-ivu">$0.00</span></div><div class="tot-bar"><span>Total</span><span id="est-tot">$0.00</span></div><div id="est-final-row" style="margin-top:10px;background:var(--blue-light);border:1.5px dashed var(--blue);border-radius:var(--r-md);padding:10px 12px"><div class="fl" style="margin-bottom:4px;color:var(--blue);font-weight:800">🤝 Precio final acordado con el cliente (todo incluido)</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px;font-weight:800;color:var(--blue)">$</span><input id="est-final" type="number" step="0.01" min="0" placeholder="ej: 140.00" style="flex:1;font-size:15px;font-weight:700" oninput="RO.totalManual=this.value;calcEst()"><button class="btn sm" onclick="limpiarPrecioFinal()" title="Volver al cálculo normal"><i class="ti ti-x"></i></button></div><div id="est-final-aviso" style="font-size:10px;color:var(--gray-500);margin-top:5px">Déjalo vacío para que la app calcule el total normal (subtotal + IVU).</div></div><div style="margin-top:10px;background:var(--gray-50);border:1.5px dashed var(--gray-200);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-cort" style="width:auto" onchange="setCortesiaRO(this.checked)"> 🤝 Cortesía del taller — el taller asume el costo (cliente paga $0)</label><div id="est-cort-m-row" style="display:none;margin-top:8px"><input id="est-cort-m" placeholder="Motivo (obligatorio — ej: disculpa por demora en la entrega)" style="font-size:11px" oninput="RO.cortesiaMotivo=this.value"><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Queda registrado como cortesía en KPIs y en el CSV del contable — no cuenta como ingreso.</div></div></div><div style="margin-top:8px;background:var(--green-light);border:1.5px dashed var(--green);border-radius:var(--r-md);padding:10px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700"><input type="checkbox" id="est-gar" style="width:auto" onchange="setGarantiaRO(this.checked)"> 🛡 Trabajo por GARANTÍA — se cubre una pieza o un trabajo anterior (cliente paga $0)</label><div id="est-gar-m-row" style="display:none;margin-top:8px"><input id="est-gar-m" placeholder="¿Qué se cubre? (obligatorio — ej: batería Duralast, invoice ADV-789012)" style="font-size:11px" oninput="RO.garantiaMotivo=this.value"><div class="fl" style="margin:7px 0 3px">Orden original (la que se está cubriendo)</div><select id="est-gar-ro" style="font-size:11px" onchange="RO.garantiaRO=this.value"></select><div style="font-size:10px;color:var(--gray-400);margin-top:4px">Sale en la factura y en el link del cliente, va en columna aparte en el CSV del contable, y NO cuenta como cortesía ni como ingreso.</div></div></div><div id="est-den" style="margin-top:10px"></div></div></div><div class="card"><div class="ch">Pago</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Método</div><select id="est-pago" onchange="RO.pago=this.value"><option>ATH Móvil</option><option>Cash</option><option>Tarjeta (Visa/MC)</option><option>Zelle</option><option>Venmo</option><option>Crédito</option></select></div><div class="fg"><div class="fl">Estado</div><select id="est-estado" onchange="RO.estado=this.value"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div></div><div class="fr fr1" style="margin-top:4px"><div class="fg"><div class="fl">Próximo servicio</div><input id="est-next" type="date" onchange="RO.nextDate=this.value"></div></div></div></div>';
 
-  if(id==='cierre')return '<div class="card" id="cier-resumen-card"><div class="ch"><i class="ti ti-checklist"></i> Revisa la orden completa antes de cerrar</div><div class="cb" id="cier-resumen" style="padding:10px 12px"></div><div style="padding:0 12px 12px"><button class="btn full" style="min-height:44px" onclick="showROView()"><i class="ti ti-eye"></i> Verla en pantalla completa</button></div></div><div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div>'+((DB.asesores||[]).length?'<div class="card"><div class="ch"><i class="ti ti-user-check"></i> Asesor de servicio</div><div class="cb"><select onchange="RO.asesor=this.value">'+aseOptionsHTML(RO.asesor)+'</select></div></div>':'')+'<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--ink)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+DISC.replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
+  if(id==='cierre')return '<div class="card" id="cier-resumen-card"><div class="ch"><i class="ti ti-checklist"></i> Revisa la orden completa antes de cerrar</div><div class="cb" id="cier-resumen" style="padding:10px 12px"></div><div style="padding:0 12px 12px"><button class="btn full" style="min-height:44px" onclick="showROView()"><i class="ti ti-eye"></i> Verla en pantalla completa</button></div></div><div class="card"><div class="ch"><i class="ti ti-user-cog"></i> Técnico asignado</div><div class="cb">'+((DB.tecnicos||[]).length?'<select onchange="RO.tecnico=this.value">'+tecOptionsHTML(RO.tecnico)+'</select>':'<div style="font-size:12px;color:var(--gray-400)">Añade tu equipo en Ajustes ⚙️ → Técnicos del taller para asignar quién hizo el trabajo.</div>')+'</div></div>'+((DB.asesores||[]).length?'<div class="card"><div class="ch"><i class="ti ti-user-check"></i> Asesor de servicio</div><div class="cb"><select onchange="RO.asesor=this.value">'+aseOptionsHTML(RO.asesor)+'</select></div></div>':'')+'<div class="card"><div class="ch"><i class="ti ti-shield-check" style="color:var(--ink)"></i> Términos y condiciones</div><div class="cb"><div class="disc">'+discTexto().replace(/\n/g,'<br>')+'</div></div></div><div class="card"><div class="ch"><i class="ti ti-bell"></i> Recordatorio</div><div class="cb"><div class="fr"><div class="fg"><div class="fl">Fecha próximo servicio</div><input id="cier-next" type="date" onchange="RO.nextDate=this.value"></div><div class="fg"><div class="fl">Servicio</div><input id="cier-svc" value="Mantenimiento preventivo"></div></div></div></div><div style="padding:0"><button class="btn p full" style="margin-bottom:8px" onclick="saveRO()"><i class="ti ti-device-floppy"></i> Guardar orden completa</button><button class="btn g full" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Generar y enviar recibo (PDF)</button></div>';
   return '';
 }
 
@@ -2742,7 +2751,7 @@ function initSP(cid,key){
         RO.sigData=RO.sigData||{};RO.sigData[key]=c.toDataURL('image/png');
         RO.sigTimes=RO.sigTimes||{};RO.sigTimes[key]=new Date().toISOString();
         // Congela los términos vigentes en el momento de la primera firma (version stamp)
-        if(!RO.terms)RO.terms={v:TERMS_VERSION,fecha:new Date().toISOString(),text:DISC};
+        if(!RO.terms)RO.terms={v:TERMS_VERSION,fecha:new Date().toISOString(),text:discTexto()};
         // Firma de autorización: congela QUÉ se autorizó (servicios + precios + total)
         if(key==='sig1'){
           var rate=DB.settings.laborRate||103;
@@ -3632,9 +3641,9 @@ function exportPDF(){
   // Header
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
   doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
-  doc.text((DB.settings.shopName||'Pit Stop')+' — ShopFlow',14,10);
+  doc.text(taller()+' — ShopFlow',14,10);
   doc.setFontSize(8);doc.setFont(undefined,'normal');
-  doc.text((DB.settings.shopAddress||'Bayamón, Puerto Rico'),14,17);
+  doc.text(tallerDir(),14,17);
   doc.text(RO.id+' · '+new Date(RO.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
 
   y=28;doc.setTextColor(0,0,0);
@@ -3730,7 +3739,7 @@ function exportPDF(){
   if(RO.cortesia){
     doc.setFillColor(230,240,255);doc.rect(14,y-3,182,10,'F');
     doc.setFont(undefined,'bold');doc.setTextColor(20,60,140);
-    doc.text('CORTESÍA DE '+((DB.settings.shopName||'PIT STOP').toUpperCase())+(RO.cortesiaMotivo?' — '+RO.cortesiaMotivo:''),18,y+2);
+    doc.text('CORTESÍA DE '+taller().toUpperCase()+(RO.cortesiaMotivo?' — '+RO.cortesiaMotivo:''),18,y+2);
     doc.setTextColor(0,0,0);doc.setFont(undefined,'normal');y+=12;
   }
   // El sello de garantía en la factura: es el papel que el cliente guarda y el que a ti te
@@ -3780,7 +3789,7 @@ function exportPDF(){
   doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'bold');
   var termsHdr='TÉRMINOS Y CONDICIONES'+(RO.terms?('  ·  v'+RO.terms.v+' — vigentes y aceptados al firmar ('+new Date(RO.terms.fecha).toLocaleDateString('es-PR')+')'):'');
   doc.text(termsHdr,14,y);y+=4;doc.setFont(undefined,'normal');
-  doc.splitTextToSize((RO.terms?RO.terms.text:DISC).replace(/\n\n/g,'\n'),182).forEach(function(l){
+  doc.splitTextToSize((RO.terms?RO.terms.text:discTexto()).replace(/\n\n/g,'\n'),182).forEach(function(l){
     if(y>278){doc.addPage();y=14;}doc.text(l,14,y);y+=3.2;
   });
 
@@ -3829,7 +3838,7 @@ function shareViaNative(){
   backupNow(); // respalda la orden a la nube al enviar el recibo
   var file=new File([_pdfBlob],_pdfFilename,{type:'application/pdf'});
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({title:(_pdfCtx.tipo==='orden'?'Orden ':'Recibo ')+(_pdfCtx.id||''),text:((_pdfCtx.tipo==='orden')?'Orden de trabajo de ':'Recibo de ')+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+(_pdfCtx.cliente||''),files:[file]})
+    navigator.share({title:(_pdfCtx.tipo==='orden'?'Orden ':'Recibo ')+(_pdfCtx.id||''),text:((_pdfCtx.tipo==='orden')?'Orden de trabajo de ':'Recibo de ')+taller()+' — '+(_pdfCtx.cliente||''),files:[file]})
     .catch(function(e){
       if(e&&e.name==='AbortError')return; // el usuario cerró el menú — normal
       downloadPDF();
@@ -3851,7 +3860,7 @@ function sendWhatsAppPDF(){
   var nom=((_pdfCtx.cliente||'').split(' ')[0])||'';
   var total=(_pdfCtx.total||0).toFixed(2);
   var doctxt=(_pdfCtx.tipo==='orden')?'la orden de trabajo':'tu recibo';
-  var msg='Hola '+nom+', aquí está '+doctxt+' de '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+' — '+(_pdfCtx.id||'')+', total $'+total+'. ¡Gracias por tu preferencia! 🏁';
+  var msg='Hola '+nom+', aquí está '+doctxt+' de '+taller()+' — '+(_pdfCtx.id||'')+', total $'+total+'. ¡Gracias por tu preferencia! 🏁';
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
     navigator.share({title:'Recibo '+(_pdfCtx.id||''),text:msg,files:[file]})
       .catch(function(e){if(e&&e.name==='AbortError')return;waFallbackPDF(msg);});
@@ -3884,7 +3893,7 @@ function reporteSemana(){
   var top=Object.keys(freq).map(function(k){return{n:k,c:freq[k]};}).sort(function(x,y){return y.c-x.c;}).slice(0,3);
   var fmt=function(d){return d.toLocaleDateString('es-PR',{day:'numeric',month:'short'});};
   var L=[];
-  L.push('📊 *Reporte semanal — '+((DB.settings&&DB.settings.shopName)||'Pit Stop')+'*');
+  L.push('📊 *Reporte semanal — '+taller()+'*');
   L.push(fmt(start)+' al '+fmt(new Date(eT-1)));
   L.push('');
   L.push('🚗 Carros atendidos: '+carros);
@@ -3931,7 +3940,7 @@ function workOrderPDF(){
   doc.setTextColor(255,255,255);doc.setFontSize(16);doc.setFont(undefined,'bold');
   doc.text('ORDEN DE TRABAJO',14,11);
   doc.setFontSize(8);doc.setFont(undefined,'normal');
-  doc.text((DB.settings.shopName||'Pit Stop')+' · '+(DB.settings.shopAddress||'Bayamón, PR'),14,18);
+  doc.text((tallerLinea()||taller()),14,18);
   doc.setFontSize(13);doc.setFont(undefined,'bold');
   doc.text(RO.id,196,11,{align:'right'});
   doc.setFontSize(8);doc.setFont(undefined,'normal');
@@ -4016,7 +4025,7 @@ function workOrderPDF(){
   }
   y+=38;
   doc.setFontSize(7);doc.setTextColor(150,150,150);
-  doc.text('Documento interno de taller — no es recibo. '+(DB.settings.shopName||'Pit Stop')+' · ShopFlow',14,y);
+  doc.text('Documento interno de taller — no es recibo. '+taller()+' · ShopFlow',14,y);
 
   var blob=doc.output('blob');
   _pdfBlob=blob;_pdfUrl=URL.createObjectURL(blob);
@@ -4063,7 +4072,7 @@ function waListo(roId,preguntar){
   var bal=balanceRO(o);
   if(preguntar&&!confirm('¿Le aviso a '+(o.cliente||'el cliente')+' por WhatsApp que '+veh+' está listo?'))return;
   var s=DB.settings||{};
-  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+(s.shopName||'Pit Stop')+'.\n\n'+
+  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\n'+
     '✅ '+veh+' ya está LISTO'+(o.id?' (orden '+o.id+')':'')+'.\n'+
     (bal>0.005?'Balance a pagar al recoger: $'+bal.toFixed(2)+(s.ath?' — ATH Móvil '+s.ath:'')+'\n':'Ya está saldado, no debe nada. ✓\n')+
     '\n¿Cuándo le queda bien recogerlo? Si prefiere, con gusto se lo llevo.\n\nQuedo al pendiente 🏁');
@@ -4145,9 +4154,9 @@ function flotaPDF(emp){
   var doc=nuevoPDF();var y=0;
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
   doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
-  doc.text((DB.settings.shopName||'Pit Stop')+' — Estado de Cuenta',14,10);
+  doc.text(taller()+' — Estado de Cuenta',14,10);
   doc.setFontSize(8);doc.setFont(undefined,'normal');
-  doc.text((DB.settings.shopAddress||'Bayamón, Puerto Rico')+(DB.settings.shopPhone?' · '+DB.settings.shopPhone:''),14,17);
+  doc.text([tallerDir(),DB.settings.shopPhone||''].filter(Boolean).join(' · '),14,17);
   doc.text(ym,196,13,{align:'right'});
   y=30;doc.setTextColor(0,0,0);
   doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('EMPRESA: '+emp,14,y);y+=7;
@@ -4179,7 +4188,7 @@ function waFlota(emp){
   var ym=prompt('¿Mes del resumen? (YYYY-MM)',def);if(!ym)return;
   var st=buildFlotaStmt(emp,ym);
   var msg='📋 *Estado de cuenta — '+emp+'* ('+ym+')\n'+
-    (DB.settings.shopName||'Pit Stop')+'\n\n'+
+    taller()+'\n\n'+
     st.rows.map(function(r){return '• '+r.fecha+' '+r.veh+' — '+(r.svcs||'servicio')+' — $'+r.total.toFixed(2)+(r.cortesia?' (cortesía 🤝)':(r.estado==='pagado'?' ✓':' ⏳'));}).join('\n')+
     '\n\nFacturado: $'+st.facturado.toFixed(2)+'\nPagado: $'+st.pagado.toFixed(2)+
     '\n*Balance pendiente: $'+st.pendTotal.toFixed(2)+'*'+
@@ -5382,7 +5391,7 @@ function waSend(tel,text){
 function waRecibo(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var veh=vehTxt(o,'');
-  var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
+  var msg='Saludos '+(o.cliente||'')+', le saluda '+taller()+' 🔧\n\n'+
     'Su orden '+o.id+(veh?' ('+veh+')':'')+' está lista.\n'+
     (o.garantia?'Total: $0.00 — CUBIERTO POR GARANTÍA 🛡'+(o.garantiaRO?' (orden original '+o.garantiaRO+')':''):
      o.cortesia?'Total: $0.00 — CORTESÍA DEL TALLER 🤝':
@@ -5399,7 +5408,7 @@ function waGarantia(roId,pieza){
   if(!g){alert('No encuentro esa garantía en la orden.');return;}
   var veh=vehTxt(o,'su vehículo');
   var hasta=dDia(g.hasta).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'});
-  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\n'+
     'Le escribo para recordarle que la '+g.pieza+' que le instalamos en '+veh+' está cubierta por garantía hasta el '+hasta+'.\n\n'+
     'Si desea, con mucho gusto se la reviso sin costo antes de esa fecha. Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁';
   waSend(o.tel,msg);
@@ -5408,7 +5417,7 @@ function waRemind(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var veh=vehTxt(o,'su vehículo');
   var fecha=o.nextDate?new Date(o.nextDate).toLocaleDateString('es-PR',{day:'numeric',month:'long'}):'pronto';
-  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\n'+
     'Le escribo para recordarle que a '+veh+' le toca su mantenimiento ('+fecha+'). ¿Le coordino una cita esta semana? Voy hasta donde usted esté, su casa o su trabajo.\n\nQuedo al pendiente 🏁'+
     'Vamos hasta donde usted esté 🚗🔧';
   waSend(o.tel,msg);
@@ -5915,6 +5924,7 @@ function saveSettings(){
   DB.settings.backup.token=document.getElementById('set-bk-token').value.trim();
   updBackupStatus();
   saveDB();
+  try{pintarMarca();}catch(e){}
 }
 function updAiKeyStatus(){
   var st=document.getElementById('set-aikey-status');if(!st)return;
@@ -6152,7 +6162,7 @@ function renderCitas(){
     '<div class="fr"><div class="fg"><div class="fl">Cliente</div><input id="ct-n" placeholder="Juan García"></div><div class="fg"><div class="fl">Teléfono</div><input id="ct-t" type="tel" placeholder="787-000-0000"></div></div>'+
     '<div class="fr"><div class="fg"><div class="fl">Fecha</div><input id="ct-f" type="date" value="'+hoy+'"></div><div class="fg"><div class="fl">Hora</div><input id="ct-h" type="time" value="09:00"></div></div>'+
     '<div class="fr"><div class="fg"><div class="fl">Vehículo</div><input id="ct-v" placeholder="2018 Toyota Corolla"></div><div class="fg"><div class="fl">Servicio</div><input id="ct-s" placeholder="Cambio de aceite"></div></div>'+
-    '<div class="fr fr1"><div class="fg"><div class="fl">Dirección (donde está el vehículo)</div><input id="ct-d" placeholder="Urb. ..., Bayamón"></div></div>'+
+    '<div class="fr fr1"><div class="fg"><div class="fl">Dirección (donde está el vehículo)</div><input id="ct-d" placeholder="Urb. ..., pueblo"></div></div>'+
     '<button class="btn p full" onclick="saveCita()" style="margin-top:6px">'+(_citaEdit?'<i class="ti ti-device-floppy"></i> Guardar cambios':'<i class="ti ti-plus"></i> Agendar cita')+'</button>'+
     (_citaEdit?'<button class="btn full" onclick="cancelEditCita()" style="margin-top:6px"><i class="ti ti-x"></i> Cancelar</button>':'')+
     '</div></div>'+
@@ -6252,7 +6262,7 @@ function delCita(id){if(!confirm('¿Eliminar esta cita?'))return;DB.citas=DB.cit
 function waCita(id){
   var c=DB.citas.find(function(x){return x.id===id;});if(!c)return;
   var f='';try{f=new Date(c.fecha+'T'+(c.hora||'09:00')).toLocaleDateString('es-PR',{weekday:'long',day:'numeric',month:'long'});}catch(e){f=c.fecha;}
-  var msg='Saludos '+c.cliente+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
+  var msg='Saludos '+c.cliente+', le saluda '+taller()+' 🔧\n\n'+
     'Confirmando su cita: *'+f+' a las '+(c.hora||'')+'*'+(c.servicio?'\nServicio: '+c.servicio:'')+(c.vehiculo?'\nVehículo: '+c.vehiculo:'')+(c.direccion?'\nLugar: '+c.direccion:'')+
     '\n\n¿La mantenemos? Si necesita moverla, con gusto se la cuadro para otro día.\n\nQuedo al pendiente 🏁';
   waSend(c.tel,msg);
@@ -6343,18 +6353,18 @@ function renderHomeSegs(){
 function waFollowUp(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
-  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nUn mensaje de seguimiento por aquí para saber cómo sigue todo con '+veh+'. Si todo quedó bien y está satisfecho con el trabajo, me ayudaría muchísimo un review:\n'+((DB.settings.reviewLink||'').trim())+'\n\nY no dude en llamarme para cualquier cosa que necesite del carro.\n\n¡Gracias por confiar en Pit Stop!\n\nQuedo al pendiente 🏁');
+  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\nUn mensaje de seguimiento por aquí para saber cómo sigue todo con '+veh+'. Si todo quedó bien y está satisfecho con el trabajo, me ayudaría muchísimo un review:\n'+((DB.settings.reviewLink||'').trim())+'\n\nY no dude en llamarme para cualquier cosa que necesite del carro.\n\n¡Gracias por confiar en '+taller()+'!\n\nQuedo al pendiente 🏁');
   o.segFu=new Date().toISOString();saveDB();renderHomeSegs();
 }
 function waReview(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var link=(DB.settings.reviewLink||'').trim();
-  waSend(o.tel,'¡Gracias por confiar en '+(DB.settings.shopName||'Pit Stop')+', '+(o.cliente||'')+'! 🙌\n\nMuchas gracias por confiar en nosotros. Si me hace el favor de dejarnos una reseña nos ayuda muchísimo: es un negocio que apenas está creciendo, y una línea suya hace que otra persona se anime a escribirnos. Le toma un minuto:\n'+link);
+  waSend(o.tel,'¡Gracias por confiar en '+taller()+', '+(o.cliente||'')+'! 🙌\n\nMuchas gracias por confiar en nosotros. Si me hace el favor de dejarnos una reseña nos ayuda muchísimo: es un negocio que apenas está creciendo, y una línea suya hace que otra persona se anime a escribirnos. Le toma un minuto:\n'+link);
   o.segRev=new Date().toISOString();saveDB();renderHomeSegs();
 }
 function waWinback(cliId){
   var c=DB.clientes.find(function(x){return x.id===cliId;});if(!c)return;
-  waSend(c.tel,'Saludos '+c.nombre+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nHace tiempo no le damos servicio a su vehículo y me acordé de usted. ¿Le coordino un mantenimiento esta semana? Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁');
+  waSend(c.tel,'Saludos '+c.nombre+'!! Le saluda '+taller()+'.\n\nHace tiempo no le damos servicio a su vehículo y me acordé de usted. ¿Le coordino un mantenimiento esta semana? Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁');
   c.winbackAt=new Date().toISOString();saveDB();renderHomeSegs();
 }
 
@@ -6449,7 +6459,7 @@ function waDVI(roId){
   var o=DB.ordenes.find(function(x){return x.id===roId;});if(!o)return;
   var s=inspSummary(o);
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
-  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+'📋 Aquí le dejo la inspección de '+veh+':\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\n'+'📋 Aquí le dejo la inspección de '+veh+':\n\n'+
     '✅ En buen estado: '+s.g.length+' punto'+(s.g.length!==1?'s':'')+'\n';
   if(s.a.length)msg+='\n⚠️ *Atención pronto:*\n'+s.a.map(function(x){return '• '+x;}).join('\n')+'\n';
   if(s.r.length)msg+='\n🔴 *CRÍTICO — requiere servicio:*\n'+s.r.map(function(x){return '• '+x;}).join('\n')+'\n';
@@ -6480,9 +6490,9 @@ function dviPDF(roId){
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'—';
   doc.setFillColor(11,31,58);doc.rect(0,0,210,22,'F');
   doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
-  doc.text('INSPECCIÓN DEL VEHÍCULO — '+(DB.settings.shopName||'Pit Stop'),14,10);
+  doc.text('INSPECCIÓN DEL VEHÍCULO — '+taller(),14,10);
   doc.setFontSize(8);doc.setFont(undefined,'normal');
-  doc.text(DB.settings.shopAddress||'Bayamón, Puerto Rico',14,17);
+  doc.text(tallerDir(),14,17);
   doc.text(o.id+' · '+new Date(o.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
   y=30;doc.setTextColor(0,0,0);
   doc.setFontSize(9);doc.setFont(undefined,'normal');
@@ -6576,7 +6586,7 @@ function dviPDF(roId){
     if(col>0)y+=h+4;
   }
   doc.setFontSize(7);doc.setTextColor(130,130,130);
-  doc.text('Inspección visual de cortesía. Este reporte no constituye garantía. '+(DB.settings.shopName||'Pit Stop')+' — '+new Date().toLocaleDateString('es-PR'),14,288);
+  doc.text('Inspección visual de cortesía. Este reporte no constituye garantía. '+taller()+' — '+new Date().toLocaleDateString('es-PR'),14,288);
   sharePDFDoc(doc,'DVI_'+o.id+'.pdf','Inspección '+o.id);
 }
 
@@ -6600,7 +6610,7 @@ function preCompraPDF(roId){
   doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont(undefined,'bold');
   doc.text('INSPECCIÓN PRE-COMPRA',14,10);
   doc.setFontSize(8);doc.setFont(undefined,'normal');
-  doc.text((DB.settings.shopName||'Pit Stop')+' · '+(DB.settings.shopAddress||'Bayamón, Puerto Rico'),14,17);
+  doc.text((tallerLinea()||taller()),14,17);
   doc.text(o.id+' · '+new Date(o.fecha).toLocaleDateString('es-PR'),196,13,{align:'right'});
   y=30;doc.setTextColor(0,0,0);doc.setFontSize(9);
   doc.text('Solicitada por: '+(o.cliente||'—'),14,y);doc.text('Vehículo: '+veh,110,y);y+=5;
@@ -6761,7 +6771,7 @@ function preCompraPDF(roId){
   });
   for(var p=1;p<=doc.internal.getNumberOfPages();p++){
     doc.setPage(p);doc.setFontSize(7);doc.setTextColor(130,130,130);
-    doc.text('Inspección pre-compra realizada el '+new Date(o.fecha).toLocaleDateString('es-PR')+'. Refleja el estado del vehículo en esa fecha. '+(DB.settings.shopName||'Pit Stop'),14,288);
+    doc.text('Inspección pre-compra realizada el '+new Date(o.fecha).toLocaleDateString('es-PR')+'. Refleja el estado del vehículo en esa fecha. '+taller(),14,288);
   }
   sharePDFDoc(doc,'PreCompra_'+o.id+'.pdf','Inspección pre-compra '+o.id);
 }
@@ -6773,7 +6783,7 @@ function waPreCompra(roId){
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'el vehículo';
   var necesita=pcTotalNecesita(o);
   var pedido=parseFloat(pc.precioPedido)||0;
-  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\n'+
+  var msg='Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\n'+
     'Ya terminé la inspección pre-compra de '+veh+' y le dejo aquí el resumen, el reporte completo con las fotos se lo envío en el PDF.\n\n';
   var v=PC_VER[pc.veredicto];
   if(v)msg+='📋 *'+v.l+'*\n\n';
@@ -6798,7 +6808,7 @@ function waCobro(roId){
   var ath=(DB.settings.athMovil||'').trim();
   var card=(DB.settings.cardLink||'').trim();
   var bal=Math.max(0,(o.total||0)-(o.abonado||0));
-  var msg='Saludos '+(o.cliente||'')+', le saluda '+(DB.settings.shopName||'Pit Stop')+' 🔧\n\n'+
+  var msg='Saludos '+(o.cliente||'')+', le saluda '+taller()+' 🔧\n\n'+
     'Balance pendiente de la orden '+o.id+': *$'+bal.toFixed(2)+'*\n\n'+
     (ath?'💳 ATH Móvil: '+ath+'\n':'')+
     (card?'💳 Tarjeta (Visa/MC/Amex): '+card+'\n':'')+
@@ -6852,7 +6862,7 @@ function shareStatus(roId){
   var _cm=dineroRO(o);
   var descCli=sinCargo(o)?0:_cm.descAmt;
   var ivuCli=_cm.ivu;
-  var snap={n:s.shopName||'Pit Stop',ph:waNum(s.shopPhone)||'',id:o.id,
+  var snap={n:taller(),ph:waNum(s.shopPhone)||'',id:o.id,
     c:((o.cliente||'').split(' ')[0])||'Cliente',v:veh||'Tu vehículo',
     sv:svCli,sub:Math.round(subCli*100)/100,desc:descCli,ivu:ivuCli,aj:_cm.manual?_cm.ajuste:0,cort:!!o.cortesia,gar:!!o.garantia,garRO:o.garantiaRO||'',
     // el nombre real del recomendado: el campo es `nombre` — leyendo `n`/`desc` salían todos
@@ -7591,12 +7601,12 @@ function waDenied(roId){
   if(!den.length)return;
   var veh=(o.vehiculo&&o.vehiculo.make)?((o.vehiculo.year||'')+' '+o.vehiculo.make+' '+(o.vehiculo.model||'')).trim():'su vehículo';
   var lineas=den.map(function(d){return '• '+d.nombre+' — $'+(d.precio||0).toFixed(2);}).join('\n');
-  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+(DB.settings.shopName||'Pit Stop')+'.\n\nCuando atendimos '+veh+' quedaron pendientes estos trabajos que le recomendé:\n'+lineas+'\n\n¿Le coordino una cita esta semana para resolverlos? Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁');
+  waSend(o.tel,'Saludos '+(o.cliente||'')+'!! Le saluda '+taller()+'.\n\nCuando atendimos '+veh+' quedaron pendientes estos trabajos que le recomendé:\n'+lineas+'\n\n¿Le coordino una cita esta semana para resolverlos? Voy hasta donde usted esté.\n\nQuedo al pendiente 🏁');
   o.segDen=new Date().toISOString();saveDB();renderHomeSegs();
 }
 function waCitaRem(citaId){
   var c=DB.citas.find(function(x){return x.id===citaId;});if(!c)return;
-  waSend(c.tel,'Saludos '+c.cliente+'!! Le recuerda '+(DB.settings.shopName||'Pit Stop')+':\n\n📅 Su cita es MAÑANA a las '+(c.hora||'')+(c.servicio?' — '+c.servicio:'')+(c.vehiculo?' ('+c.vehiculo+')':'')+'.\n\n¿Confirmamos? Si necesita moverla, con gusto se la cuadro para otro día.\n\nQuedo al pendiente 🏁');
+  waSend(c.tel,'Saludos '+c.cliente+'!! Le recuerda '+taller()+':\n\n📅 Su cita es MAÑANA a las '+(c.hora||'')+(c.servicio?' — '+c.servicio:'')+(c.vehiculo?' ('+c.vehiculo+')':'')+'.\n\n¿Confirmamos? Si necesita moverla, con gusto se la cuadro para otro día.\n\nQuedo al pendiente 🏁');
   c.remAt=new Date().toISOString();saveDB();renderHomeSegs();
 }
 
