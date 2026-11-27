@@ -2,6 +2,30 @@
 
 > Update this file at the end of every working session so the next session resumes instead of restarting.
 
+## 🚦 CONTINUA AQUI — 2026-11-27 (ESTIMADOS — v52)
+
+**✅ EN VIVO Y VERIFICADO CONTRA EL SERVIDOR:** `main` 9ffb765, GitHub Pages sirve **v52** (`sw.js` shopflow-v52),
+`live == repo`. `test/estimados.js` **49/49 contra el sitio en vivo**; suite completa 55 archivos verde en local.
+
+**QUE ES:** seccion **Estimados** (tarjeta roja en el home). Pedido de Roberto tras el Corolla de Jose: *un estimado NO
+es una orden de reparacion*. Cliente, vehiculo (VIN, millaje), "lo que encontramos", trabajos con mano de obra +
+piezas, total con IVU al momento, diagnostico pagado que se acredita, **PDF** con el formato que aprobo Roberto
+(negro + raya roja, tabla MO/piezas/total), y **"Cliente aprobo: abrir orden"** que llena el asistente de RO con
+SOLO los trabajos marcados ✓.
+
+**REGLAS DEL DISENO (no romper):**
+- `DB.estimados` aparte: no cuenta en ventas ni "por cobrar". Viaja en `COLS_SYNC` (gana el `_editedAt` mas nuevo).
+- Nunca se borra: `estado` abierto / convertido / descartado (si se borrara, la nube lo resucita).
+- El estimado pasa a `convertido` **cuando la RO se GUARDA** (`upsertRO` -> `estMarcarConvertido`), no al abrir el
+  asistente; `roId` = numero FINAL. Salirse del asistente lo deja pendiente.
+- ids `EST-<base36 tiempo><seq><rand>` (unicos entre equipos); `num` es solo la etiqueta visible ("Estimado #3").
+- Guardado inmediato en cada tecla (sin debounce: el iPad mata timers). `estCur()` re-engancha `EST` tras un sync.
+
+**CODEX (2 pasadas):** arreglados convertido-antes-de-guardar, ids que chocaban, EST obsoleto tras sync, guardado
+perdido al salir, coma decimal/negativos, ids en onclick sin sanear, datos largos en el PDF, rerender tras sync.
+**Aceptado/pendiente:** `saveDB()` falso no avisa en estimados; `num` puede repetirse entre 2 equipos (cosmetico);
+un bloque de texto > 1 pagina se sale del PDF; reabrir uno convertido permite otra orden (avisa antes).
+
 ## 🚦 CONTINUA AQUI — 2026-09-05 (batch 36: EL RESPALDO YA NO MIENTE — v40)
 
 **✅ EN VIVO Y VERIFICADO CONTRA EL SERVIDOR** (no contra el disco): commit `8c5c899` en `main`,
