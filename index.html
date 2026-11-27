@@ -199,6 +199,7 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
         <div class="mc" onclick="go('finanzas')"><div class="mi" style="background:var(--green-light)"><i class="ti ti-chart-line" style="color:var(--green);font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Finanzas</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">P&L · Inventario</div></div>
         <div class="mc" onclick="go('historial')"><div class="mi" style="background:#FFF0E6"><i class="ti ti-history" style="color:#D2691E;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Historial</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Resumen del día y ROs</div></div>
         <div class="mc" onclick="go('inventario')"><div class="mi" style="background:#EEF2FF"><i class="ti ti-package" style="color:#4F46E5;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Inventario</div><div id="home-inv-lbl" style="font-size:11px;color:var(--gray-400);margin-top:2px">Piezas y partes</div></div>
+        <div class="mc" onclick="EST=null;go('estimados')"><div class="mi" style="background:#FDECEC"><i class="ti ti-file-invoice" style="color:#C62828;font-size:20px"></i></div><div style="font-size:13px;font-weight:700">Estimados</div><div id="home-est-lbl" style="font-size:11px;color:var(--gray-400);margin-top:2px">Cotiza antes de abrir orden</div></div>
       </div>
       <div class="st">Citas de hoy</div>
       <div id="home-citas"></div>
@@ -351,6 +352,15 @@ textarea{resize:vertical;min-height:52px;line-height:1.5}
     <div id="citas-ct" style="font-size:11px;color:rgba(255,255,255,.5)"></div>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="citas-body"></div>
+</div>
+
+<div id="estimados" class="pg">
+  <div class="tb">
+    <button class="tb-back" onclick="if(EST){EST=null;renderEstimados();}else go('home')"><i class="ti ti-arrow-left"></i> Atrás</button>
+    <div id="est-tit" style="color:#fff;font-size:14px;font-weight:700">Estimados</div>
+    <div style="width:60px"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0" id="est-body"></div>
 </div>
 
 <div id="ro-detail" class="pg">
@@ -1054,7 +1064,7 @@ function garantiasCliHTML(nombre){
    (quedó en la bitácora), y el respaldo de esa tarde la tenía otra vez "agendada" — la nube
    atrasada la resucitó. Con inventario eso significa conteos de piezas mal sin que nadie lo note. */
 var COLS_SYNC=['clientes','citas','garage','gastos','inventario','tecnicos','asesores',
-               'svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS'];
+               'svcsCustom','catsCustom','jobsCustom','promos','suplidores','ordenesS','estimados'];
 function censo(db){
   db=db||DB;
   var ids={},fp={},firmas=0,fotosAct=0,rotas={};
@@ -1342,7 +1352,7 @@ function saveDB(opts){
    comprobó (auditoría 27-jul) que un respaldo con una lista corrompida dejaba la app tirando
    excepciones en home, clientes, finanzas, garage y citas. Un normalizador, tres puertas. */
 var LISTAS_DB=['ordenes','clientes','garage','gastos','suplidores','ordenesS','inventario','citas',
-               'svcsCustom','catsCustom','tecnicos','asesores','jobsCustom','promos','papelera','bitacora'];
+               'svcsCustom','catsCustom','tecnicos','asesores','jobsCustom','promos','papelera','bitacora','estimados'];
 function _maxIdNum(lista,pref){
   var m=0;
   (lista||[]).forEach(function(x){
@@ -2070,7 +2080,7 @@ function mergeDB(local,remote){
 }
 // Re-render por sincronización. Guarda lo que el usuario tiene a medias ANTES de
 // reconstruir el HTML y lo devuelve después: la nube ya no le borra lo que escribe.
-function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes}[v.id];if(!f)return;var keep=snapFields();try{f();}catch(e){}putFields(keep);}
+function rerenderCurrent(){var v=document.querySelector('.pg.v');if(!v)return;var f={home:renderHome,ordenes:renderOrdenes,clientes:renderClientes,garage:renderGarage,finanzas:renderPL,historial:renderHistDia,inventario:renderInventario,citas:renderCitas,ajustes:initAjustes,estimados:function(){var ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&document.getElementById('estimados').contains(ae))return;renderEstimados();}}[v.id];if(!f)return;var keep=snapFields();try{f();}catch(e){}putFields(keep);}
 function sbSession(cb){var c=sbReady();if(!c){cb(null);return;}c.auth.getSession().then(function(r){cb(r&&r.data&&r.data.session||null);}).catch(function(){cb(null);});}
 async function syncPull(){
   if(DB._demo)return; // (24-nov, Codex) el demo nunca se mezcla con la nube: un taller nuevo subia ordenes de ejemplo
@@ -2368,9 +2378,262 @@ function go(p){
   if(p==='ajustes'){initAjustes();}
   if(p==='inventario'){renderInventario();}
   if(p==='citas'){renderCitas();}
+  if(p==='estimados'){renderEstimados();}
   // Si la app se recargó (iOS la mató en segundo plano) con un formulario a medias,
   // los campos vuelven llenos al entrar a la página.
   restoreFields();
+}
+
+// ===== ESTIMADOS (27-nov-2026, pedido de Roberto) =====
+// Un estimado NO es una orden: no cuenta en ventas ni en "por cobrar". Vive en DB.estimados,
+// viaja entre equipos como las demas listas (COLS_SYNC: gana la edicion mas reciente) y nunca se
+// borra de verdad (estado 'descartado'), para que la nube no lo resucite. La orden de reparacion
+// nace SOLO cuando se trabaja el carro: "Abrir orden" llena la RO nueva con lo que el cliente aprobo.
+var EST=null,_estTimer=null,_estPrefill=null,_estFiltro='abiertos';
+function estR2(n){return Math.round((Number(n)||0)*100)/100;}
+function estNum(v){var t=String(v==null?'':v).trim();if(t.charAt(0)==='-')return 0;var n=parseFloat(t.replace(',','.').replace(/[^0-9.]/g,''));return isNaN(n)?0:n;}
+function estQty(v){return Math.max(1,Math.round(estNum(v)||1));}
+function estQ(id){return String(id||'').replace(/[^A-Za-z0-9-]/g,'');}
+function estCur(){if(EST){var x=estDe(EST.id);if(x)EST=x;}return EST;}
+function estItemTot(it){
+  var piezas=(it.parts||[]).reduce(function(s,p){return s+estQty(p.qty)*estNum(p.precio);},0);
+  return {labor:estR2(estNum(it.labor)),piezas:estR2(piezas),total:estR2(estNum(it.labor)+piezas)};
+}
+function estTotales(e){
+  var sub=0;(e.items||[]).forEach(function(it){sub+=estItemTot(it).total;});
+  sub=estR2(sub);var ivu=e.sinIVU?0:estR2(sub*0.115);
+  return {sub:sub,ivu:ivu,total:estR2(sub+ivu)};
+}
+function estLista(){return (DB.estimados||[]).filter(function(e){return e&&e.id;});}
+var _estSeq=0;
+function estNuevoId(){_estSeq=(_estSeq+1)%1296;return 'EST-'+Date.now().toString(36).toUpperCase()+('0'+_estSeq.toString(36)).slice(-2).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();}
+function estNumNuevo(){var m=0;estLista().forEach(function(e){if((e.num||0)>m)m=e.num;});return m+1;}
+function estEtq(e){return 'Estimado #'+(e&&e.num?e.num:'?');}
+function estNuevo(){
+  var e={id:estNuevoId(),num:estNumNuevo(),fecha:new Date().toISOString(),estado:'abierto',cliente:'',tel:'',
+    vehiculo:{year:'',make:'',model:'',vin:'',odo:''},hallazgo:'',diag:0,notas:'',items:[estItemNuevo()],
+    _editedAt:new Date().toISOString()};
+  if(!Array.isArray(DB.estimados))DB.estimados=[];
+  DB.estimados.push(e);saveDB();
+  estAbrir(e.id);
+}
+function estItemNuevo(){return {uid:'ei-'+Date.now()+'-'+Math.floor(Math.random()*1000),n:'',nota:'',labor:'',ok:true,parts:[]};}
+function estDe(id){return estLista().find(function(x){return x.id===id;});}
+function estAbrir(id){EST=estDe(id)||null;go('estimados');}
+function estGuardarYa(){
+  if(!estCur())return;
+  EST._editedAt=new Date().toISOString();
+  var t=estTotales(EST);EST.total=t.total;
+  saveDB();
+}
+function estGuardar(){estGuardarYa();}
+function estSet(campo,valor){
+  if(!estCur())return;
+  if(campo.indexOf('veh.')===0)EST.vehiculo[campo.slice(4)]=valor;else EST[campo]=valor;
+  estGuardar();estPintarTotales();
+}
+function estItemSet(i,campo,valor){estCur();var it=EST&&EST.items[i];if(!it)return;it[campo]=valor;estGuardar();estPintarTotales();}
+function estPiezaSet(i,j,campo,valor){estCur();var p=EST&&EST.items[i]&&EST.items[i].parts[j];if(!p)return;p[campo]=valor;estGuardar();estPintarTotales();}
+function estAgregarItem(){estCur();EST.items.push(estItemNuevo());estGuardarYa();renderEstimados();}
+function estQuitarItem(i){
+  estCur();var it=EST.items[i];if(!it)return;
+  if((it.n||it.labor||(it.parts||[]).length)&&!confirm('¿Quitar el trabajo "'+(it.n||'sin nombre')+'" de este estimado?'))return;
+  EST.items.splice(i,1);estGuardarYa();renderEstimados();
+}
+function estAgregarPieza(i){estCur();EST.items[i].parts.push({name:'',qty:1,precio:''});estGuardarYa();renderEstimados();}
+function estQuitarPieza(i,j){estCur();EST.items[i].parts.splice(j,1);estGuardarYa();renderEstimados();}
+function estPintarTotales(){
+  if(!EST)return;
+  (EST.items||[]).forEach(function(it,i){var el=document.getElementById('est-it-tot-'+i);if(el)el.textContent='$'+estItemTot(it).total.toFixed(2);});
+  var t=estTotales(EST),el=document.getElementById('est-tots');
+  if(el)el.innerHTML='<div class="er"><span>Subtotal</span><b>$'+t.sub.toFixed(2)+'</b></div>'+
+    (estNum(EST.diag)>0?'<div class="er"><span>Diagnóstico $'+estNum(EST.diag).toFixed(2)+' (se acredita al aprobar)</span><b>$0.00</b></div>':'')+
+    '<div class="er"><span>IVU 11.5%</span><b>$'+t.ivu.toFixed(2)+'</b></div>'+
+    '<div class="er" style="font-size:16px"><span><b>Total estimado</b></span><b>$'+t.total.toFixed(2)+'</b></div>';
+}
+function estEstadoBadge(e){
+  if(e.estado==='convertido')return '<span class="badge bg">Orden abierta</span>';
+  if(e.estado==='descartado')return '<span class="badge bgr">Descartado</span>';
+  return '<span class="badge ba">Pendiente</span>';
+}
+function renderEstimados(){
+  var b=document.getElementById('est-body'),tit=document.getElementById('est-tit');if(!b)return;
+  if(EST){EST=estDe(EST.id)||null;}
+  if(!EST){
+    tit.textContent='Estimados';
+    var l=estLista().filter(function(e){return _estFiltro==='todos'?true:(_estFiltro==='abiertos'?e.estado==='abierto':e.estado!=='abierto');})
+      .sort(function(a,c){return String(c.fecha).localeCompare(String(a.fecha));});
+    var h='<div class="sec"><button class="btn p full" onclick="estNuevo()" style="padding:13px;margin-bottom:12px"><i class="ti ti-file-plus"></i> Nuevo estimado</button>'+
+      '<div style="font-size:11px;color:var(--gray-400);margin:-4px 0 12px">Un estimado no es una orden: no cuenta en ventas ni en "por cobrar". La orden se abre cuando se trabaja el carro.</div>'+
+      '<div class="tabs" style="margin-bottom:10px">'+['abiertos','cerrados','todos'].map(function(f){
+        return '<div class="tab'+(_estFiltro===f?' active':'')+'" onclick="_estFiltro=\''+f+'\';renderEstimados()">'+({abiertos:'Pendientes',cerrados:'Cerrados',todos:'Todos'})[f]+'</div>';}).join('')+'</div>';
+    if(!l.length)h+='<div style="text-align:center;color:var(--gray-400);padding:30px 10px;font-size:13px">'+(_estFiltro==='abiertos'?'No hay estimados pendientes.':'No hay estimados aquí.')+'</div>';
+    l.forEach(function(e){
+      var v=e.vehiculo||{},veh=[v.year,v.make,v.model].filter(Boolean).join(' ')||'Sin vehículo';
+      h+='<div class="card" onclick="estAbrir(\''+estQ(e.id)+'\')" style="cursor:pointer"><div class="cb" style="display:flex;justify-content:space-between;gap:10px;align-items:center">'+
+        '<div style="min-width:0"><div style="font-weight:700;font-size:14px">'+E_(e.cliente||'Sin cliente')+'</div>'+
+        '<div style="font-size:12px;color:var(--gray-500)">'+E_(veh)+' · '+E_(estEtq(e))+' · '+new Date(e.fecha).toLocaleDateString('es-PR')+'</div></div>'+
+        '<div style="text-align:right;flex-shrink:0"><div style="font-weight:800;font-size:15px">$'+estTotales(e).total.toFixed(2)+'</div>'+estEstadoBadge(e)+'</div></div></div>';
+    });
+    b.innerHTML=h+'</div>';return;
+  }
+  var e=EST,v=e.vehiculo||(e.vehiculo={}),cerrado=e.estado!=='abierto';
+  tit.textContent=estEtq(e);
+  var dis=cerrado?' disabled':'';
+  var h='<div class="sec">';
+  if(cerrado)h+='<div class="tip-box" style="background:var(--gray-100);color:var(--gray-700);margin-bottom:10px"><i class="ti ti-lock" style="font-size:16px;flex-shrink:0"></i><span>'+(e.estado==='convertido'?'Este estimado ya se convirtió en orden'+(e.roId?' ('+E_(e.roId)+')':'')+'.':'Este estimado está descartado.')+' Para cambiarlo, ábrelo de nuevo.</span></div>';
+  h+='<div class="card"><div class="ch"><span><i class="ti ti-user"></i> Cliente y vehículo</span>'+estEstadoBadge(e)+'</div><div class="cb">'+
+    '<div class="fr"><div class="fg"><div class="fl">Cliente</div><input'+dis+' value="'+E_(e.cliente)+'" oninput="estSet(\'cliente\',this.value)" placeholder="Nombre"></div>'+
+    '<div class="fg"><div class="fl">Teléfono</div><input'+dis+' type="tel" value="'+E_(e.tel)+'" oninput="estSet(\'tel\',this.value)" placeholder="787-000-0000"></div></div>'+
+    '<div class="fr fr3"><div class="fg"><div class="fl">Año</div><input'+dis+' inputmode="numeric" value="'+E_(v.year)+'" oninput="estSet(\'veh.year\',this.value)"></div>'+
+    '<div class="fg"><div class="fl">Marca</div><input'+dis+' value="'+E_(v.make)+'" oninput="estSet(\'veh.make\',this.value)"></div>'+
+    '<div class="fg"><div class="fl">Modelo</div><input'+dis+' value="'+E_(v.model)+'" oninput="estSet(\'veh.model\',this.value)"></div></div>'+
+    '<div class="fr"><div class="fg"><div class="fl">VIN</div><input'+dis+' value="'+E_(v.vin)+'" oninput="estSet(\'veh.vin\',this.value.toUpperCase())" style="text-transform:uppercase"></div>'+
+    '<div class="fg"><div class="fl">Millaje</div><input'+dis+' inputmode="numeric" value="'+E_(v.odo)+'" oninput="estSet(\'veh.odo\',this.value)"></div></div>'+
+    '</div></div>';
+  h+='<div class="card"><div class="ch"><span><i class="ti ti-search"></i> Lo que encontramos</span></div><div class="cb">'+
+    '<textarea'+dis+' oninput="estSet(\'hallazgo\',this.value)" placeholder="Explícale al cliente qué encontraste y por qué hay que hacerlo, en palabras simples." style="min-height:80px">'+E_(e.hallazgo)+'</textarea></div></div>';
+  (e.items||[]).forEach(function(it,i){
+    h+='<div class="card"><div class="ch"><span style="display:flex;align-items:center;gap:8px">'+
+      '<input type="checkbox"'+dis+' '+(it.ok!==false?'checked':'')+' onchange="estItemSet('+i+',\'ok\',this.checked)" style="width:20px;height:20px;padding:0;-webkit-appearance:checkbox;appearance:auto;accent-color:var(--green);flex-shrink:0" title="Aprobado por el cliente" aria-label="Trabajo aprobado por el cliente"> Trabajo '+(i+1)+'</span>'+
+      '<span style="display:flex;align-items:center;gap:8px"><b id="est-it-tot-'+i+'">$'+estItemTot(it).total.toFixed(2)+'</b>'+
+      (cerrado?'':'<button class="btn sm" onclick="estQuitarItem('+i+')" aria-label="Quitar trabajo"><i class="ti ti-trash"></i></button>')+'</span></div><div class="cb">'+
+      '<div class="fr fr1"><div class="fg"><div class="fl">Trabajo</div><input'+dis+' value="'+E_(it.n)+'" oninput="estItemSet('+i+',\'n\',this.value)" placeholder="Ej. Reemplazo de junta de tapa de válvulas"></div></div>'+
+      '<div class="fr"><div class="fg"><div class="fl">Detalle (opcional)</div><input'+dis+' value="'+E_(it.nota)+'" oninput="estItemSet('+i+',\'nota\',this.value)" placeholder="Incluye los sellos..."></div>'+
+      '<div class="fg"><div class="fl">Mano de obra ($)</div><input'+dis+' type="number" step="0.01" inputmode="decimal" value="'+E_(it.labor)+'" oninput="estItemSet('+i+',\'labor\',this.value)" placeholder="0.00"></div></div>';
+    (it.parts||[]).forEach(function(p,j){
+      h+='<div style="display:grid;grid-template-columns:1fr 54px 84px 34px;gap:6px;margin-bottom:6px;align-items:end">'+
+        '<div class="fg"><div class="fl">Pieza</div><input'+dis+' value="'+E_(p.name)+'" oninput="estPiezaSet('+i+','+j+',\'name\',this.value)"></div>'+
+        '<div class="fg"><div class="fl">Cant.</div><input'+dis+' type="number" min="1" inputmode="numeric" value="'+E_(p.qty)+'" oninput="estPiezaSet('+i+','+j+',\'qty\',this.value)"></div>'+
+        '<div class="fg"><div class="fl">Precio c/u</div><input'+dis+' type="number" step="0.01" inputmode="decimal" value="'+E_(p.precio)+'" oninput="estPiezaSet('+i+','+j+',\'precio\',this.value)" placeholder="0.00"></div>'+
+        (cerrado?'<div></div>':'<button class="btn sm" onclick="estQuitarPieza('+i+','+j+')" aria-label="Quitar pieza" style="height:34px;justify-content:center"><i class="ti ti-x"></i></button>')+'</div>';
+    });
+    if(!cerrado)h+='<button class="btn sm" onclick="estAgregarPieza('+i+')"><i class="ti ti-plus"></i> Pieza</button>';
+    h+='</div></div>';
+  });
+  if(!cerrado)h+='<button class="btn full" onclick="estAgregarItem()" style="margin-bottom:12px"><i class="ti ti-plus"></i> Agregar trabajo</button>';
+  h+='<div class="card"><div class="ch"><span><i class="ti ti-calculator"></i> Total</span></div><div class="cb">'+
+    '<div class="fr"><div class="fg"><div class="fl">Diagnóstico pagado ($)</div><input'+dis+' type="number" step="0.01" inputmode="decimal" value="'+E_(e.diag||'')+'" oninput="estSet(\'diag\',this.value)" placeholder="0"></div>'+
+    '<div class="fg"><div class="fl">&nbsp;</div><div style="font-size:11px;color:var(--gray-400)">Se acredita al aprobar el trabajo y sale así en el PDF.</div></div></div>'+
+    '<div id="est-tots"></div></div></div>';
+  h+='<button class="btn p full" onclick="estPDF(\''+estQ(e.id)+'\')" style="padding:13px;margin-bottom:8px"><i class="ti ti-file-type-pdf"></i> PDF para el cliente</button>';
+  if(!cerrado){
+    h+='<button class="btn g full" onclick="estConvertir(\''+estQ(e.id)+'\')" style="padding:13px;margin-bottom:8px"><i class="ti ti-clipboard-plus"></i> Cliente aprobó: abrir orden</button>'+
+       '<div style="font-size:11px;color:var(--gray-400);text-align:center;margin:-2px 0 10px">Pasa a la orden solo los trabajos marcados ✓.</div>'+
+       '<button class="btn full" onclick="estCambiarEstado(\''+estQ(e.id)+'\',\'descartado\')" style="margin-bottom:8px"><i class="ti ti-archive"></i> Descartar estimado</button>';
+  }else{
+    h+='<button class="btn full" onclick="estCambiarEstado(\''+estQ(e.id)+'\',\'abierto\')" style="margin-bottom:8px"><i class="ti ti-lock-open"></i> Abrir de nuevo</button>';
+  }
+  h+='<button class="btn full" onclick="EST=null;renderEstimados()"><i class="ti ti-arrow-left"></i> Todos los estimados</button></div>';
+  b.innerHTML=h;estPintarTotales();
+}
+function estCambiarEstado(id,estado){
+  var e=estDe(id);if(!e)return;
+  if(estado==='descartado'&&!confirm('¿Descartar este estimado? Se queda guardado en "Cerrados" y lo puedes abrir de nuevo.'))return;
+  if(estado==='abierto'&&e.roId&&!confirm('Este estimado ya tiene la orden '+e.roId+'. Si lo abres y lo conviertes otra vez, sale OTRA orden. ¿Abrirlo de nuevo?'))return;
+  e.estado=estado;e._editedAt=new Date().toISOString();saveDB();
+  if(estado==='descartado')EST=null;
+  renderEstimados();
+}
+function estConvertir(id){
+  var e=estDe(id);if(!e)return;
+  var ok=(e.items||[]).filter(function(it){return it.ok!==false&&(it.n||estItemTot(it).total>0);});
+  if(!ok.length){alert('Marca con ✓ al menos un trabajo aprobado.');return;}
+  if(!confirm('Abrir una orden nueva con '+ok.length+' trabajo(s) aprobado(s) por $'+ok.reduce(function(s,it){return s+estItemTot(it).total;},0).toFixed(2)+' + IVU.\n\nEl estimado se marca como "Orden abierta" cuando guardes la orden.'))return;
+  _estPrefill={estId:e.id,num:e.num,diag:estNum(e.diag),cliente:e.cliente||'',tel:e.tel||'',vehiculo:JSON.parse(JSON.stringify(e.vehiculo||{})),
+    queja:(e.hallazgo||'').trim(),items:JSON.parse(JSON.stringify(ok))};
+  EST=null;go('ro');
+}
+function applyEstPrefill(){
+  var p=_estPrefill;_estPrefill=null;if(!p||!RO)return;
+  RO.cliente=p.cliente;RO.tel=p.tel;
+  RO.vehiculo.year=p.vehiculo.year||'';RO.vehiculo.make=p.vehiculo.make||'';RO.vehiculo.model=p.vehiculo.model||'';
+  RO.vehiculo.vin=p.vehiculo.vin||'';RO.vehiculo.odoIn=p.vehiculo.odo||'';
+  RO.queja=p.queja;RO.estimadoId=p.estId;
+  var t0=Date.now();
+  RO.servicios=p.items.map(function(it,k){
+    var lab=estR2(estNum(it.labor));
+    return {n:(it.n||'Trabajo')+(it.nota?' ('+it.nota+')':''),p:lab,ep:lab,id:'est'+k,qty:1,uid:'svc-'+(t0+k)+'-'+k,laborHours:0,
+      parts:(it.parts||[]).filter(function(pz){return pz.name||estNum(pz.precio)>0;}).map(function(pz){
+        return {qty:Math.max(1,Math.round(estNum(pz.qty)||1)),cost:0,date:localDateStr(),name:pz.name||'Pieza',partNum:'',receipt:'',supplier:'',sellPrice:estR2(estNum(pz.precio)),warrantyMonths:0};})};
+  });
+  if(p.diag>0)RO.techNotes=((RO.techNotes||'')+'\nDiagnóstico de $'+p.diag.toFixed(2)+' ya pagado: se acreditó en el estimado (no se cobra de nuevo).').trim();
+}
+// La orden ya EXISTE (la llama upsertRO): recien ahora el estimado pasa a "Orden abierta".
+function estMarcarConvertido(o){
+  if(!o||!o.estimadoId)return;
+  var e=estDe(o.estimadoId);if(!e)return;
+  if(e.estado==='convertido'&&e.roId===o.id)return;
+  e.estado='convertido';e.roId=o.id;e._editedAt=new Date().toISOString();
+  try{bita('estimado-a-orden',o.id,estEtq(e)+' · '+(e.cliente||''));}catch(x){}
+}
+function estPDF(id){
+  var e=estDe(id);if(!e)return;
+  if(typeof window.jspdf==='undefined'){alert('PDF cargando... intenta de nuevo.');return;}
+  if(!(e.items||[]).length){alert('Agrega al menos un trabajo.');return;}
+  var doc=nuevoPDF(),W=210,M=16,y=0,t=estTotales(e),v=e.vehiculo||{};
+  var nom=(DB.settings&&DB.settings.shopName)||'';
+  // Cabecera: negro con raya roja (formato aprobado por Roberto el 27-nov)
+  doc.setFillColor(17,17,17);doc.rect(0,0,W,30,'F');doc.setFillColor(215,25,32);doc.rect(0,30,W,2,'F');
+  doc.setTextColor(255,255,255);doc.setFont(undefined,'bold');doc.setFontSize(18);
+  doc.text((nom||'Estimado').toUpperCase(),M,14);
+  doc.setFont(undefined,'normal');doc.setFontSize(8.5);doc.setTextColor(207,207,207);
+  doc.text(tallerDir()||'',M,21);
+  doc.setTextColor(255,255,255);doc.setFont(undefined,'bold');doc.setFontSize(11);doc.text('Estimado',W-M,14,{align:'right'});
+  doc.setFont(undefined,'normal');doc.setFontSize(8.5);doc.setTextColor(207,207,207);
+  doc.text(estEtq(e)+' · '+new Date(e.fecha).toLocaleDateString('es-PR',{day:'numeric',month:'long',year:'numeric'}),W-M,21,{align:'right'});
+  y=44;doc.setTextColor(26,26,26);doc.setFont(undefined,'bold');doc.setFontSize(15);doc.text('Estimado de reparación',M,y);
+  // Datos en gris con borde rojo
+  y+=6;doc.setFillColor(244,244,244);doc.rect(M,y,W-2*M,22,'F');doc.setFillColor(215,25,32);doc.rect(M,y,1.2,22,'F');
+  function dato(lbl,val,x,yy){doc.setFontSize(7);doc.setTextColor(102,102,102);doc.text(lbl.toUpperCase(),x,yy);doc.setFontSize(9.5);doc.setTextColor(26,26,26);doc.text(doc.splitTextToSize(String(val||'—'),W/2-M-8)[0],x,yy+4.5);}
+  dato('Cliente',e.cliente,M+6,y+6);dato('Vehículo',[v.year,v.make,v.model].filter(Boolean).join(' '),W/2+2,y+6);
+  dato('VIN',v.vin,M+6,y+15);dato('Millaje',v.odo?Number(estNum(v.odo)).toLocaleString('en-US'):'',W/2+2,y+15);
+  y+=30;
+  function titulo(s){doc.setFont(undefined,'bold');doc.setFontSize(9.5);doc.setTextColor(215,25,32);doc.text(s.toUpperCase(),M,y);y+=5;doc.setTextColor(26,26,26);doc.setFont(undefined,'normal');doc.setFontSize(9.5);}
+  function nuevaPag(h){if(y+h>270){doc.addPage();y=18;}}
+  if((e.hallazgo||'').trim()){
+    titulo('Lo que encontramos');
+    e.hallazgo.trim().split(/\n+/).forEach(function(par){var ls=doc.splitTextToSize(par,W-2*M);nuevaPag(ls.length*4.6);doc.text(ls,M,y);y+=ls.length*4.6+1.5;});
+    y+=3;
+  }
+  titulo('Trabajos recomendados');
+  var cX=[M,W-M-72,W-M-36,W-M];
+  doc.setFont(undefined,'bold');doc.setFontSize(7.5);doc.setTextColor(102,102,102);
+  doc.text('TRABAJO',cX[0],y);doc.text('MANO DE OBRA',cX[1],y,{align:'right'});doc.text('PIEZAS',cX[2],y,{align:'right'});doc.text('TOTAL',cX[3],y,{align:'right'});
+  y+=2;doc.setDrawColor(17,17,17);doc.setLineWidth(0.5);doc.line(M,y,W-M,y);y+=5;doc.setLineWidth(0.2);
+  (e.items||[]).forEach(function(it){
+    var tt=estItemTot(it),ls=doc.splitTextToSize(it.n||'Trabajo',cX[1]-cX[0]-30),nota=it.nota?doc.splitTextToSize(it.nota,cX[1]-cX[0]-30):[];
+    nuevaPag(ls.length*4.4+nota.length*3.8+5);
+    doc.setFont(undefined,'normal');doc.setFontSize(9.5);doc.setTextColor(26,26,26);doc.text(ls,cX[0],y);
+    doc.text('$'+tt.labor.toFixed(2),cX[1],y,{align:'right'});doc.text('$'+tt.piezas.toFixed(2),cX[2],y,{align:'right'});doc.text('$'+tt.total.toFixed(2),cX[3],y,{align:'right'});
+    var yy=y+ls.length*4.4;
+    if(nota.length){doc.setFontSize(8);doc.setTextColor(102,102,102);doc.text(nota,cX[0],yy-0.6);yy+=nota.length*3.8;}
+    y=yy+1.5;doc.setDrawColor(226,226,226);doc.line(M,y,W-M,y);y+=5;
+  });
+  nuevaPag(30);
+  function fila(lbl,val,bold){doc.setFont(undefined,bold?'bold':'normal');doc.setFontSize(bold?12:9.5);doc.setTextColor(bold?17:68,bold?17:68,bold?17:68);doc.text(lbl,cX[2]-6,y,{align:'right'});doc.text(val,cX[3],y,{align:'right'});y+=bold?0:5.5;}
+  fila('Subtotal','$'+t.sub.toFixed(2));
+  if(estNum(e.diag)>0)fila('Diagnóstico ($'+estNum(e.diag).toFixed(2)+', se acredita al aprobar el trabajo)','$0.00');
+  fila('IVU 11.5%','$'+t.ivu.toFixed(2));
+  doc.setDrawColor(17,17,17);doc.setLineWidth(0.5);doc.line(M,y-2,W-M,y-2);doc.setLineWidth(0.2);y+=4;
+  fila('Total estimado','$'+t.total.toFixed(2),true);y+=9;
+  var notas=['Es un estimado. El precio de las piezas puede variar según la disponibilidad en la tienda; si cambia, se le avisa antes de proceder.',
+    'Puede aprobar todos los trabajos o solo algunos.'+(estNum(e.diag)>0?' Si no aprueba ninguno, el diagnóstico es $'+estNum(e.diag).toFixed(2)+'.':''),
+    'Garantía en piezas suplidas por el taller: 30 días o 1,000 millas, lo que ocurra primero, en la pieza y la mano de obra, más la garantía del fabricante de la pieza.'];
+  if((e.notas||'').trim())notas.unshift(e.notas.trim());
+  doc.setDrawColor(221,221,221);doc.line(M,y-4,W-M,y-4);
+  doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(85,85,85);
+  notas.forEach(function(n){var ls=doc.splitTextToSize('•  '+n,W-2*M);nuevaPag(ls.length*3.8);doc.text(ls,M,y);y+=ls.length*3.8+1.2;});
+  // Pie negro en cada pagina
+  var tel=String((DB.settings&&DB.settings.shopPhone)||''),td=tel.replace(/\D/g,''),np=doc.getNumberOfPages();
+  if(td.length===10)tel=td.slice(0,3)+'-'+td.slice(3,6)+'-'+td.slice(6);
+  for(var pg=1;pg<=np;pg++){doc.setPage(pg);doc.setFillColor(17,17,17);doc.rect(0,284,W,13,'F');doc.setFontSize(8);doc.setTextColor(207,207,207);
+    doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);doc.text(nom||'',M,291.5);
+    doc.setFont(undefined,'normal');doc.setTextColor(207,207,207);if(tel)doc.text('WhatsApp '+tel,W-M,291.5,{align:'right'});}
+  var fname=(nom?nom.replace(/[^A-Za-z0-9]+/g,'')+'_':'')+'Estimado_'+(e.num||'')+'.pdf';
+  bita('estimado-pdf',e.id,(e.cliente||'')+' · $'+t.total.toFixed(2));
+  sharePDFDoc(doc,fname,estEtq(e));
+  return doc;
 }
 
 // ===== EL HUECO DE LA BARRA DE ABAJO CRECE CON LA BARRA =====
@@ -2527,6 +2790,7 @@ function initRO(){
   RO={id:previewRONum(),fecha:new Date().toISOString(),cliente:'',tel:'',email:'',vehiculo:{year:'',make:'',model:'',tag:'',color:'',odoIn:'',odoOut:'',vin:''},queja:'',fotos:[],sig1:false,sig2:false,sigDen:false,sigData:{},sigTimes:{},terms:null,auth1:null,insp:{},servicios:[],denegados:[],descuento:0,descTipo:'%',descMotivo:'',totalManual:'',cortesia:false,cortesiaMotivo:'',garantia:false,garantiaMotivo:'',garantiaRO:'',empresa:'',fuente:'',pago:'ATH Móvil',estado:'pendiente',nextDate:'',techNotes:'',total:0};
   var d=new Date();d.setMonth(d.getMonth()+5);RO.nextDate=localDateStr(d);
   if(_citaPrefill)applyCitaPrefill();
+  if(_estPrefill)applyEstPrefill();
   curStep=0;
   buildSteps();buildPanes();
   document.getElementById('ro-id-lbl').textContent=RO.id;
@@ -3496,6 +3760,7 @@ function upsertRO(){
   var idx=DB.ordenes.findIndex(function(x){return x.id===RO.id;});
   if(idx===-1){RO.id=nextRONum();DB.ordenes.push(JSON.parse(JSON.stringify(RO)));}
   else{DB.ordenes[idx]=JSON.parse(JSON.stringify(RO));}
+  if(RO.estimadoId)estMarcarConvertido(RO);
 }
 function saveOpenRO(){
   if(!RO.cliente){alert('Agrega el nombre del cliente antes de guardar.');gotoStep(0);return;}

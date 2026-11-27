@@ -109,7 +109,9 @@ const is = (n, got, exp) => (got === exp ? ok(n, got) : no(n, { got, exp }));
   is('Sin marcas de hora se comporta como antes (gana la nube), sin reventar', r.sinMarcas, 'completada');
 
   // --- 4. EL CABLEADO ESTÁ COMPLETO ---
-  is('COLS_SYNC cubre las 13 listas que se sincronizan', (r.cols||[]).length, 13);
+  // 27-nov-2026: +1 lista, `estimados` (cotizaciones que viajan entre equipos igual que las citas).
+  is('COLS_SYNC cubre las 14 listas que se sincronizan', (r.cols||[]).length, 14);
+  is('COLS_SYNC incluye estimados', (r.cols||[]).indexOf('estimados')>=0, true);
   is('censo() saca huella de esas listas (si no, nunca se marcarían)', r.censoTieneFpc, true);
   ['clientes', 'citas', 'garage', 'gastos', 'inventario'].forEach(k =>
     is('COLS_SYNC incluye ' + k, r.cols.indexOf(k) >= 0, true));
